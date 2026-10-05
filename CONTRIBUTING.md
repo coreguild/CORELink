@@ -6,8 +6,9 @@
 * One branch per change, from `main`: `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `chore/<short-name>`.
   Examples: `feat/officer-chat`, `fix/utf8-trim`.
 * Open a pull request into `main`. Keep PRs small: one feature or one fix. Describe how you tested it in game.
-* Squash-merge. Delete the branch after merging. Merging is always a person clicking the button; AI agents open
-  and update PRs but never merge them.
+* Merge with a merge commit (the only method enabled), so every branch keeps its full commit history on `main`.
+  The branch is deleted automatically. Merging is always a person clicking the button; AI agents open and update
+  PRs but never merge them.
 
 ## Pull requests
 
@@ -27,23 +28,23 @@ every user-visible change.
 
 ## Versioning and releases
 
-* Version lives in `## Version:` in both TOC files. Bump it in the PR that ships the first user-visible change of
-  the next version (patch for fixes, minor for features; we are pre-1.0), and start that version's CHANGELOG section.
-  The TOC never carries an "rc" suffix; the same zip that passed RC is the one that ships.
-* Two channels, driven by the **release** workflow (Actions tab -> release -> Run workflow), which runs
-  `scripts/release.sh` on a clean checkout of `main`. A person presses the button; agents never run `final`. The
-  script also works locally from an up-to-date `main`:
-  * **Release candidate**: `scripts/release.sh rc` tags `v<ver>-rcN` (next free N), publishes a GitHub pre-release,
-    and updates the RC download link. Guild leads run it for a day on two clients in two guilds, with one client left
-    on the previous stable to prove the protocol still interoperates. Problems -> normal fix PRs -> `rc` again.
-  * **Latest release**: `scripts/release.sh final` tags `v<ver>` on the same commit as the RC, publishes the GitHub
-    release as latest, and updates the stable download link. `--no-rc` exists for small hotfixes only.
+* Nobody edits a version number. Both TOCs say `## Version: @project-version@` and CI keeps it that way. The
+  release job computes the version from the existing git tags and stamps it into the zip it builds.
+* Two channels, two presses of the **release** workflow (Actions tab -> release -> Run workflow). A person presses
+  the button; agents never run `final`. `scripts/release.sh` is the same code for local use; `--dry-run` previews.
+  * **Release candidate** (`rc`): continues an open candidate series (`v0.2.0-rc2`) or, if the last candidate was
+    already released, patch-bumps the last release and starts `rc1`. Pick `bump` = `minor` or `major` to start a
+    bigger version. Publishes a GitHub pre-release and updates the RC download link. Guild leads run it for a day on
+    two clients in two guilds, with one client left on the previous stable to prove the protocol still interoperates.
+  * **Latest release** (`final`): promotes the rc on `main` to `v<ver>`, publishes it as latest and updates the
+    stable link. `no_rc` exists for small hotfixes only.
+* Release notes are generated from the titles of the PRs merged since the previous release, so write PR titles a
+  player could read. `CHANGELOG.md` is no longer maintained by hand; the Releases page is the changelog.
 * Public download links, no GitHub account needed:
   * stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
   * release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip
   * landing page with both: https://core-wow-community.github.io/CORELink/
-  These are served from the `gh-pages` branch, which only `scripts/release.sh` writes to. Older builds stay at
-  `v/CORELink-<version>.zip`.
+  Served from the `gh-pages` branch, which only the release job writes to. Older builds stay at `v/CORELink-<version>.zip`.
 
 ## Commit messages
 

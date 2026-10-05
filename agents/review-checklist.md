@@ -31,7 +31,8 @@ in the harness; this review is about what it does to a player's client at 8 PM o
 - Harness has a `check(...)` for the new behaviour and `tests/run.sh` passes, including luacheck with no new
   entries in `.luacheckrc` that are not real WoW globals.
 - New diagnostics go through `Debug(...)` (kept for `/cl report`), not `Print`, unless the player must act on them.
-- README command table, CHANGELOG, and both TOC versions updated when user-visible.
+- README command table updated when user-visible. `## Version:` in the TOCs untouched (`@project-version@`).
+  PR title readable as a release-note line.
 
 ## Report format
 

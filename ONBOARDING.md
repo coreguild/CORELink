@@ -60,7 +60,7 @@ gh pr create --fill                              # then fill in the PR template 
 `main` is protected: nobody can push to it directly, and a pull request cannot be merged until CI passes
 (the tests, and a check that the addon's interface number matches the live game client). No reviewer approval
 is required, but fill in the PR template honestly: what it does for players, commands, protocol impact, how
-you tested. Merge with the squash button when the checks are green.
+you tested. Press the merge button when the checks are green (it creates a merge commit; history is kept).
 
 ## 6. Vibe coding with an AI agent
 

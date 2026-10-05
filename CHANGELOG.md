@@ -1,6 +1,7 @@
 # Changelog
 
-Every user-visible change gets a line here, in the same PR that makes it. Newest first.
+From 0.1.2 on, release notes are generated on the GitHub Releases page from the merged pull-request titles:
+https://github.com/core-wow-community/CORELink/releases. This file is kept for the first two versions only.
 
 ## 0.1.1 - 2026-10-05
 

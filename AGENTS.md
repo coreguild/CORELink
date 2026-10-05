@@ -19,7 +19,8 @@ Hard rules:
    Every new or changed behaviour needs a `check(...)` in `tests/harness.lua` that fails without the change.
    CI runs the same script on every pull request and `main` will not accept a PR whose tests fail.
 2. For a feature request, restate it, ask about anything ambiguous, and fill in the PR template's
-   "Feature notes" section completely (see `agents/feature-requests.md`). Add a CHANGELOG line.
+   "Feature notes" section completely (see `agents/feature-requests.md`). The PR title becomes a release-note line.
+   Never edit `## Version:` in the TOCs; it is `@project-version@` and the release job stamps the real number.
 3. You cannot run the game. Say "not verified in game" for anything the mock harness does not cover.
 4. Do not change the wire protocol (`PROTO`, field order, separator) without bumping the version and keeping old versions readable.
 5. Do not add dependencies or build steps. The addon is one Lua file plus two TOC files.
