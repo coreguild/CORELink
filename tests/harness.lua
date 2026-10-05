@@ -42,7 +42,7 @@ local function advance(seconds)
   end
 end
 local events = {}
-local lastSetText = nil
+local lastSetText
 local function widget()
   return setmetatable({}, { __index = function(_, k)
     if k == "SetText" then return function(_, t) lastSetText = t end end
