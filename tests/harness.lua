@@ -158,6 +158,15 @@ n0 = #chatLines; slash("setup Other pw2 X")
 check("member cannot run /cl setup", chatLines[#chatLines].text:find("only the guild master", 1, true) ~= nil and CORELinkDB.channel == "CORELink7100")
 myRank = 0; slash("officerrank 2"); myRank = 3
 check("GM can change officer rank cutoff", CORELinkDB.officerRank == 2)
+-- /cl publish always writes all four fields, including the default officer rank 1 (#16)
+myRank = 0
+slash("officerrank 1"); lastSetText = nil; slash("publish")
+check("publish line includes officer rank 1", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1", lastSetText)
+slash("officerrank 2"); lastSetText = nil; slash("publish")
+check("publish line includes officer rank 2", lastSetText == "CORELink: CORELink7100 pw1 MAIN 2", lastSetText)
+local savedTag = CORELinkDB.tag; CORELinkDB.tag = nil; lastSetText = nil; slash("publish")
+check("publish line writes - for an empty tag so the rank stays in place", lastSetText == "CORELink: CORELink7100 pw1 - 2", lastSetText)
+CORELinkDB.tag = savedTag; slash("officerrank 1"); myRank = 3
 
 -- long message trimmed without breaking UTF-8
 local long = string.rep("\195\169", 150)  -- 300 bytes of 'é'
