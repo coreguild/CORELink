@@ -8,7 +8,8 @@ Start by reading `agents/README.md`, then follow the three documents it links:
 * `agents/testing.md`    - how to test without the game (`tests/run.sh`) and in the game (`scripts/install-local.sh`, `/reload`).
 * `agents/wow-api-gotchas.md` - constraints of the WoW Lua environment that have already cost us days. Read before touching chat or networking code.
 
-Procedures you can follow step by step live in `skills/` (`test-addon`, `install-addon`, `release`).
+Procedures you can follow step by step live in `skills/` (`start-feature`, `test-addon`, `install-addon`, `release`).
+Before editing anything, run the `start-feature` skill (or its commands) so you are on a `feat/`, `fix/`, `docs/` or `chore/` branch.
 
 Hard rules:
 
