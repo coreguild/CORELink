@@ -45,7 +45,8 @@ local DEBUG_MAX = 20
 local debugLog = {}
 local function Debug(fmt, ...)
   local text = select("#", ...) > 0 and string.format(fmt, ...) or fmt
-  local line = string.format("%d %s", math.floor(GetTime()), text)
+  local stamp = (date and date("%H:%M:%S")) or tostring(math.floor(GetTime()))
+  local line = stamp .. " " .. text
   debugLog[#debugLog + 1] = line
   if #debugLog > DEBUG_MAX then table.remove(debugLog, 1) end
   if db and db.debug then Print("|cff999999debug|r " .. text) end
@@ -106,11 +107,21 @@ local function ChannelId()
   return (id and id > 0) and id or nil
 end
 
+-- Connection diagnostics: what the game told us about the link channel, and whether joining is on hold.
+local conn = { giState = "not read yet", lastNotice = nil, lastNoticeAt = nil, joinAttempts = 0, blockedUntil = 0, blockedWhy = nil }
+local JOIN_BLOCK_SECS = 600   -- after WRONG_PASSWORD / BANNED, stop retrying for this long (or until /cl reload)
+
 local function EnsureChannel()
   if not db.enabled or not Configured() or Locked() then return end
   if not ChannelId() then
-    Debug("joining channel %s (password %s)", db.channel, db.password ~= "" and "set" or "none")
-    JoinChannelByName(db.channel, (db.password ~= "" and db.password) or nil)
+    if GetTime() < conn.blockedUntil then
+      Debug("join of %s on hold (%s); /cl reload to retry now", db.channel, tostring(conn.blockedWhy))
+      return
+    end
+    conn.joinAttempts = conn.joinAttempts + 1
+    Debug("joining channel %s (attempt %d, password %s)", db.channel, conn.joinAttempts, db.password ~= "" and "set" or "none")
+    local ok, err = pcall(JoinChannelByName, db.channel, (db.password ~= "" and db.password) or nil)
+    if not ok then Debug("JoinChannelByName errored: %s", tostring(err)) end
   end
   C_Timer.After(1, HideChannel)
 end
@@ -122,6 +133,22 @@ end
 local function IsLinkChannel(name)
   if not name or issecret(name) or not Configured() then return false end
   return name:lower():find(db.channel:lower(), 1, true) ~= nil
+end
+
+-- Notices the game sends about channels: joined, left, wrong password, banned, too many channels ...
+local function OnChannelNotice(notice, channelName, channelBaseName)
+  if issecret(notice) or type(notice) ~= "string" then return end
+  if not (IsLinkChannel(channelName) or IsLinkChannel(channelBaseName)) then return end
+  conn.lastNotice, conn.lastNoticeAt = notice, (date and date("%H:%M:%S")) or ""
+  Debug("channel notice for %s: %s", tostring(db.channel), notice)
+  if notice == "WRONG_PASSWORD" or notice == "BANNED" or notice == "TOO_MANY_CHANNELS" then
+    conn.blockedUntil = GetTime() + JOIN_BLOCK_SECS
+    conn.blockedWhy = notice
+    local why = (notice == "WRONG_PASSWORD" and "wrong channel password. Ask the Guild Master to check the CORELink line in Guild Info")
+      or (notice == "BANNED" and "you are banned from that channel")
+      or "you are in too many chat channels; leave one"
+    Print("could not join " .. tostring(db.channel) .. ": " .. why .. ". /cl reload to retry, /cl report for details.")
+  end
 end
 
 local function SetConfig(channel, password, tag, source)
@@ -143,16 +170,26 @@ local function BuildLine()
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
+local function GIState(state)
+  if conn.giState ~= state then
+    conn.giState = state
+    Debug("guild info: %s", state)
+  end
+end
+
 local function ReadGuildInfo()
-  if not db or not IsInGuild() then return end
+  if not db then return end
+  if not IsInGuild() then GIState("not in a guild") return end
   local ok, text = pcall(GetGuildInfoText)
-  if not ok or type(text) ~= "string" or issecret(text) or text == "" then return end
+  if not ok or type(text) ~= "string" or issecret(text) then GIState("not readable") return end
+  if text == "" then GIState("empty (not received yet, or nothing written)") return end
   local i = text:lower():find("corelink:", 1, true)
-  if not i then return end
+  if not i then GIState("no CORELink: line") return end
   local line = (text:sub(i):match("^[^\r\n]*") or ""):gsub("%s+$", "")
-  if line == db.lastGI then return end          -- unchanged; keep any local override
+  if line == db.lastGI then GIState("line unchanged") return end   -- keep any local override
   local ch, pw, tag, orank = line:sub(10):match("^[ \t]*([^%s]+)[ \t]+([^%s]+)[ \t]*([^%s]*)[ \t]*([^%s]*)")
-  if not ch then return end
+  if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
+  GIState("line read")
   db.officerRank = tonumber(orank) or 1
   db.lastGI = line
   pw = (pw == "-") and "" or Clean(pw)
@@ -470,7 +507,16 @@ local function LoginSync()
     Print(StatusLine())
     return
   end
-  if loginAttempts < 6 then C_Timer.After(5 * loginAttempts, LoginSync) end
+  if loginAttempts < 6 then
+    C_Timer.After(5 * loginAttempts, LoginSync)
+    return
+  end
+  local why
+  if not IsInGuild() then why = "you are not in a guild"
+  elseif not Configured() then why = "no usable CORELink line in Guild Info (" .. conn.giState .. ")"
+  elseif conn.lastNotice then why = "the game answered " .. conn.lastNotice .. " when joining " .. db.channel
+  else why = "joining " .. db.channel .. " got no answer from the server" end
+  Print("not connected after login: " .. why .. ". Run /cl report and share it, or /cl reload to retry.")
 end
 
 ---------------------------------------------------------------- filters
@@ -506,6 +552,7 @@ f:RegisterEvent("CHAT_MSG_GUILD")
 f:RegisterEvent("CHAT_MSG_ADDON")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:RegisterEvent("CHANNEL_UI_UPDATE")
+f:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 
 local lastRead, warned = 0, false
 f:SetScript("OnEvent", function(self, event, ...)
@@ -521,7 +568,8 @@ f:SetScript("OnEvent", function(self, event, ...)
       C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
     end
   elseif event == "PLAYER_LOGIN" then
-    if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() end
+    if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster()
+    elseif GuildRoster then GuildRoster() end
     C_Timer.After(5, LoginSync)
     C_Timer.After(25, function()
       if db.nicks[UnitName("player")] then BroadcastNick() end
@@ -538,6 +586,9 @@ f:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHANNEL_UI_UPDATE" then
     -- the channel system just became ready (or changed); make sure we are in the link channel
     if Configured() then EnsureChannel() end
+  elseif event == "CHAT_MSG_CHANNEL_NOTICE" then
+    local notice, _, _, channelName, _, _, _, _, channelBaseName = ...
+    OnChannelNotice(notice, channelName, channelBaseName)
   elseif event == "CHAT_MSG_GUILD" then
     OnGuildMessage(...)
   elseif event == "CHAT_MSG_ADDON" then
@@ -721,6 +772,11 @@ SlashCmdList["CORELINK"] = function(input)
       "tag " .. tostring(Configured() and GetTag() or nil),
       "config " .. tostring(db.source),
       "officerRank " .. tostring(db.officerRank or 1),
+      "inGuild " .. tostring(IsInGuild()),
+      "guildInfo " .. conn.giState,
+      "joinAttempts " .. conn.joinAttempts,
+      "lastNotice " .. (conn.lastNotice and (conn.lastNotice .. " at " .. conn.lastNoticeAt) or "none"),
+      "joinHold " .. (GetTime() < conn.blockedUntil and tostring(conn.blockedWhy) or "no"),
       "lockdown " .. tostring(Locked()),
       "lastSend " .. tostring(lastSendResult),
       "queue " .. #sendQueue,
@@ -750,7 +806,8 @@ SlashCmdList["CORELINK"] = function(input)
       db.window = nil; Print("bridged messages will show in the window(s) that have Guild chat enabled.")
     end
   elseif cmd == "reload" then
-    db.lastGI = nil; ReadGuildInfo(); Print("re-read Guild Info.")
+    db.lastGI = nil; conn.blockedUntil = 0; conn.blockedWhy = nil
+    ReadGuildInfo(); EnsureChannel(); Print("re-read Guild Info and retried the channel.")
   elseif cmd == "clear" then
     LeaveLink(); db.channel, db.password, db.tag, db.source, db.lastGI = nil, nil, nil, nil, nil
     Print("settings cleared.")

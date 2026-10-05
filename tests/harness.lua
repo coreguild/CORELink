@@ -10,6 +10,7 @@ end
 ---------------------------------------------------------------- fake client
 local now = 1000
 GetTime = function() return now end
+date = function(fmt) return os.date(fmt, 1759680000 + now) end  -- fixed wall clock for reproducible logs
 local chatLines = {}                  -- what the player would see in chat windows
 local function frame(id)
   return { id = id, AddMessage = function(_, m, r, g, b) chatLines[#chatLines + 1] = { frame = id, text = m, r = r, g = g, b = b } end }
@@ -63,6 +64,7 @@ IsInGuild = function() return true end
 local myRank = 3
 GetGuildInfo = function() return "CORE Forever", "Member", myRank end
 local guildInfoText = "Welcome!\nCORELink: CORELink7100 pw1 MAIN 1\n"
+local savedTextForRestore = guildInfoText
 GetGuildInfoText = function() return guildInfoText end
 local roster = {
   { "Shockly-Beta", "Member", 3, "MAGE" },
@@ -231,6 +233,44 @@ do
   H(nil, "CHANNEL_UI_UPDATE")
   check("CHANNEL_UI_UPDATE triggers a rejoin when not in the channel", #joinCalls == jc + 1)
   JoinChannelByName = savedJoin
+end
+
+-- Connection diagnostics (#17 / #22): wrong password is reported once, retries pause, /cl reload clears it
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 wrongpw MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw } end   -- never succeeds
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  advance(6)
+  local jc = #joinCalls
+  n0 = #chatLines
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  local notices = 0
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("could not join CORELink7100: wrong channel password", 1, true) then notices = notices + 1 end end
+  check("wrong password is reported to the player once", notices == 1)
+  advance(130)                                           -- login retries + two housekeeping ticks
+  check("join retries pause after a wrong-password notice", #joinCalls == jc, #joinCalls - jc)
+  lastSetText = nil; slash("report")
+  check("report shows guild info state, join attempts and the last notice",
+    (lastSetText or ""):find("guildInfo line ", 1, true) and (lastSetText or ""):find("joinAttempts ", 1, true) and (lastSetText or ""):find("lastNotice WRONG_PASSWORD at ", 1, true) and (lastSetText or ""):find("joinHold WRONG_PASSWORD", 1, true), lastSetText)
+  check("debug log uses wall-clock timestamps", (lastSetText or ""):match("log: %d%d:%d%d:%d%d ") ~= nil)
+  myRank = 0; slash("reload"); myRank = 3          -- reload is GM-only until #23 lands
+  check("/cl reload clears the hold and retries the join", #joinCalls == jc + 1, #joinCalls - jc)
+end
+
+-- Login gives up with a reason when Guild Info never has a line
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "Welcome, no link configured here\n"
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  n0 = #chatLines
+  advance(90)
+  local found = 0
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("not connected after login: no usable CORELink line in Guild Info (no CORELink: line)", 1, true) then found = found + 1 end end
+  check("login reports why it could not connect, once", found == 1, found)
+  guildInfoText = savedTextForRestore or "CORELink: CORELink7100 pw1 MAIN 1\n"
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))
