@@ -2,6 +2,6 @@
 ## Title: CORELink
 ## Notes: Bridges guild chat between co-guilds (Greenwall-style).
 ## Author: CORE
-## Version: 0.1.1
+## Version: @project-version@
 ## SavedVariables: CORELinkDB
 CORELink.lua

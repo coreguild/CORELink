@@ -9,7 +9,9 @@
 - **Commands added/changed:** `/cl ...` (also update the table in README.md)
 - **Config / Guild Info line impact:** none | new optional field | breaking
 - **Wire protocol impact:** none | new field, PROTO bumped to CLx, older versions still readable
-- **Version bump:** both TOCs now say `## Version: x.y.z`
+- **Size of change for the release:** patch (fix) | minor (feature) | major (players must all update together)
+
+(The PR title becomes a line in the auto-generated release notes. Write it for a player.)
 
 ## Tests
 

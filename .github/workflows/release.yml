@@ -1,7 +1,8 @@
 name: release
 # Manual button in the Actions tab: Actions -> release -> Run workflow.
-# channel=rc    tags v<ver>-rcN, GitHub pre-release, updates rc/CORELink.zip on the download page
-# channel=final tags v<ver> (needs an rc tag on the same commit unless no_rc), latest release, updates latest/
+# Version numbers are automatic: computed from existing tags (see scripts/release.sh header).
+# channel=rc    next candidate: v0.2.0-rc2 if a 0.2.0 series is open, else bump the last release and start rc1
+# channel=final promotes the rc on main to v<ver>; latest release; updates latest/CORELink.zip
 # channel=site  only re-renders the download page
 on:
   workflow_dispatch:
@@ -12,8 +13,13 @@ on:
         required: true
         default: rc
         options: [rc, final, site]
+      bump:
+        description: "rc only: auto = continue the open rc series or patch-bump the last release; minor/major start a new series"
+        type: choice
+        default: auto
+        options: [auto, patch, minor, major]
       notes:
-        description: "Release notes (defaults to a pointer at CHANGELOG.md)"
+        description: "Extra text on top of the auto-generated notes (merged PR titles since the last release)"
         type: string
         required: false
       no_rc:
@@ -42,10 +48,13 @@ jobs:
           LUAC: luac5.4
           CI: "true"
           CHANNEL: ${{ inputs.channel }}
+          BUMP: ${{ inputs.bump }}
           NOTES: ${{ inputs.notes }}
           NO_RC: ${{ inputs.no_rc }}
         run: |
-          args=("$CHANNEL")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          args=("$CHANNEL" --bump "${BUMP:-auto}")
           [ -n "$NOTES" ] && args+=(--notes "$NOTES")
           [ "$NO_RC" = "true" ] && args+=(--no-rc)
           scripts/release.sh "${args[@]}"

@@ -22,10 +22,19 @@ jobs:
           LUA: lua5.4
           LUAC: luac5.4
         run: tests/run.sh
-      - name: TOC versions match
+      - name: TOCs carry the version placeholder
         run: |
-          a=$(grep -m1 '^## Version:' CORELink/CORELink.toc); b=$(grep -m1 '^## Version:' CORELink/CORELink_Camelot.toc)
-          [ "$a" = "$b" ] || { echo "TOC versions differ: '$a' vs '$b'"; exit 1; }
+          for t in CORELink/*.toc; do
+            grep -q '^## Version: @project-version@$' "$t" || { echo "$t must say '## Version: @project-version@'; versions are stamped at release time"; exit 1; }
+          done
+      - name: Package builds with a stamped version
+        env:
+          LUA: lua5.4
+          LUAC: luac5.4
+          VERSION: 0.0.0-ci
+        run: |
+          scripts/package.sh >/dev/null
+          unzip -p dist/CORELink-0.0.0-ci.zip CORELink/CORELink.toc | grep -q '^## Version: 0.0.0-ci$' && echo "stamping ok"
   game-version:
     name: game-version
     runs-on: ubuntu-latest

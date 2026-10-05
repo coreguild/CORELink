@@ -171,6 +171,12 @@ local report = lastSetText or ""
 check("/cl report fills the copy box", report ~= "")
 check("report has version, channel id, last send result and log", report:find("CORELink 0.1.1-test", 1, true) and report:find("channel CORELink7100 id 6", 1, true) and report:find("lastSend 0", 1, true) and report:find("log: ", 1, true), report)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. report)
+-- an unstamped (dev) checkout reports "dev" instead of the placeholder
+local realMeta = C_AddOns.GetAddOnMetadata
+C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
+lastSetText = nil; slash("report")
+check("placeholder version shows as dev", (lastSetText or ""):find("CORELink dev |", 1, true) ~= nil, lastSetText)
+C_AddOns.GetAddOnMetadata = realMeta
 
 -- /cl debug on echoes debug lines to chat; off silences them but the report still keeps the log
 slash("debug on"); n0 = #chatLines

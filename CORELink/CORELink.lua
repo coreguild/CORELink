@@ -55,7 +55,9 @@ local function Version()
   local v
   if C_AddOns and C_AddOns.GetAddOnMetadata then v = C_AddOns.GetAddOnMetadata(ADDON, "Version")
   elseif GetAddOnMetadata then v = GetAddOnMetadata(ADDON, "Version") end
-  return v or "?"
+  -- The repo's TOC holds "@project-version@"; releases stamp the real number. A symlinked dev checkout shows "dev".
+  if not v or v == "" or v:find("@", 1, true) then return "dev" end
+  return v
 end
 
 local function Clean(s) return (s:gsub("[%s~|]", "")) end
