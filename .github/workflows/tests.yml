@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Lua
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4
-      - name: Syntax check and mock harness
+      - name: Install Lua and luacheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4 lua-check
+      - name: Syntax check, luacheck and mock harness
         env:
           LUA: lua5.4
           LUAC: luac5.4
