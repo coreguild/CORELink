@@ -77,24 +77,50 @@ Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
 ## How a change gets to players
 
-The short version: edit on a branch, open a pull request, the robots check it, a human merges it, then a
-release candidate goes to a few testers before everyone gets it.
+Branch, pull request, CI, squash-merge, release candidate, release. `main` is always releasable and is only
+written through pull requests.
 
-1. **Nobody edits `main` directly.** You make a branch (`feat/my-idea`), change the addon, and open a pull request.
-2. **The checks run.** GitHub runs the tests and confirms the addon still matches the current game client. A pull
-   request cannot be merged until both are green. No reviewer sign-off is required, but the PR must say what players
-   will see and how it was tested.
-3. **Merge.** Whoever merges uses the squash button. `main` is now the next version, but nobody is running it yet.
-4. **Release candidate.** `scripts/release.sh rc` tags it `v0.2.0-rc1`, publishes a GitHub pre-release, and puts the
-   zip on the RC link: https://core-wow-community.github.io/CORELink/rc/CORELink.zip. Guild leads run it for a day
-   on two clients in two guilds, with one person still on the old stable version to prove they can still talk.
-   Problems go back to step 1, and the next candidate is `rc2`.
-5. **Release.** `scripts/release.sh final` tags the same code `v0.2.0`, publishes it as the latest release, and moves
-   the stable link to it: https://core-wow-community.github.io/CORELink/latest/CORELink.zip. Announce it to both
-   guilds with the CHANGELOG entry. Everyone should run the same version.
+```
+feat/x ──PR──▶ main ──release.sh rc──▶ v0.2.0-rc1 (pre-release, rc/CORELink.zip)
+                 │                          │ testers run it for a day
+                 │                          ▼
+                 └──release.sh final──▶ v0.2.0 (latest, latest/CORELink.zip)
+```
 
-The zip that testers ran in step 4 is byte for byte the one players get in step 5; only the tag changes.
-Every build also stays available at `v/CORELink-<version>.zip` if someone needs to go back.
+1. **Branch.** `git switch -c feat/<name> main` (`fix/`, `docs/`, `chore/` for other kinds). One change per branch.
+   The PR that ships the first user-visible change of a version bumps `## Version:` in both TOC files and starts
+   that version's section in `CHANGELOG.md`. The TOC version never carries an `rc` suffix.
+
+2. **Pull request into `main`.** The template asks for feature notes (player-facing behaviour, commands, Guild Info
+   and wire-protocol impact, version) and how it was tested. CI runs two required checks on every PR:
+   * `tests`: `luac -p`, `luacheck` against the WoW globals in `.luacheckrc`, the mock-API harness in
+     `tests/harness.lua`, and both TOC versions equal.
+   * `game-version`: `scripts/check-game-version.sh` fetches the live client build from
+     `https://us.version.battle.net/<product>/versions` (product in `tests/game-product.txt`), derives the interface
+     number (`1.60.1` -> `16001`) and fails if either TOC's `## Interface:` lacks it. It also runs every 6 hours and
+     opens an issue when a game patch moves ahead of us.
+   The `protect-main` ruleset blocks merging until both are green and the branch is up to date with `main`. No
+   approval is required; the gameplay-impact review in `agents/review-checklist.md` is posted as a comment.
+
+3. **Squash-merge.** The only merge method enabled. The branch is deleted automatically.
+
+4. **Release candidate.** From a clean, up-to-date `main`: `scripts/release.sh rc`. It re-runs the checks, builds
+   `dist/CORELink-<ver>.zip` from the TOC version, creates annotated tag `v<ver>-rcN` (next free N), publishes a
+   GitHub pre-release with the zip, and pushes to the `gh-pages` branch: `rc/CORELink.zip`, `rc/VERSION`,
+   `v/CORELink-<ver>.zip`, a re-rendered `index.html` from `site/index.template.html`, and `channels.json`.
+   GitHub Pages serves that branch publicly at https://core-wow-community.github.io/CORELink/ even though the
+   source repo is private. Testers run the RC for a day on two clients in two guilds, with one client left on the
+   previous stable to prove the protocol still interoperates. Fixes go through normal PRs; the next `rc` run
+   becomes `rcN+1`.
+
+5. **Release.** `scripts/release.sh final` refuses unless a `v<ver>-rc*` tag points at `HEAD` (override with
+   `--no-rc` only for a small hotfix that touches neither the relay path nor the protocol). It tags `v<ver>`,
+   publishes the GitHub release as latest with the same zip, and updates `latest/CORELink.zip`, `latest/VERSION`
+   and the page. Announce with the CHANGELOG section. All linked guilds should run the same version.
+
+Permanent download URLs: `latest/CORELink.zip` (stable), `rc/CORELink.zip` (candidate), `v/CORELink-<ver>.zip`
+(every build), `channels.json` (`{"stable","rc","updated"}` for bots). Only `scripts/release.sh` writes to
+`gh-pages`; the `release` skill in `skills/` wraps the same steps for an agent.
 
 ## Development
 
