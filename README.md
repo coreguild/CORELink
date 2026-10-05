@@ -77,7 +77,7 @@ Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
 ## How a change gets to players
 
-Branch, pull request, CI, squash-merge, then two buttons: release candidate, release. Nobody edits a version
+Branch, pull request, CI, merge, then two buttons: release candidate, release. Nobody edits a version
 number; the release button computes it from the existing tags and GitHub writes the notes from the PR titles.
 
 ```
@@ -101,8 +101,8 @@ feat/x ──PR──▶ main ──[release: rc]──▶ v0.2.0-rc1 (pre-relea
    The `protect-main` ruleset blocks merging until both are green and the branch is up to date with `main`. No
    approval is required; the gameplay-impact review in `agents/review-checklist.md` is posted as a comment.
 
-3. **Squash-merge.** A person clicks the button; agents never merge. It is the only merge method enabled, and the
-   branch is deleted automatically.
+3. **Merge.** A person clicks the button; agents never merge. Merge commits are the only method enabled, so the
+   branch's full history lands on `main`; the branch is deleted automatically.
 
 4. **Release candidate.** GitHub -> Actions -> **release** -> **Run workflow** -> `rc`. The job checks out `main`,
    re-runs the checks, works out the version (`bump` = `auto`: continue an open candidate series as `rcN+1`,
