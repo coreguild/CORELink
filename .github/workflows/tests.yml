@@ -1,0 +1,45 @@
+name: tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 */6 * * *"   # every 6 hours: catch a game patch that changes the interface number
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4
+      - name: Syntax check and mock harness
+        env:
+          LUA: lua5.4
+          LUAC: luac5.4
+        run: tests/run.sh
+      - name: TOC versions match
+        run: |
+          a=$(grep -m1 '^## Version:' CORELink/CORELink.toc); b=$(grep -m1 '^## Version:' CORELink/CORELink_Camelot.toc)
+          [ "$a" = "$b" ] || { echo "TOC versions differ: '$a' vs '$b'"; exit 1; }
+  game-version:
+    name: game-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: TOC interface matches the live client
+        id: check
+        run: scripts/check-game-version.sh | tee check.txt
+      - name: Open an issue when the game moved ahead of us (scheduled runs only)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Game client updated: TOC interface no longer matches"
+          if [ -z "$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[0].number')" ]; then
+            gh issue create --title "$title" --label "game-patch" --body "$(printf 'scripts/check-game-version.sh failed on the scheduled run:\n\n```\n%s\n```\n\nOpen a `chore/interface-bump` PR updating `## Interface:` in both TOCs, re-test in game, and bump the addon version.' "$(cat check.txt)")"
+          fi

@@ -8,6 +8,14 @@
 * Open a pull request into `main`. Keep PRs small: one feature or one fix. Describe how you tested it in game.
 * Squash-merge. Delete the branch after merging.
 
+## Pull requests
+
+The PR template asks for feature notes (player-facing behaviour, commands, config and protocol impact, version) and
+a test checklist. Fill it in; an empty template is the most common reason a PR gets sent back. No reviewer approval
+is required, but CI must pass before the merge button works (`tests/run.sh`, and the TOC interface number must match
+the live game client), every PR gets the gameplay-impact review in `agents/review-checklist.md`, and `CHANGELOG.md` gets a line for
+every user-visible change.
+
 ## Before you push
 
 1. `tests/run.sh` passes (syntax check plus the mock harness).

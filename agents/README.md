@@ -11,4 +11,4 @@ What an agent can and cannot do here:
 * Cannot: launch the game, log in, or observe chat. Anything beyond the harness must be verified by a human
   with two characters in two different guilds. Say so explicitly in your summary.
 
-Read in order: `branching.md`, `testing.md`, `wow-api-gotchas.md`.
+Read in order: `branching.md`, `testing.md`, `wow-api-gotchas.md`, `feature-requests.md`, `review-checklist.md`.
