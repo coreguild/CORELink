@@ -89,7 +89,9 @@ ColorPickerFrame = nil
 assert(loadfile("CORELink/CORELink.lua"))("CORELink")
 local H = events.handler
 local function slash(s) SlashCmdList["CORELINK"](s) end
+CORELinkDB = { debug = true }            -- left on by a previous session: must be off after login
 H(nil, "ADDON_LOADED", "CORELink")
+check("debug echo is off at login even if saved on", CORELinkDB.debug == false)
 H(nil, "PLAYER_LOGIN")
 H(nil, "GUILD_ROSTER_UPDATE")
 advance(8)                                   -- ReadGuildInfo (5s) then EnsureChannel (1.5s)

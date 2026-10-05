@@ -514,6 +514,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     CORELinkDB = CORELinkDB or {}
     db = CORELinkDB
     if db.enabled == nil then db.enabled = true end
+    db.debug = false          -- debug echo is per session: always off at login, /cl debug on to enable
     db.muted = db.muted or {}
     db.nicks = db.nicks or {}
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
