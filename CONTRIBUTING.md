@@ -26,10 +26,21 @@ every user-visible change.
 
 ## Versioning and releases
 
-* Version lives in `## Version:` in both TOC files. Bump it in the PR that ships a user-visible change
-  (patch for fixes, minor for features; we are pre-1.0).
-* To release: merge to `main`, then `scripts/package.sh`, then upload `dist/CORELink-<version>.zip` as a
-  GitHub Release tagged `v<version>`. Everyone in every linked guild should run the same version.
+* Version lives in `## Version:` in both TOC files. Bump it in the PR that ships the first user-visible change of
+  the next version (patch for fixes, minor for features; we are pre-1.0), and start that version's CHANGELOG section.
+  The TOC never carries an "rc" suffix; the same zip that passed RC is the one that ships.
+* Two channels, driven by `scripts/release.sh` from an up-to-date `main`:
+  * **Release candidate**: `scripts/release.sh rc` tags `v<ver>-rcN` (next free N), publishes a GitHub pre-release,
+    and updates the RC download link. Guild leads run it for a day on two clients in two guilds, with one client left
+    on the previous stable to prove the protocol still interoperates. Problems -> normal fix PRs -> `rc` again.
+  * **Latest release**: `scripts/release.sh final` tags `v<ver>` on the same commit as the RC, publishes the GitHub
+    release as latest, and updates the stable download link. `--no-rc` exists for small hotfixes only.
+* Public download links, no GitHub account needed:
+  * stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
+  * release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip
+  * landing page with both: https://core-wow-community.github.io/CORELink/
+  These are served from the `gh-pages` branch, which only `scripts/release.sh` writes to. Older builds stay at
+  `v/CORELink-<version>.zip`.
 
 ## Commit messages
 
