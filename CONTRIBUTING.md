@@ -6,7 +6,8 @@
 * One branch per change, from `main`: `feat/<short-name>`, `fix/<short-name>`, `docs/<short-name>`, `chore/<short-name>`.
   Examples: `feat/officer-chat`, `fix/utf8-trim`.
 * Open a pull request into `main`. Keep PRs small: one feature or one fix. Describe how you tested it in game.
-* Squash-merge. Delete the branch after merging.
+* Squash-merge. Delete the branch after merging. Merging is always a person clicking the button; AI agents open
+  and update PRs but never merge them.
 
 ## Pull requests
 

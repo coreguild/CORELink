@@ -6,4 +6,7 @@
 3. Before pushing: `tests/run.sh` must pass. Do not push with failing tests.
 4. Push and open a PR into `main` with: what changed, why, how it was tested (harness + in game or "not verified in game").
 5. Never push to `main`. Never force-push a shared branch. Never rewrite history on `main`.
-6. If the user asks to "just commit", still create a branch; ask before merging anything.
+6. If the user asks to "just commit", still create a branch.
+7. Never merge. Not with `gh pr merge`, not with auto-merge, not by pushing to `main`. Report "PR #n is ready to
+   merge: CI green, review posted" and stop. A human presses the button. If the user says "merge it", point them
+   at the button; do not do it for them.

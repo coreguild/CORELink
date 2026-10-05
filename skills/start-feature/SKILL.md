@@ -16,4 +16,4 @@ Arguments: a short description of the change, e.g. `officer chat bridging` or `f
 5. Confirm with `git status -sb` that you are on the new branch tracking nothing yet, then start the work.
 6. When the work is done: `tests/run.sh`, commit with an imperative subject and a `Co-Authored-By:` trailer naming the agent, `git push -u origin <type>/<name>`, and open a pull request into `main` with `gh pr create --fill` (edit the body to say how it was tested, or "not verified in game").
 
-Never: commit on `main`, reuse a merged branch, or put two unrelated changes on one branch.
+Never: commit on `main`, merge a PR (humans do that), reuse a merged branch, or put two unrelated changes on one branch.
