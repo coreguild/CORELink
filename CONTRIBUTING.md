@@ -38,8 +38,9 @@ every user-visible change.
     two clients in two guilds, with one client left on the previous stable to prove the protocol still interoperates.
   * **Latest release** (`final`): promotes the rc on `main` to `v<ver>`, publishes it as latest and updates the
     stable link. `no_rc` exists for small hotfixes only.
-* Release notes are generated from the titles of the PRs merged since the previous release, so write PR titles a
-  player could read. `CHANGELOG.md` is no longer maintained by hand; the Releases page is the changelog.
+* Release notes are built from the commits on `main` since the previous release (merge commits and `wip`/`fixup`
+  subjects skipped), so write commit subjects a player could read. They go on the GitHub release, on the download
+  page under "What's new", and to `notes/<version>.md`. `CHANGELOG.md` is no longer maintained by hand.
 * Public download links, no GitHub account needed:
   * stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
   * release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip

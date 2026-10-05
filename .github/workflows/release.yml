@@ -19,7 +19,7 @@ on:
         default: auto
         options: [auto, patch, minor, major]
       notes:
-        description: "Extra text on top of the auto-generated notes (merged PR titles since the last release)"
+        description: "Extra text on top of the notes built from the commits since the last release"
         type: string
         required: false
       no_rc:
