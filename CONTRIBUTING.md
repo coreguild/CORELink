@@ -38,9 +38,11 @@ every user-visible change.
     two clients in two guilds, with one client left on the previous stable to prove the protocol still interoperates.
   * **Latest release** (`final`): promotes the rc on `main` to `v<ver>`, publishes it as latest and updates the
     stable link. `no_rc` exists for small hotfixes only.
-* Release notes are built from the commits on `main` since the previous release (merge commits and `wip`/`fixup`
-  subjects skipped), so write commit subjects a player could read. They go on the GitHub release, on the download
-  page under "What's new", and to `notes/<version>.md`. `CHANGELOG.md` is no longer maintained by hand.
+* Release notes are a changelog section in the conventional-changelog format (Features, Bug Fixes, ... each line
+  linking its commit), built from the commits since the previous tag. They go on the GitHub release, on the
+  download page under "What's new", and are prepended to the published
+  [CHANGELOG.md](https://core-wow-community.github.io/CORELink/CHANGELOG.md). The copy of `CHANGELOG.md` in this repo
+  is frozen; the published one is the real changelog.
 * Public download links, no GitHub account needed:
   * stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
   * release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip
@@ -49,7 +51,21 @@ every user-visible change.
 
 ## Commit messages
 
-Short imperative subject (`Fix UTF-8 trim at packet boundary`), body explains why if it is not obvious.
+Subjects follow [Conventional Commits](https://www.conventionalcommits.org/), because the changelog is generated
+from them at release time and grouped by type:
+
+```
+feat(relay): queue messages typed before the channel joins      -> Features
+fix: debug echo is off at login                                  -> Bug Fixes
+perf(roster): cache rank lookups                                 -> Performance Improvements
+docs: explain the officer note                                   -> Documentation
+chore|ci|build|test|refactor|style: ...                          -> Maintenance
+feat(protocol)!: CL5 packets                                     -> also listed under BREAKING CHANGES
+```
+
+Scope is optional and should be a player-recognisable area (`relay`, `officer`, `nicknames`, `setup`, `ui`).
+A subject without a type still appears, under "Other Changes". Imperative mood, lower case, no trailing period.
+Body explains why if it is not obvious.
 If an AI agent wrote the change, say so in the commit body, e.g. `Co-Authored-By: <agent name>`.
 
 ## Code style

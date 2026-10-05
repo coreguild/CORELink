@@ -89,8 +89,8 @@ feat/x ──PR──▶ main ──[release: rc]──▶ v0.2.0-rc1 (pre-relea
 ```
 
 1. **Branch.** `git switch -c feat/<name> main` (`fix/`, `docs/`, `chore/` for other kinds). One change per branch.
-   Write commit subjects a player could understand; every commit since the last release becomes a line in the
-   release notes (merge commits and `wip`/`fixup` subjects are skipped).
+   Commit subjects use Conventional Commits (`feat(scope): ...`, `fix: ...`); the changelog is generated from them
+   and grouped into Features, Bug Fixes and so on, each line linking its commit. See `CONTRIBUTING.md`.
 
 2. **Pull request into `main`.** The template asks for feature notes (player-facing behaviour, commands, Guild Info
    and wire-protocol impact) and how it was tested. CI runs two required checks on every PR:
@@ -109,10 +109,10 @@ feat/x ──PR──▶ main ──[release: rc]──▶ v0.2.0-rc1 (pre-relea
 4. **Release candidate.** GitHub -> Actions -> **release** -> **Run workflow** -> `rc`. The job checks out `main`,
    re-runs the checks, works out the version (`bump` = `auto`: continue an open candidate series as `rcN+1`,
    otherwise patch-bump the last release and start `rc1`; choose `minor` or `major` to start a bigger version),
-   stamps it into the TOCs inside the zip, creates tag `v<ver>-rcN`, publishes a GitHub pre-release whose notes list
-   the commits since the last release (plus a "since rcN-1" section), and pushes `rc/CORELink.zip`,
-   `v/CORELink-<ver>.zip`, `notes/<ver>.md` and the re-rendered page, which shows the same notes under each
-   channel, to the `gh-pages` branch. GitHub Pages serves that branch publicly at
+   stamps it into the TOCs inside the zip, creates tag `v<ver>-rcN`, publishes a GitHub pre-release whose body is the
+   changelog section for that tag (commits since the previous rc or release, grouped by type), and pushes
+   `rc/CORELink.zip`, `v/CORELink-<ver>.zip`, `notes/<tag>.md`, an updated `CHANGELOG.md` and the re-rendered
+   page, which shows the same section under each channel, to the `gh-pages` branch. GitHub Pages serves that branch publicly at
    https://core-wow-community.github.io/CORELink/ even though the source is private. Testers run the RC for a day
    on two clients in two guilds, with one client left on the previous stable to prove the protocol still
    interoperates. Fixes go through normal PRs; press `rc` again for `rcN+1`.

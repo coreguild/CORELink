@@ -11,8 +11,10 @@
 #           that series (v0.2.0-rc2); otherwise bump the last final (--bump, default patch) and start rc1.
 #           --bump minor/major on an existing series starts a new, higher series instead.
 #   final : the version of the rc tag that points at this commit (required unless --no-rc, which bumps the last final).
-# Release notes are built from the commits on main since the previous release (merge commits and wip/site noise
-# skipped), put on the GitHub release and shown on the download page; --notes adds text on top.
+# Release notes are a CHANGELOG section in the conventional-changelog format (Features / Bug Fixes / ... with
+# commit links), built from the commits since the previous tag (rc: since rcN-1 or the last release; final: since
+# the last release). They go on the GitHub release, are prepended to CHANGELOG.md on gh-pages, and are shown on the
+# download page. --notes adds a paragraph on top.
 # Downloads are published to the gh-pages branch at permanent URLs (see site/index.template.html).
 # Normally run by the "release" GitHub Actions workflow (Run workflow button); works locally from a clean main.
 set -euo pipefail
@@ -86,8 +88,9 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
     echo "$VER" > "$wt/$channel/VERSION"
     date -u +%Y-%m-%d > "$wt/$channel/DATE"
     cp "$zip" "$wt/v/CORELink-$VER.zip"
-    printf '%s\n' "$RELEASE_NOTES" > "$wt/notes/$VER.md"
+    printf '%s\n' "$RELEASE_NOTES" > "$wt/notes/${TAG#v}.md"
     printf '%s\n' "$RELEASE_NOTES" > "$wt/$channel/NOTES.md"
+    prepend_changelog "$wt/CHANGELOG.md" "$CHANGELOG_SECTION"
   fi
   local stable rc stable_date rc_date rc_block=""
   stable=$(cat "$wt/latest/VERSION" 2>/dev/null || echo "none yet")
@@ -112,33 +115,65 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
   echo "site published: $PAGES_URL  (stable $stable, rc $rc)"
 }
 
-# ---- changelog from commits ---------------------------------------------------------------------
-commit_list() {  # $1 = range, e.g. v0.1.0..HEAD ; one "- subject (sha)" per commit, noise removed, oldest first
-  git log --no-merges --reverse --pretty='%s (%h)' "$1" 2>/dev/null \
-    | grep -viE '^(wip|fixup!|squash!|site:|merge |release:)' \
-    | awk '!seen[$0]++' | sed 's/^/- /'
+# ---- changelog from commits (conventional-changelog style) ------------------------------------------
+# Commit subjects "type(scope)!: text" are grouped by type; everything else lands under "Other Changes".
+changelog_section() {  # $1 = new tag, $2 = previous tag ("" for none) ; prints a markdown section
+  local tag="$1" prev="$2" url="https://github.com/$REPO" today; today=$(date -u +%Y-%m-%d)
+  if [ -n "$prev" ]; then printf '## [%s](%s/compare/%s...%s) (%s)\n' "${tag#v}" "$url" "$prev" "$tag" "$today"
+  else printf '## %s (%s)\n' "${tag#v}" "$today"; fi
+  git log --no-merges --reverse --pretty='%H%x1f%h%x1f%s' "${prev:+$prev..}HEAD" | awk -F'\037' -v url="$url" '
+    {
+      full = $1; short = $2; subj = $3
+      if (subj ~ /^(wip|fixup!|squash!|site:|Merge )/) next
+      type = ""; scope = ""; bang = 0; rest = subj
+      if (match(subj, /^[A-Za-z]+(\([^)]*\))?!?: /)) {
+        head = substr(subj, 1, RLENGTH); rest = substr(subj, RLENGTH + 1)
+        type = head; sub(/[(!:].*$/, "", type); type = tolower(type)
+        if (match(head, /\([^)]*\)/)) scope = substr(head, RSTART + 1, RLENGTH - 2)
+        if (head ~ /!: $/) bang = 1
+      }
+      sec = "Other Changes"
+      if (type == "feat") sec = "Features"
+      else if (type == "fix") sec = "Bug Fixes"
+      else if (type == "perf") sec = "Performance Improvements"
+      else if (type == "revert") sec = "Reverts"
+      else if (type == "docs") sec = "Documentation"
+      else if (type ~ /^(chore|ci|build|test|refactor|style)$/) sec = "Maintenance"
+      line = "* " (scope != "" ? "**" scope ":** " : "") rest " ([" short "](" url "/commit/" full "))"
+      if (bang) brk[++nb] = line
+      n[sec]++; items[sec, n[sec]] = line; total++
+    }
+    END {
+      if (nb) { printf "\n\n### \342\232\240 BREAKING CHANGES\n\n"; for (i = 1; i <= nb; i++) print brk[i] }
+      split("Features|Bug Fixes|Performance Improvements|Reverts|Documentation|Maintenance|Other Changes", o, "|")
+      for (k = 1; k <= 7; k++) { s = o[k]; if (n[s]) { printf "\n\n### %s\n\n", s; for (i = 1; i <= n[s]; i++) print items[s, i] } }
+      if (!total) printf "\n\n* No changes.\n"
+    }'
 }
-build_notes() {  # $1 = tag being created, $2 = channel label, $3 = channel dir ; prints markdown
-  local since="v$LAST_FINAL"; git rev-parse -q --verify "refs/tags/$since" >/dev/null || since=""
-  local all; all=$(commit_list "${since:+$since..}HEAD")
+build_notes() {  # $1 = new tag, $2 = previous tag, $3 = channel label, $4 = channel dir ; prints markdown
   [ -n "$NOTES" ] && printf '%s\n\n' "$NOTES"
-  printf '## Changes since %s\n\n%s\n' "${since:-the beginning}" "${all:-- (no commits found)}"
-  if [ "$MODE" = rc ] && [ "${N:-1}" -gt 1 ]; then
-    local prev="v$VER-rc$((N-1))" delta
-    delta=$(commit_list "$prev..HEAD")
-    printf '\n## Since %s\n\n%s\n' "$prev" "${delta:-- (no new commits)}"
-  fi
-  printf '\nDirect download (%s): %s/%s/CORELink.zip\n' "$2" "$PAGES_URL" "$3"
+  changelog_section "$1" "$2"
+  printf '\nDirect download (%s): %s/%s/CORELink.zip\n' "$3" "$PAGES_URL" "$4"
 }
-notes_html() {  # stdin markdown -> minimal HTML (headings, bullet lists, paragraphs), escaped
-  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' | awk '
-    function closelist() { if (inlist) { print "</ul>"; inlist=0 } }
-    /^## / { closelist(); sub(/^## /, ""); print "<h3>" $0 "</h3>"; next }
-    /^- /  { if (!inlist) { print "<ul>"; inlist=1 } sub(/^- /, ""); print "<li>" $0 "</li>"; next }
+notes_html() {  # stdin markdown (changelog section) -> minimal HTML, escaped
+  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+      -E -e 's/\[([^]]+)\]\(([^)]+)\)/<a href="\2">\1<\/a>/g' -e 's/\*\*([^*]+)\*\*/<strong>\1<\/strong>/g' \
+  | awk '
+    function closelist() { if (inlist) { print "</ul>"; inlist = 0 } }
+    /^### / { closelist(); sub(/^### /, ""); print "<h3>" $0 "</h3>"; next }
+    /^## /  { closelist(); sub(/^## /, ""); print "<h3>" $0 "</h3>"; next }
+    /^[*-] / { if (!inlist) { print "<ul>"; inlist = 1 } sub(/^[*-] /, ""); print "<li>" $0 "</li>"; next }
     /^Direct download/ { closelist(); next }
     /^[[:space:]]*$/ { closelist(); next }
     { closelist(); print "<p>" $0 "</p>" }
     END { closelist() }'
+}
+prepend_changelog() {  # $1 = CHANGELOG.md path on gh-pages, $2 = section markdown
+  local header body
+  header=$(printf '%s\n' "# Changelog" "" "All notable changes to CORELink are documented in this file. It is generated at release time from the commit history; commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/) (\`feat:\`, \`fix:\`, \`feat(scope)!:\` ...)." "")
+  body=""
+  [ -f "$1" ] && body=$(awk 'f{print} /^## /{if(!f){f=1; print}}' "$1")
+  printf '%s\n\n%s\n\n%s\n' "$header" "$2" "$body" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "$1"
 }
 
 case "$MODE" in
@@ -151,7 +186,10 @@ case "$MODE" in
     fi
     TAG="v$VER-rc$N"
     echo "last final: $LAST_FINAL | open rc series: ${RC_SERIES:-none} | this: $TAG"
-    RELEASE_NOTES=$(build_notes "$TAG" "RC channel" rc)
+    PREV_TAG="v$VER-rc$((N-1))"; [ "$N" -gt 1 ] || PREV_TAG="v$LAST_FINAL"
+    git rev-parse -q --verify "refs/tags/$PREV_TAG" >/dev/null || PREV_TAG=""
+    CHANGELOG_SECTION=$(changelog_section "$TAG" "$PREV_TAG")
+    RELEASE_NOTES=$(build_notes "$TAG" "$PREV_TAG" "RC channel" rc)
     [ $DRY -eq 1 ] && { printf '%s\n' "--- notes ---" "$RELEASE_NOTES" "-------------"; }
     [ $DRY -eq 1 ] || preflight
     run git tag -a "$TAG" -m "CORELink $VER release candidate $N"
@@ -173,7 +211,9 @@ case "$MODE" in
     TAG="v$VER"
     git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && { echo "$TAG already exists; nothing to do"; exit 2; }
     echo "last final: $LAST_FINAL | promoting ${RC_HERE:-(no rc)} -> $TAG"
-    RELEASE_NOTES=$(build_notes "$TAG" "stable" latest)
+    PREV_TAG="v$LAST_FINAL"; git rev-parse -q --verify "refs/tags/$PREV_TAG" >/dev/null || PREV_TAG=""
+    CHANGELOG_SECTION=$(changelog_section "$TAG" "$PREV_TAG")
+    RELEASE_NOTES=$(build_notes "$TAG" "$PREV_TAG" "stable" latest)
     [ $DRY -eq 1 ] && { printf '%s\n' "--- notes ---" "$RELEASE_NOTES" "-------------"; }
     [ $DRY -eq 1 ] || preflight
     run git tag -a "$TAG" -m "CORELink $VER"
@@ -183,7 +223,7 @@ case "$MODE" in
     echo "Release published: $TAG"
     ;;
   site)
-    VER="$LAST_FINAL"; RELEASE_NOTES=""
+    VER="$LAST_FINAL"; TAG="v$VER"; RELEASE_NOTES=""; CHANGELOG_SECTION=""
     publish_site none
     ;;
 esac
