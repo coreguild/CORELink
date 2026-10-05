@@ -75,4 +75,4 @@ tests/run.sh                        # syntax check + luacheck + mock harness (br
 scripts/package.sh                  # tests + dist/CORELink-<version>.zip
 ```
 
-Read `CONTRIBUTING.md` for the branch and release workflow, and `agents/` if you are an AI agent (or using one).
+New here? Start with `ONBOARDING.md`. Read `CONTRIBUTING.md` for the branch and release workflow, and `agents/` if you are an AI agent (or using one).
