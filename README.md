@@ -75,6 +75,27 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
 
 Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
+## How a change gets to players
+
+The short version: edit on a branch, open a pull request, the robots check it, a human merges it, then a
+release candidate goes to a few testers before everyone gets it.
+
+1. **Nobody edits `main` directly.** You make a branch (`feat/my-idea`), change the addon, and open a pull request.
+2. **The checks run.** GitHub runs the tests and confirms the addon still matches the current game client. A pull
+   request cannot be merged until both are green. No reviewer sign-off is required, but the PR must say what players
+   will see and how it was tested.
+3. **Merge.** Whoever merges uses the squash button. `main` is now the next version, but nobody is running it yet.
+4. **Release candidate.** `scripts/release.sh rc` tags it `v0.2.0-rc1`, publishes a GitHub pre-release, and puts the
+   zip on the RC link: https://core-wow-community.github.io/CORELink/rc/CORELink.zip. Guild leads run it for a day
+   on two clients in two guilds, with one person still on the old stable version to prove they can still talk.
+   Problems go back to step 1, and the next candidate is `rc2`.
+5. **Release.** `scripts/release.sh final` tags the same code `v0.2.0`, publishes it as the latest release, and moves
+   the stable link to it: https://core-wow-community.github.io/CORELink/latest/CORELink.zip. Announce it to both
+   guilds with the CHANGELOG entry. Everyone should run the same version.
+
+The zip that testers ran in step 4 is byte for byte the one players get in step 5; only the tag changes.
+Every build also stays available at `v/CORELink-<version>.zip` if someone needs to go back.
+
 ## Development
 
 ```
