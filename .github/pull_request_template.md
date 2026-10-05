@@ -11,7 +11,7 @@
 - **Wire protocol impact:** none | new field, PROTO bumped to CLx, older versions still readable
 - **Size of change for the release:** patch (fix) | minor (feature) | major (players must all update together)
 
-(The PR title becomes a line in the auto-generated release notes. Write it for a player.)
+(Your commit subjects become lines in the release notes. Write them for a player; squash `wip` commits before pushing.)
 
 ## Tests
 

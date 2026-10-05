@@ -20,6 +20,10 @@
       <p class="version">Version {{STABLE_VERSION}}</p>
       <a class="button" href="latest/CORELink.zip" download>Download CORELink.zip</a>
       <p class="meta">What everyone in the guild should run. Published {{STABLE_DATE}}.</p>
+      <details class="notes" open>
+        <summary>What's new in {{STABLE_VERSION}}</summary>
+        {{STABLE_NOTES}}
+      </details>
     </article>
 
     <article class="card rc {{RC_CLASS}}">
@@ -27,6 +31,10 @@
       <p class="version">Version {{RC_VERSION}}</p>
       <a class="button secondary" href="rc/CORELink.zip" download>Download RC</a>
       <p class="meta">For guild leads testing the next version. Published {{RC_DATE}}. Report problems with <code>/cl report</code>.</p>
+      <details class="notes">
+        <summary>What's new in {{RC_VERSION}}</summary>
+        {{RC_NOTES}}
+      </details>
     </article>
   </section>
 
@@ -41,7 +49,7 @@
   </section>
 
   <footer>
-    <p>Permanent links: <a href="{{PAGES_URL}}/latest/CORELink.zip">{{PAGES_URL}}/latest/CORELink.zip</a> and <a href="{{PAGES_URL}}/rc/CORELink.zip">{{PAGES_URL}}/rc/CORELink.zip</a>. Older builds: <code>v/CORELink-&lt;version&gt;.zip</code>.</p>
+    <p>Permanent links: <a href="{{PAGES_URL}}/latest/CORELink.zip">{{PAGES_URL}}/latest/CORELink.zip</a> and <a href="{{PAGES_URL}}/rc/CORELink.zip">{{PAGES_URL}}/rc/CORELink.zip</a>. Older builds: <code>v/CORELink-&lt;version&gt;.zip</code>, their notes: <code>notes/&lt;version&gt;.md</code>.</p>
     <p class="meta">Page updated {{UPDATED}}.</p>
   </footer>
 </main>

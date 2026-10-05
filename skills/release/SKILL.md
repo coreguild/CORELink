@@ -6,7 +6,8 @@ description: Prepare or cut a CORELink release candidate, or explain how to prom
 Releases are a human button press: GitHub -> Actions -> **release** -> **Run workflow**.
 Inputs: `channel` (`rc`, `final`, `site`), `bump` (`auto`, `patch`, `minor`, `major`; rc only), `notes`, `no_rc`.
 Nobody edits version numbers. The job computes the next version from the git tags, stamps it into the zip, tags,
-publishes the GitHub (pre-)release with notes generated from merged PR titles, and updates the public download page.
+publishes the GitHub (pre-)release with notes built from the commits since the last release, and updates the public
+download page, which shows those notes under each channel. `--dry-run` prints the notes so the user can read them first.
 
 What an agent does:
 1. `git switch main && git pull`, then `scripts/release.sh rc --dry-run` (add `--bump minor|major` if the merged
