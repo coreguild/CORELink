@@ -102,7 +102,8 @@ feat/x ──PR──▶ main ──release.sh rc──▶ v0.2.0-rc1 (pre-relea
    The `protect-main` ruleset blocks merging until both are green and the branch is up to date with `main`. No
    approval is required; the gameplay-impact review in `agents/review-checklist.md` is posted as a comment.
 
-3. **Squash-merge.** The only merge method enabled. The branch is deleted automatically.
+3. **Squash-merge.** A person clicks the button; agents never merge. It is the only merge method enabled, and the
+   branch is deleted automatically.
 
 4. **Release candidate.** From a clean, up-to-date `main`: `scripts/release.sh rc`. It re-runs the checks, builds
    `dist/CORELink-<ver>.zip` from the TOC version, creates annotated tag `v<ver>-rcN` (next free N), publishes a

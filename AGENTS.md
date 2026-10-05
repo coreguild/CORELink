@@ -26,3 +26,6 @@ Hard rules:
 6. Keep the addon Lua 5.1 compatible and guard any API that may be missing on this client.
 7. Before anything is merged, run the `review-pr` skill (or walk `agents/review-checklist.md`) and post the result
    on the PR. CI also fails the PR when the TOC interface number no longer matches the live game client.
+8. **Agents never merge.** Do not run `gh pr merge`, click merge, enable auto-merge, or push to `main` by any other
+   route, even when asked to "finish it" or "get it in". Say the PR is ready and stop. Merging is a human button
+   press. The same applies to `scripts/release.sh final`: run it only when a human explicitly asks for that release.
