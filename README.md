@@ -12,13 +12,21 @@ Repository layout:
 | `tests/` | Mock WoW API harness. `tests/run.sh` syntax-checks and runs it without the game. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip` from the TOC version, after running tests. |
+| `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the public download page on `gh-pages`. |
+| `site/` | Template and stylesheet for the download page. Rendered by `scripts/release.sh`, never edited on `gh-pages` by hand. |
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version from Blizzard's version server. CI runs it on every PR and every 6 hours. |
 | `agents/` | Rules for humans and AI agents working in this repo (branching, testing, WoW API gotchas). |
 | `skills/` | Agent skills: step-by-step procedures for starting a branch, testing, installing and releasing. |
 
+## Download
+
+* Stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
+* Release candidate (guild leads testing the next version): https://core-wow-community.github.io/CORELink/rc/CORELink.zip
+* Landing page with both and install steps: https://core-wow-community.github.io/CORELink/
+
 ## Quick start (players)
 
-1. Download the latest `CORELink-<version>.zip` from Releases, or run `scripts/package.sh`.
+1. Download the stable zip above.
 2. Put the `CORELink` folder in `World of Warcraft/_classic_beta_/Interface/AddOns/`.
 3. Log in. If your Guild Information contains a `CORELink:` line, you are done.
 
