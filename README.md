@@ -13,7 +13,7 @@ Repository layout:
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip` from the TOC version, after running tests. |
 | `agents/` | Rules for humans and AI agents working in this repo (branching, testing, WoW API gotchas). |
-| `skills/` | Agent skills: step-by-step procedures for testing, installing and releasing. |
+| `skills/` | Agent skills: step-by-step procedures for starting a branch, testing, installing and releasing. |
 
 ## Quick start (players)
 
