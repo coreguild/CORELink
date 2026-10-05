@@ -30,7 +30,9 @@ every user-visible change.
 * Version lives in `## Version:` in both TOC files. Bump it in the PR that ships the first user-visible change of
   the next version (patch for fixes, minor for features; we are pre-1.0), and start that version's CHANGELOG section.
   The TOC never carries an "rc" suffix; the same zip that passed RC is the one that ships.
-* Two channels, driven by `scripts/release.sh` from an up-to-date `main`:
+* Two channels, driven by the **release** workflow (Actions tab -> release -> Run workflow), which runs
+  `scripts/release.sh` on a clean checkout of `main`. A person presses the button; agents never run `final`. The
+  script also works locally from an up-to-date `main`:
   * **Release candidate**: `scripts/release.sh rc` tags `v<ver>-rcN` (next free N), publishes a GitHub pre-release,
     and updates the RC download link. Guild leads run it for a day on two clients in two guilds, with one client left
     on the previous stable to prove the protocol still interoperates. Problems -> normal fix PRs -> `rc` again.

@@ -12,7 +12,7 @@ Repository layout:
 | `tests/` | Mock WoW API harness. `tests/run.sh` syntax-checks and runs it without the game. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip` from the TOC version, after running tests. |
-| `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the public download page on `gh-pages`. |
+| `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the public download page on `gh-pages`. Run by the **release** workflow button in the Actions tab, or locally. |
 | `site/` | Template and stylesheet for the download page. Rendered by `scripts/release.sh`, never edited on `gh-pages` by hand. |
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version from Blizzard's version server. CI runs it on every PR and every 6 hours. |
 | `agents/` | Rules for humans and AI agents working in this repo (branching, testing, WoW API gotchas). |
@@ -105,7 +105,8 @@ feat/x ──PR──▶ main ──release.sh rc──▶ v0.2.0-rc1 (pre-relea
 3. **Squash-merge.** A person clicks the button; agents never merge. It is the only merge method enabled, and the
    branch is deleted automatically.
 
-4. **Release candidate.** From a clean, up-to-date `main`: `scripts/release.sh rc`. It re-runs the checks, builds
+4. **Release candidate.** GitHub -> Actions -> **release** -> **Run workflow** -> `rc` (a human presses it; the
+   same thing runs locally as `scripts/release.sh rc` from a clean, up-to-date `main`). It re-runs the checks, builds
    `dist/CORELink-<ver>.zip` from the TOC version, creates annotated tag `v<ver>-rcN` (next free N), publishes a
    GitHub pre-release with the zip, and pushes to the `gh-pages` branch: `rc/CORELink.zip`, `rc/VERSION`,
    `v/CORELink-<ver>.zip`, a re-rendered `index.html` from `site/index.template.html`, and `channels.json`.
@@ -114,7 +115,7 @@ feat/x ──PR──▶ main ──release.sh rc──▶ v0.2.0-rc1 (pre-relea
    previous stable to prove the protocol still interoperates. Fixes go through normal PRs; the next `rc` run
    becomes `rcN+1`.
 
-5. **Release.** `scripts/release.sh final` refuses unless a `v<ver>-rc*` tag points at `HEAD` (override with
+5. **Release.** The same button with `final` (or `scripts/release.sh final`). It refuses unless a `v<ver>-rc*` tag points at `HEAD` (override with
    `--no-rc` only for a small hotfix that touches neither the relay path nor the protocol). It tags `v<ver>`,
    publishes the GitHub release as latest with the same zip, and updates `latest/CORELink.zip`, `latest/VERSION`
    and the page. Announce with the CHANGELOG section. All linked guilds should run the same version.

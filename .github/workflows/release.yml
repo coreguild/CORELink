@@ -1,0 +1,60 @@
+name: release
+# Manual button in the Actions tab: Actions -> release -> Run workflow.
+# channel=rc    tags v<ver>-rcN, GitHub pre-release, updates rc/CORELink.zip on the download page
+# channel=final tags v<ver> (needs an rc tag on the same commit unless no_rc), latest release, updates latest/
+# channel=site  only re-renders the download page
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "rc = release candidate, final = promote to stable, site = re-render page only"
+        type: choice
+        required: true
+        default: rc
+        options: [rc, final, site]
+      notes:
+        description: "Release notes (defaults to a pointer at CHANGELOG.md)"
+        type: string
+        required: false
+      no_rc:
+        description: "final only: allow a release without an rc tag (small hotfix, no relay/protocol change)"
+        type: boolean
+        default: false
+permissions:
+  contents: write     # tags, releases, gh-pages
+jobs:
+  release:
+    name: ${{ inputs.channel }}
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    concurrency: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Install Lua and luacheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4 lua-check
+      - name: Release
+        env:                      # inputs go through env vars, never interpolated into the shell
+          GH_TOKEN: ${{ github.token }}
+          LUA: lua5.4
+          LUAC: luac5.4
+          CI: "true"
+          CHANNEL: ${{ inputs.channel }}
+          NOTES: ${{ inputs.notes }}
+          NO_RC: ${{ inputs.no_rc }}
+        run: |
+          args=("$CHANNEL")
+          [ -n "$NOTES" ] && args+=(--notes "$NOTES")
+          [ "$NO_RC" = "true" ] && args+=(--no-rc)
+          scripts/release.sh "${args[@]}"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Release: ${{ inputs.channel }}"
+            echo "- Page: https://core-wow-community.github.io/CORELink/"
+            echo "- Stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip"
+            echo "- RC: https://core-wow-community.github.io/CORELink/rc/CORELink.zip"
+          } >> "$GITHUB_STEP_SUMMARY"
