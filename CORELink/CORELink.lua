@@ -275,11 +275,11 @@ local function CleanNick(str)
   return str:sub(1, 20)
 end
 
--- (Rank - Nickname) for officers with a nickname, (Rank) for officers without,
+-- (Rank Nickname) for officers with a nickname, (Rank) for officers without,
 -- (Nickname) for everyone else, nothing if neither applies.
 local function BuildTag(rank, nick)
   if nick and nick ~= "" then
-    if rank then return "(" .. rank .. " - " .. nick .. ") " end
+    if rank then return "(" .. rank .. " " .. nick .. ") " end
     return "(" .. nick .. ") "
   end
   if rank then return "(" .. rank .. ") " end

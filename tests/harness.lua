@@ -123,7 +123,7 @@ H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~deadbeef~ALT~Carol~PRIEST~OCaptain~Cee
 local shown = {}
 for i = n0 + 1, #chatLines do shown[#shown + 1] = chatLines[i] end
 check("incoming packet displayed in both GUILD windows (1 and 3)", #shown == 2 and shown[1].frame == 1 and shown[2].frame == 3, #shown)
-check("display has tag, class colour, officer label and nickname", shown[1] and shown[1].text:find("[ALT]", 1, true) and shown[1].text:find("|cffffffff[Carol]|r", 1, true) and shown[1].text:find("(Captain - Cee)", 1, true), shown[1] and shown[1].text)
+check("display has tag, class colour, officer label and nickname", shown[1] and shown[1].text:find("[ALT]", 1, true) and shown[1].text:find("|cffffffff[Carol]|r", 1, true) and shown[1].text:find("(Captain Cee)", 1, true), shown[1] and shown[1].text)
 
 -- own tag echo is ignored; beacon (empty message) is not displayed but counts as heard
 n0 = #chatLines
@@ -147,7 +147,7 @@ check("packet on another channel ignored", #chatLines == n0)
 -- nickname sync over the guild addon channel, then shown as a prefix in real guild chat via the filter
 H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Bobby", "GUILD", "Bob-Beta")
 local _, newMsg = filters.CHAT_MSG_GUILD(nil, "CHAT_MSG_GUILD", "yo", "Bob-Beta")
-check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "string" and newMsg:find("(Officer - Bobby) yo", 1, true) ~= nil, newMsg)
+check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "string" and newMsg:find("(Officer Bobby) yo", 1, true) ~= nil, newMsg)
 
 -- link channel packets are hidden from chat windows by the filter
 check("raw channel text hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6. CORELink7100") == true)
