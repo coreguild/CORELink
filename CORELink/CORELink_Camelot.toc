@@ -1,0 +1,7 @@
+## Interface: 16001
+## Title: CORELink
+## Notes: Bridges guild chat between co-guilds (Greenwall-style).
+## Author: CORE
+## Version: 0.1.0
+## SavedVariables: CORELinkDB
+CORELink.lua
