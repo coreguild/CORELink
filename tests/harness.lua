@@ -42,11 +42,17 @@ local function advance(seconds)
   end
 end
 local events = {}
+local lastSetText = nil
+local function widget()
+  return setmetatable({}, { __index = function(_, k)
+    if k == "SetText" then return function(_, t) lastSetText = t end end
+    if k == "CreateFontString" then return function() return widget() end end
+    return function() end
+  end })
+end
 CreateFrame = function(kind, name, parent, template)
-  local f = { scripts = {} }
-  function f:RegisterEvent() end
-  function f:SetScript(ev, fn) if ev == "OnEvent" then events.handler = fn end end
-  function f:SetSize() end function f:SetPoint() end function f:Show() end function f:Hide() end
+  local f = widget()
+  rawset(f, "SetScript", function(_, ev, fn) if ev == "OnEvent" then events.handler = fn end end)
   return f
 end
 UIParent = {}
@@ -69,11 +75,13 @@ GetPlayerInfoByGUID = function(guid) local map = { ["guid-bob"] = "WARRIOR", ["g
 math.randomseed(7)
 wipe = function(t) for k in pairs(t) do t[k] = nil end end
 local sentAddon = {}
+local addonSendResult = 0
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
-  SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }; return 0 end,
+  SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }; return addonSendResult end,
   GuildRoster = function() end,
 }
+C_AddOns = { GetAddOnMetadata = function(_, key) if key == "Version" then return "0.1.1-test" end end }
 SlashCmdList = {}
 ColorPickerFrame = nil
 
@@ -156,6 +164,33 @@ advance(2)
 p = sentAddon[#sentAddon]
 local body = p and p.text:match("^CL4~%x+~MAIN~Shockly~MAGE~~~(.*)$")
 check("long message trimmed on a UTF-8 boundary with ellipsis", body and #p.text <= 255 and body:sub(-3) == "..." and (#body - 3) % 2 == 0, p and #p.text)
+
+-- /cl report: one pasteable line with version, channel, last send result and the debug log
+n0 = #chatLines; lastSetText = nil; slash("report")
+local report = lastSetText or ""
+check("/cl report fills the copy box", report ~= "")
+check("report has version, channel id, last send result and log", report:find("CORELink 0.1.1-test", 1, true) and report:find("channel CORELink7100 id 6", 1, true) and report:find("lastSend 0", 1, true) and report:find("log: ", 1, true), report)
+check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. report)
+
+-- /cl debug on echoes debug lines to chat; off silences them but the report still keeps the log
+slash("debug on"); n0 = #chatLines
+H(nil, "CHAT_MSG_GUILD", "debug me", "Shockly-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
+check("debug on echoes the relay queue line", #chatLines > n0 and chatLines[#chatLines].text:find("debug|r queued relay", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+slash("debug off"); n0 = #chatLines
+H(nil, "CHAT_MSG_GUILD", "quiet now", "Shockly-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
+check("debug off prints nothing for a relayed message", #chatLines == n0)
+advance(3)
+lastSetText = nil; slash("report")
+check("report log keeps entries recorded while debug was off", (lastSetText or ""):find("quiet now", 1, true) == nil and (lastSetText or ""):find("queued relay", 1, true) ~= nil)
+
+-- a failing send result is surfaced to the player once per send and in the report
+addonSendResult = 4
+H(nil, "CHAT_MSG_GUILD", "will fail", "Shockly-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
+n0 = #chatLines; advance(2)
+local failLine
+for i = n0 + 1, #chatLines do if chatLines[i].text:find("relay send failed (result 4)", 1, true) then failLine = chatLines[i].text end end
+check("failed send result 4 is reported to the player", failLine ~= nil)
+addonSendResult = 0
 
 print(string.format("\n%d checks, %d failed", checks, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -51,6 +51,8 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
 | `/cl nicknames on/off`, `/cl classcolor on/off`, `/cl officer on/off` | all | Display toggles (this client only). |
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
 | `/cl window <n>` | all | Force bridged lines into chat window n; no argument = windows with Guild chat. |
+| `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
+| `/cl debug on/off` | all | Echo debug events to chat as they happen. Events are always kept for `/cl report`. |
 
 ## How it works
 
@@ -69,7 +71,7 @@ Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
 ```
 scripts/install-local.sh            # link CORELink/ into the beta client (macOS default path), then /reload in game
-tests/run.sh                        # syntax check + mock harness (needs lua: brew install lua)
+tests/run.sh                        # syntax check + luacheck + mock harness (brew install lua luacheck)
 scripts/package.sh                  # tests + dist/CORELink-<version>.zip
 ```
 

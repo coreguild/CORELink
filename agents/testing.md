@@ -6,14 +6,18 @@
 tests/run.sh
 ```
 
-Runs `luac -p` on the addon and then `tests/harness.lua`, a mock of the WoW API that loads the real addon file
+Runs `luac -p` on the addon, then `luacheck` (undefined globals, typos in API names, unused variables, accidental
+globals; configuration and the list of allowed WoW globals in `.luacheckrc`), then `tests/harness.lua`, a mock of the WoW API that loads the real addon file
 and drives it through login, Guild Info parsing, channel join, outgoing relay, incoming packets (all protocol
 versions), filters, nicknames, GM-only commands and UTF-8 trimming. Exit code is non-zero on any failure.
 
 When you add behaviour, add a `check(...)` to `tests/harness.lua`. Mock only what the addon calls; keep mocks
 in the harness, never in the addon.
 
-Needs a Lua interpreter: macOS `brew install lua`; Windows `winget install DEVCOM.Lua`; Linux `apt install lua5.4`.
+If you use a WoW API that is not in `.luacheckrc`, add it to `read_globals` in the same PR and guard the call with
+`if X then`. Do not silence a warning with an inline comment unless the comment says why.
+
+Needs a Lua interpreter and luacheck: macOS `brew install lua luacheck`; Windows `winget install DEVCOM.Lua`; Linux `apt install lua5.4`.
 
 ## In the game (humans)
 
@@ -33,3 +37,6 @@ line:
 4. `/reload` on both and confirm it still works (tests the auto-join path).
 
 Record exactly this in the PR. If you only ran the harness, write "not verified in game".
+
+When a player reports a problem, ask for the output of `/cl report`. It contains the version, channel id, last send
+result and the last 20 debug events, which is usually enough to locate the fault without a back-and-forth.

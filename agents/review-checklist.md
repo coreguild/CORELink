@@ -28,7 +28,9 @@ in the harness; this review is about what it does to a player's client at 8 PM o
 - Behaviour when: not in a guild, not configured, channel not joined, lockdown active, Guild Info empty,
   another guild still on an older version.
 - The TOC `## Interface:` matches the live client (`scripts/check-game-version.sh`); CI enforces this.
-- Harness has a `check(...)` for the new behaviour and `tests/run.sh` passes.
+- Harness has a `check(...)` for the new behaviour and `tests/run.sh` passes, including luacheck with no new
+  entries in `.luacheckrc` that are not real WoW globals.
+- New diagnostics go through `Debug(...)` (kept for `/cl report`), not `Print`, unless the player must act on them.
 - README command table, CHANGELOG, and both TOC versions updated when user-visible.
 
 ## Report format

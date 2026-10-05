@@ -18,7 +18,7 @@ every user-visible change.
 
 ## Before you push
 
-1. `tests/run.sh` passes (syntax check plus the mock harness).
+1. `tests/run.sh` passes (syntax check, luacheck, and the mock harness).
 2. You loaded the addon in the Forever client and tried the change. Note what you did in the PR.
 3. If you changed the wire protocol, read `agents/wow-api-gotchas.md` first and bump the `PROTO` version.
    Receivers must keep accepting older protocol versions for at least one release.

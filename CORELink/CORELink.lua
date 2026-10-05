@@ -1,4 +1,4 @@
---[[ CORELink 2.3 - bridge guild chat between multiple co-guilds (retail 12.x API).
+--[[ CORELink - bridge guild chat between multiple co-guilds (retail 12.x API).
      Guild messages are relayed into a hidden custom channel; clients in other
      guilds show them in guild colours as "[GuildTag] [Author]: message".
 
@@ -14,6 +14,7 @@
 local ADDON, PROTO, SEP = "CORELink", "CL4", "~"
 local PREFIX = "CORELink"
 local lastSendResult
+local lastFailNotice = 0
 local rankNameOf = {}  -- guild member name -> rank name
 local rankOf = {}   -- guild member name -> rank index (0 = guild master)
 local DEFAULT_OFFICER_COLOR = "e8c63e"
@@ -37,6 +38,24 @@ end
 
 local function Print(msg)
   DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
+end
+
+-- Debug log: always recorded (last DEBUG_MAX lines, shown by /cl report), echoed to chat when /cl debug on.
+local DEBUG_MAX = 20
+local debugLog = {}
+local function Debug(fmt, ...)
+  local text = select("#", ...) > 0 and string.format(fmt, ...) or fmt
+  local line = string.format("%d %s", math.floor(GetTime()), text)
+  debugLog[#debugLog + 1] = line
+  if #debugLog > DEBUG_MAX then table.remove(debugLog, 1) end
+  if db and db.debug then Print("|cff999999debug|r " .. text) end
+end
+
+local function Version()
+  local v
+  if C_AddOns and C_AddOns.GetAddOnMetadata then v = C_AddOns.GetAddOnMetadata(ADDON, "Version")
+  elseif GetAddOnMetadata then v = GetAddOnMetadata(ADDON, "Version") end
+  return v or "?"
 end
 
 local function Clean(s) return (s:gsub("[%s~|]", "")) end
@@ -88,6 +107,7 @@ end
 local function EnsureChannel()
   if not db.enabled or not Configured() or Locked() then return end
   if not ChannelId() then
+    Debug("joining channel %s (password %s)", db.channel, db.password ~= "" and "set" or "none")
     JoinChannelByName(db.channel, (db.password ~= "" and db.password) or nil)
   end
   C_Timer.After(1, HideChannel)
@@ -138,6 +158,7 @@ local function ReadGuildInfo()
   ch = Clean(ch)
   if ch ~= db.channel or pw ~= db.password or tag ~= db.tag then
     SetConfig(ch, pw, tag, "Guild Info")
+    Debug("config from Guild Info: channel=%s tag=%s officerRank=%d", ch, tostring(tag), db.officerRank or 1)
     Print("settings loaded from Guild Info (channel: " .. ch .. ").")
   end
 end
@@ -307,6 +328,7 @@ local function Relay(id, tag, author, msg, class, flags, nick)
   seen[id] = GetTime()
   local head = table.concat({ PROTO, id, tag, author, class or "", flags or "", nick or "" }, SEP) .. SEP
   table.insert(sendQueue, head .. Trim(msg, 245 - #PREFIX - #head))
+  Debug("queued relay %s from %s (%d bytes, queue %d)", id, author, #head + #msg, #sendQueue)
 end
 
 local function OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
@@ -410,8 +432,9 @@ local function OnLinkMessage(text)
   if msg == "" then return end       -- presence beacon, nothing to display
   if displayed[id] then return end
   displayed[id] = GetTime()
-  if tag == GetTag() then return end -- own guild saw it natively
-  if db.muted[tag:lower()] then return end
+  if tag == GetTag() then Debug("ignored %s packet %s: own guild tag", proto, id) return end -- own guild saw it natively
+  if db.muted[tag:lower()] then Debug("ignored %s packet %s: tag %s muted", proto, id, tag) return end
+  Debug("showing %s packet %s from %s <%s>", proto, id, author, tag)
   local label
   if db.officer ~= false and flags and flags:sub(1, 1) == "O" then
     label = (flags:sub(2):gsub("[~|]", ""))
@@ -484,7 +507,7 @@ f:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHAT_MSG_GUILD" then
     OnGuildMessage(...)
   elseif event == "CHAT_MSG_ADDON" then
-    local prefix, text, chatType, sender, target, zoneChanId, localId, chanName = ...
+    local prefix, text, chatType, sender, _, _, localId, chanName = ...
     if prefix ~= PREFIX then return end
     if chatType == "GUILD" then
       OnGuildAddon(text, sender)
@@ -506,6 +529,12 @@ C_Timer.NewTicker(1, function()
   if id and C_ChatInfo and C_ChatInfo.SendAddonMessage then
     local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, text, "CHANNEL", tostring(id))
     lastSendResult = ok and tostring(res) or "error"
+    Debug("sent on channel %d -> result %s", id, lastSendResult)
+    if lastSendResult ~= "0" and lastSendResult ~= "true" and lastSendResult ~= "nil"
+       and GetTime() - lastFailNotice > 60 then        -- at most one notice a minute, never per packet
+      lastFailNotice = GetTime()
+      Print("relay send failed (result " .. lastSendResult .. "). Run /cl report and share it.")
+    end
   end
 end)
 
@@ -640,6 +669,35 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "classcolor" then
     db.classColor = not (arg:lower() == "off")
     Print("class-coloured names: " .. (db.classColor and "on" or "off"))
+  elseif cmd == "debug" then
+    db.debug = (arg:lower() == "on")
+    Print("debug output: " .. (db.debug and "on (also kept in /cl report)" or "off"))
+  elseif cmd == "report" then
+    local heardTags = {}
+    for tag, t in pairs(heard) do if GetTime() - t <= 600 then heardTags[#heardTags + 1] = tag end end
+    local nSeen, nDisp, nNick = 0, 0, 0
+    for _ in pairs(seen) do nSeen = nSeen + 1 end
+    for _ in pairs(displayed) do nDisp = nDisp + 1 end
+    for _ in pairs(db.nicks) do nNick = nNick + 1 end
+    local report = table.concat({
+      "CORELink " .. Version(),
+      "proto " .. PROTO,
+      db.enabled and "enabled" or "disabled",
+      Configured() and ("channel " .. db.channel .. " id " .. tostring(ChannelId() or "not joined")) or "not configured",
+      "tag " .. tostring(Configured() and GetTag() or nil),
+      "config " .. tostring(db.source),
+      "officerRank " .. tostring(db.officerRank or 1),
+      "lockdown " .. tostring(Locked()),
+      "lastSend " .. tostring(lastSendResult),
+      "queue " .. #sendQueue,
+      "heard " .. (#heardTags > 0 and table.concat(heardTags, ",") or "none"),
+      string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
+      "debug " .. tostring(db.debug == true),
+      "log: " .. (#debugLog > 0 and table.concat(debugLog, " / ") or "empty"),
+    }, " | ")
+    Print("report (also in the copy box, Ctrl+C and paste it to whoever is helping):")
+    Print(report)
+    pcall(ShowCopyBox, report)
   elseif cmd == "guilds" then
     local now, n = GetTime(), 0
     for tag, t in pairs(heard) do
@@ -681,9 +739,9 @@ SlashCmdList["CORELINK"] = function(input)
       Print("NOT CONFIGURED. Guild leaders: /cl setup <channel> <password> [tag]")
     end
     if IsGM() then
-      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | reload | clear | on | off | mute | unmute")
+      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | reload | clear | on | off | mute | unmute | report | debug on|off")
     else
-      Print("/cl nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window")
+      Print("/cl nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | report | debug on|off")
     end
   end
 end
