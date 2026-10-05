@@ -32,7 +32,7 @@ in the harness; this review is about what it does to a player's client at 8 PM o
   entries in `.luacheckrc` that are not real WoW globals.
 - New diagnostics go through `Debug(...)` (kept for `/cl report`), not `Print`, unless the player must act on them.
 - README command table updated when user-visible. `## Version:` in the TOCs untouched (`@project-version@`).
-  Commit subjects readable as release-note lines.
+  Commit subjects follow Conventional Commits so the generated changelog groups them correctly.
 
 ## Report format
 

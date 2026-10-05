@@ -11,7 +11,7 @@
 - **Wire protocol impact:** none | new field, PROTO bumped to CLx, older versions still readable
 - **Size of change for the release:** patch (fix) | minor (feature) | major (players must all update together)
 
-(Your commit subjects become lines in the release notes. Write them for a player; squash `wip` commits before pushing.)
+(Commit subjects become changelog lines: use `feat(scope): ...` / `fix: ...` (Conventional Commits, see CONTRIBUTING.md). Squash `wip` commits before pushing.)
 
 ## Tests
 

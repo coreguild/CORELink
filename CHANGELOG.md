@@ -1,7 +1,7 @@
 # Changelog
 
-From 0.1.2 on, release notes are generated on the GitHub Releases page from the merged pull-request titles:
-https://github.com/core-wow-community/CORELink/releases. This file is kept for the first two versions only.
+This copy is frozen at 0.1.1. The maintained changelog is generated at release time from the commit history and
+published at https://core-wow-community.github.io/CORELink/CHANGELOG.md (also on each GitHub release).
 
 ## 0.1.1 - 2026-10-05
 
