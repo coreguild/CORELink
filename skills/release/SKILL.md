@@ -3,7 +3,11 @@ name: release
 description: Cut a CORELink release candidate or final release from main with scripts/release.sh, publishing GitHub releases and the public download page. Use when asked to release, ship, cut an RC, promote an RC, or package the addon.
 ---
 
-Two channels, one script, run from an up-to-date `main` with a clean tree:
+Releases are a human button press. Agents prepare and verify; they do not trigger `final`.
+
+The button: GitHub -> Actions -> "release" -> "Run workflow" -> choose `rc`, `final` or `site`, optional notes.
+It runs `scripts/release.sh` on a clean checkout of `main` with Lua and luacheck installed. The same script can be
+run locally from an up-to-date `main` with a clean tree, which is what the steps below describe:
 
 - `scripts/release.sh rc`    -> tag `v<ver>-rcN`, GitHub pre-release, RC download link updated.
 - `scripts/release.sh final` -> tag `v<ver>`, GitHub latest release, stable download link updated.
@@ -13,15 +17,17 @@ Two channels, one script, run from an up-to-date `main` with a clean tree:
 
 `<ver>` is read from `## Version:` in `CORELink/CORELink.toc`. It never contains "rc".
 
-Steps:
+Agent steps (when asked to "cut an RC" or "prepare the release"):
 1. `git switch main && git pull`. Confirm `## Version:` is identical in both TOCs and is the version being released;
    if it still shows the previous release, stop: a version bump PR is needed first. Never commit to `main`.
 2. Confirm `CHANGELOG.md` has a section for this version. Pass its text with `--notes "..."`.
-3. For a new version: `scripts/release.sh rc`. Tell the user the RC link
+3. For a new version, an agent may run `scripts/release.sh rc` locally when the user asked for an RC, or tell the user
+   to press the button with `rc`. Tell the user the RC link
    (`https://core-wow-community.github.io/CORELink/rc/CORELink.zip`) and that it needs a day of play on two clients in
    two different guilds, including one `/reload` and one fresh login, and one client still on the previous stable
    to prove protocol compatibility.
-4. After the user confirms the RC is good: `scripts/release.sh final`. Give them the stable link
+4. After the user confirms the RC is good, the user presses the button with `final` (or runs
+   `scripts/release.sh final` themselves). Do not run `final` yourself. Give them the stable link
    (`https://core-wow-community.github.io/CORELink/latest/CORELink.zip`) and the CHANGELOG text to announce.
 5. If the RC had problems: fix via normal PRs, then `scripts/release.sh rc` again; it picks the next rc number.
 

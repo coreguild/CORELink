@@ -7,6 +7,8 @@
 #                                              Requires an rc tag on this exact commit unless --no-rc (small hotfixes).
 #   scripts/release.sh site                    just re-render and publish the download page from current channels
 #
+# Normally run by the "Release" GitHub Actions workflow (.github/workflows/release.yml, "Run workflow" button);
+# the same script works locally from a clean, up-to-date main.
 # <ver> comes from "## Version:" in CORELink/CORELink.toc. The TOC never carries "rc"; the same zip that passed
 # RC is what ships. Downloads are served from the gh-pages branch at permanent URLs (see site/index.template.html).
 set -euo pipefail
@@ -23,6 +25,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ "$MODE" = rc ] || [ "$MODE" = final ] || [ "$MODE" = site ] || { sed -n '2,12p' "$0"; exit 2; }
+
+GIT_NAME=$(git config user.name || true);  GIT_NAME=${GIT_NAME:-github-actions[bot]}
+GIT_EMAIL=$(git config user.email || true); GIT_EMAIL=${GIT_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}
+export GIT_COMMITTER_NAME="$GIT_NAME" GIT_COMMITTER_EMAIL="$GIT_EMAIL" GIT_AUTHOR_NAME="$GIT_NAME" GIT_AUTHOR_EMAIL="$GIT_EMAIL"
 
 VER=$(grep -m1 '^## Version:' CORELink/CORELink.toc | awk '{print $3}')
 [ -n "$VER" ] || { echo "no ## Version in CORELink/CORELink.toc"; exit 2; }
@@ -54,13 +60,14 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
   if [ "$channel" != none ]; then
     cp "$zip" "$wt/$channel/CORELink.zip"
     echo "$VER" > "$wt/$channel/VERSION"
+    date -u +%Y-%m-%d > "$wt/$channel/DATE"
     cp "$zip" "$wt/v/CORELink-$VER.zip"
   fi
   local stable rc stable_date rc_date
   stable=$(cat "$wt/latest/VERSION" 2>/dev/null || echo "none yet")
   rc=$(cat "$wt/rc/VERSION" 2>/dev/null || echo "none")
-  [ -f "$wt/latest/VERSION" ] && stable_date=$(date -r "$wt/latest/VERSION" +%Y-%m-%d) || stable_date="-"
-  [ -f "$wt/rc/VERSION" ] && rc_date=$(date -r "$wt/rc/VERSION" +%Y-%m-%d) || rc_date="-"
+  stable_date=$(cat "$wt/latest/DATE" 2>/dev/null || echo "-")
+  rc_date=$(cat "$wt/rc/DATE" 2>/dev/null || echo "-")
   # RC newer than stable? show it; otherwise hide the RC card.
   local rc_block=""
   if [ "$rc" != none ] && [ "$rc" != "$stable" ]; then rc_block="show"; fi
@@ -70,7 +77,7 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
       site/index.template.html > "$wt/index.html"
   cp site/style.css "$wt/style.css"
   printf '{"stable":"%s","rc":"%s","updated":"%s"}\n' "$stable" "$rc" "$(date -u +%FT%TZ)" > "$wt/channels.json"
-  (cd "$wt" && git add -A && git -c user.name="$(git config user.name)" -c user.email="$(git config user.email)" \
+  (cd "$wt" && git add -A && git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" \
      commit -q -m "site: $channel -> $VER" && git push -q origin HEAD:gh-pages)
   git worktree remove --force "$wt"
   echo "site published: $PAGES_URL  (stable $stable, rc $rc)"
