@@ -446,6 +446,33 @@ local function OnLinkMessage(text)
   Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
 end
 
+---------------------------------------------------------------- status
+local function StatusLine()
+  if not Configured() then return "NOT CONFIGURED. Guild leaders: /cl setup <channel> <password> [tag]" end
+  return string.format("%s | tag: %s | channel: %s (%s) | config: %s%s",
+    db.enabled and "ON" or "OFF", tostring(GetTag()), db.channel,
+    ChannelId() and "joined" or "not joined", db.source or "local",
+    Locked() and " | PAUSED (chat lockdown)" or "")
+end
+
+-- Login: the guild roster, Guild Info text and the channel list all arrive at different times after
+-- PLAYER_LOGIN, so retry the read-and-join a few times (5s, 10s, 15s ... up to ~75s) instead of once.
+-- Equivalent to the player typing /cl reload, then /cl once it is connected.
+local loginAttempts = 0
+local function LoginSync()
+  if not db then return end
+  loginAttempts = loginAttempts + 1
+  db.lastGI = nil                  -- nothing is "unchanged" at login: always re-read Guild Info
+  ReadGuildInfo()
+  EnsureChannel()
+  Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured()), tostring(ChannelId() ~= nil))
+  if Configured() and ChannelId() then
+    Print(StatusLine())
+    return
+  end
+  if loginAttempts < 6 then C_Timer.After(5 * loginAttempts, LoginSync) end
+end
+
 ---------------------------------------------------------------- filters
 -- Recolour officers' messages in real guild chat (this client only).
 ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", function(self, event, msg, author, ...)
@@ -478,6 +505,7 @@ f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("CHAT_MSG_GUILD")
 f:RegisterEvent("CHAT_MSG_ADDON")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
+f:RegisterEvent("CHANNEL_UI_UPDATE")
 
 local lastRead, warned = 0, false
 f:SetScript("OnEvent", function(self, event, ...)
@@ -494,7 +522,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     end
   elseif event == "PLAYER_LOGIN" then
     if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() end
-    C_Timer.After(5, function() ReadGuildInfo(); EnsureChannel() end)
+    C_Timer.After(5, LoginSync)
     C_Timer.After(25, function()
       if db.nicks[UnitName("player")] then BroadcastNick() end
       SendGuildAddon("NREQ")
@@ -507,6 +535,9 @@ f:SetScript("OnEvent", function(self, event, ...)
     end)
   elseif event == "GUILD_ROSTER_UPDATE" then
     if GetTime() - lastRead > 5 then lastRead = GetTime(); RefreshRoster(); ReadGuildInfo() end
+  elseif event == "CHANNEL_UI_UPDATE" then
+    -- the channel system just became ready (or changed); make sure we are in the link channel
+    if Configured() then EnsureChannel() end
   elseif event == "CHAT_MSG_GUILD" then
     OnGuildMessage(...)
   elseif event == "CHAT_MSG_ADDON" then
@@ -732,15 +763,8 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "unmute" and arg ~= "" then
     db.muted[arg:lower()] = nil; Print("unmuted guild tag " .. arg)
   else
-    if Configured() then
-      Print(string.format("%s | tag: %s | channel: %s (%s) | config: %s%s",
-        db.enabled and "ON" or "OFF", tostring(GetTag()), db.channel,
-        ChannelId() and "joined" or "not joined", db.source or "local",
-        Locked() and " | PAUSED (chat lockdown)" or ""))
-      if lastSendResult then Print("last send result: " .. lastSendResult .. " (0 = success)") end
-    else
-      Print("NOT CONFIGURED. Guild leaders: /cl setup <channel> <password> [tag]")
-    end
+    Print(StatusLine())
+    if Configured() and lastSendResult then Print("last send result: " .. lastSendResult .. " (0 = success)") end
     if IsGM() then
       Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | reload | clear | on | off | mute | unmute | report | debug on|off")
     else

@@ -200,5 +200,38 @@ for i = n0 + 1, #chatLines do if chatLines[i].text:find("relay send failed (resu
 check("failed send result 4 is reported to the player", failLine ~= nil)
 addonSendResult = 0
 
+-- Login sync: Guild Info text arrives late and the channel list is not ready at +5s; the addon must still
+-- configure and join on its own, then print the status line exactly once.
+do
+  local savedText, savedJoin = guildInfoText, JoinChannelByName
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = ""                                   -- not delivered yet
+  local joinReady = false
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; if joinReady then joined[n] = 6 end end
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  advance(6)                                           -- attempt 1 at +5s: no text yet
+  check("login sync: nothing configured while Guild Info is empty", CORELinkDB.channel == nil)
+  guildInfoText = savedText                            -- text arrives; channel system still not ready
+  advance(10)                                          -- attempt 2 at +15s: reads config, join requested but fails
+  check("login sync: config read without /cl reload", CORELinkDB.channel == "CORELink7100")
+  joinReady = true
+  n0 = #chatLines
+  advance(16)                                          -- attempt 3 at +30s joins; attempt 4 at +50s sees joined
+  advance(21)
+  local status = 0
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("ON | tag: MAIN | channel: CORELink7100 (joined)", 1, true) then status = status + 1 end end
+  check("login sync: joined and status line printed once", joined["CORELink7100"] == 6 and status == 1, status)
+  n0 = #chatLines; advance(60)
+  local extra = 0
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("ON | tag:", 1, true) then extra = extra + 1 end end
+  check("login sync: no further status lines after it connected", extra == 0)
+  -- CHANNEL_UI_UPDATE re-joins if the channel dropped
+  joined["CORELink7100"] = nil; local jc = #joinCalls
+  H(nil, "CHANNEL_UI_UPDATE")
+  check("CHANNEL_UI_UPDATE triggers a rejoin when not in the channel", #joinCalls == jc + 1)
+  JoinChannelByName = savedJoin
+end
+
 print(string.format("\n%d checks, %d failed", checks, failures))
 os.exit(failures == 0 and 0 or 1)
