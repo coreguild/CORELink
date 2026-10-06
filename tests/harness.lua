@@ -292,6 +292,8 @@ do
   for i = n0 + 1, #chatLines do if chatLines[i].text:find("not connected after login: ", 1, true) and chatLines[i].text:find("CORELink7100", 1, true) then late = late + 1 end end
   check("configured client whose join never lands gets one explanation after the retries", late == 1, late)
   JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+end
+
 -- WoW: Forever reports "First Surname" in chat and the roster while UnitName gives the first name only.
 -- The nickname must still apply to our own guild lines, and our own lines must be recognised as ours.
 do
