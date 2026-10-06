@@ -25,7 +25,7 @@ read_globals = {
   "GetGuildInfo", "GetGuildInfoText", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo", "GuildRoster",
   "C_GuildInfo", "UnitName", "UnitGUID", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
   -- misc
-  "C_Timer", "GetTime", "wipe", "issecretvalue", "strsplit", "unpack",
+  "C_Timer", "GetTime", "date", "wipe", "issecretvalue", "strsplit", "unpack",
 }
 files["tests/harness.lua"] = {
   std = "+lua53",                 -- harness runs on the host Lua, defines the mocks as globals
