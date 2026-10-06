@@ -237,6 +237,13 @@ end
 -- WoW: Forever reports "First Surname" in chat and the roster while UnitName gives the first name only.
 -- The nickname must still apply to our own guild lines, and our own lines must be recognised as ours.
 do
+  -- self-contained: a configured, joined client regardless of what earlier blocks left behind
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  advance(8)
   roster[1][1] = "Shockly Stormgale-Beta"
   now = now + 10; H(nil, "GUILD_ROSTER_UPDATE")            -- roster refresh learns our full name via GUID
   myRank = 0
