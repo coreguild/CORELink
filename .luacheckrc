@@ -23,7 +23,7 @@ read_globals = {
   "GetChannelName", "GetChannelList", "C_ChatInfo",
   -- guild / player
   "GetGuildInfo", "GetGuildInfoText", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo", "GuildRoster",
-  "C_GuildInfo", "UnitName", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
+  "C_GuildInfo", "UnitName", "UnitGUID", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
   -- misc
   "C_Timer", "GetTime", "date", "wipe", "issecretvalue", "strsplit", "unpack",
 }
