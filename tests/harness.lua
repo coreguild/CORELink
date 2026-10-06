@@ -268,9 +268,29 @@ do
   n0 = #chatLines
   advance(90)
   local found = 0
-  for i = n0 + 1, #chatLines do if chatLines[i].text:find("not connected after login: no usable CORELink line in Guild Info (no CORELink: line)", 1, true) then found = found + 1 end end
-  check("login reports why it could not connect, once", found == 1, found)
+  local late = 0
+  for i = n0 + 1, #chatLines do
+    if chatLines[i].text:find("not configured: no CORELink: line. Guild leaders:", 1, true) then found = found + 1 end
+    if chatLines[i].text:find("not connected after login", 1, true) then late = late + 1 end
+  end
+  check("unconfigured login reports what Guild Info held, once, with no second message", found == 1 and late == 0, found .. "/" .. late)
   guildInfoText = savedTextForRestore or "CORELink: CORELink7100 pw1 MAIN 1\n"
+end
+
+-- Configured but the join never lands: the login sync explains after its last attempt
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw } end   -- never succeeds, no notice
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  n0 = #chatLines
+  advance(90)
+  local late = 0
+  -- earlier blocks may have left a WRONG_PASSWORD notice in the module state, so accept either reason
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("not connected after login: ", 1, true) and chatLines[i].text:find("CORELink7100", 1, true) then late = late + 1 end end
+  check("configured client whose join never lands gets one explanation after the retries", late == 1, late)
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))

@@ -502,7 +502,7 @@ local function LoginSync()
   db.lastGI = nil                  -- nothing is "unchanged" at login: always re-read Guild Info
   ReadGuildInfo()
   EnsureChannel()
-  Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured()), tostring(ChannelId() ~= nil))
+  Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured() and true or false), tostring(ChannelId() ~= nil))
   if Configured() and ChannelId() then
     Print(StatusLine())
     return
@@ -511,9 +511,11 @@ local function LoginSync()
     C_Timer.After(5 * loginAttempts, LoginSync)
     return
   end
+  -- "Not configured" was already reported by the 20 s notice below; this line is for a configured client
+  -- whose channel join did not happen.
+  if not Configured() then return end
   local why
   if not IsInGuild() then why = "you are not in a guild"
-  elseif not Configured() then why = "no usable CORELink line in Guild Info (" .. conn.giState .. ")"
   elseif conn.lastNotice then why = "the game answered " .. conn.lastNotice .. " when joining " .. db.channel
   else why = "joining " .. db.channel .. " got no answer from the server" end
   Print("not connected after login: " .. why .. ". Run /cl report and share it, or /cl reload to retry.")
@@ -578,7 +580,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     C_Timer.After(20, function()
       if not Configured() and not warned then
         warned = true
-        Print("not configured yet. Guild leaders: /cl setup <channel> <password> [tag]")
+        Print("not configured: " .. conn.giState .. ". Guild leaders: /cl setup <channel> <password> [tag]")
       end
     end)
   elseif event == "GUILD_ROSTER_UPDATE" then
