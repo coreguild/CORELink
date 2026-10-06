@@ -18,7 +18,14 @@ local lastFailNotice = 0
 local rankNameOf = {}  -- guild member name -> rank name
 local rankOf = {}   -- guild member name -> rank index (0 = guild master)
 local DEFAULT_OFFICER_COLOR = "e8c63e"
-local heard = {}   -- guild tag -> last time seen on the link channel
+local heard = {}   -- guild tag -> last time seen on the link channel (on OUR realm)
+-- Custom channels are per realm: a guild's lines reach a realm only if that guild has an addon user on it.
+-- Guildmates on other realms tell us what they hear (HEARD messages on the guild addon channel), so
+-- /cl guilds can show which realms each linked guild is actually reaching.
+local heardRealms = {}      -- tag -> realm -> last time heard there (ours or a guildmate's realm)
+local guildRealms = {}      -- realm -> last time one of our own guildmates reported from it
+local lastHeardSent, lastHeardSig = 0, ""
+local coverageWarned = {}   -- tag -> true once we warned that it is not reaching our realm
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
 local db
@@ -70,6 +77,17 @@ local function Hash(s)
 end
 
 local function Configured() return db and db.channel and db.channel ~= "" end
+
+local function MyRealm()
+  local r = (GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or ""
+  return (type(r) == "string" and not issecret(r)) and r:gsub("[%s~|,]", "") or ""
+end
+
+local function NoteHeard(tag, realm, when)
+  if not tag or tag == "" or not realm or realm == "" then return end
+  heardRealms[tag] = heardRealms[tag] or {}
+  heardRealms[tag][realm] = when
+end
 
 -- Who am I, in the format chat events and the roster use. On WoW: Forever that is "First Surname", while
 -- UnitName("player") may return only the first name, so identify ourselves by GUID and learn the name from
@@ -364,7 +382,36 @@ local function OnGuildAddon(text, sender)
     if not IsMe(sender) and db.nicks[MyName()] then
       C_Timer.After(1 + math.random() * 6, BroadcastNick)
     end
+  elseif cmd == "HEARD" then
+    -- HEARD~<realm>~tag1,tag2: a guildmate reports which guild tags it hears on its realm
+    local realm, tags = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
+    if not realm or realm == "" then return end
+    local now = GetTime()
+    guildRealms[realm] = now
+    for tag in (tags or ""):gmatch("[^,]+") do
+      NoteHeard(tag, realm, now)
+      -- That guild reaches the guildmate's realm but has not reached ours in 10 minutes: no relay here.
+      if realm ~= MyRealm() and tag ~= GetTag() and not coverageWarned[tag]
+         and not (heard[tag] and now - heard[tag] < 600) and now > 600 then
+        coverageWarned[tag] = true
+        Print(string.format("guild %s is reaching %s but not %s: it has no member running CORELink on your realm. /cl guilds for details.", tag, realm, MyRealm()))
+      end
+    end
   end
+end
+
+-- Tell our guild (across realms) which tags we hear on our realm; at most once a minute, only when it changed
+-- or every 5 minutes.
+local function BroadcastHeard()
+  if not db or not db.enabled or not Configured() or not IsInGuild() then return end
+  local now, tags = GetTime(), {}
+  for tag, t in pairs(heard) do if now - t <= 600 then tags[#tags + 1] = tag end end
+  table.sort(tags)
+  local sig = table.concat(tags, ",")
+  if sig == "" then return end
+  if sig == lastHeardSig and now - lastHeardSent < 300 then return end
+  lastHeardSent, lastHeardSig = now, sig
+  SendGuildAddon("HEARD" .. SEP .. MyRealm() .. SEP .. sig:sub(1, 200))
 end
 
 local function Split(rest, n)   -- n fields; the last one takes the remainder
@@ -486,6 +533,7 @@ local function OnLinkMessage(text)
   if not id then return end
   seen[id] = GetTime()
   heard[tag] = GetTime()
+  NoteHeard(tag, MyRealm(), GetTime())
   pending[id] = nil                  -- another client already relayed it
   if msg == "" then return end       -- presence beacon, nothing to display
   if displayed[id] then return end
@@ -665,6 +713,12 @@ C_Timer.NewTicker(60, function()
   local now = GetTime()
   for k, v in pairs(seen) do if now - v > 60 then seen[k] = nil end end
   for k, v in pairs(displayed) do if now - v > 60 then displayed[k] = nil end end
+  for tag, realms in pairs(heardRealms) do
+    for realm, t in pairs(realms) do if now - t > 600 then realms[realm] = nil end end
+    if next(realms) == nil then heardRealms[tag] = nil end
+  end
+  for realm, t in pairs(guildRealms) do if now - t > 600 then guildRealms[realm] = nil end end
+  BroadcastHeard()
   ReadGuildInfo()
   EnsureChannel()
   if C_GuildInfo and C_GuildInfo.GuildRoster and math.random() < 0.5 then C_GuildInfo.GuildRoster() end
@@ -802,7 +856,19 @@ SlashCmdList["CORELINK"] = function(input)
       "lockdown " .. tostring(Locked()),
       "lastSend " .. tostring(lastSendResult),
       "queue " .. #sendQueue,
+      "realm " .. MyRealm(),
       "heard " .. (#heardTags > 0 and table.concat(heardTags, ",") or "none"),
+      "reach " .. (function()
+        local out = {}
+        for tag, realms in pairs(heardRealms) do
+          local rs = {}
+          for realm, t in pairs(realms) do if GetTime() - t <= 600 then rs[#rs + 1] = realm end end
+          table.sort(rs)
+          if #rs > 0 then out[#out + 1] = tag .. "@" .. table.concat(rs, "+") end
+        end
+        table.sort(out)
+        return #out > 0 and table.concat(out, ",") or "none"
+      end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
       "debug " .. tostring(db.debug == true),
       "log: " .. (#debugLog > 0 and table.concat(debugLog, " / ") or "empty"),
@@ -811,15 +877,30 @@ SlashCmdList["CORELINK"] = function(input)
     Print(report)
     pcall(ShowCopyBox, report)
   elseif cmd == "guilds" then
-    local now, n = GetTime(), 0
-    for tag, t in pairs(heard) do
-      if now - t > 600 then heard[tag] = nil
-      else
+    local now, n, mine = GetTime(), 0, MyRealm()
+    for tag, t in pairs(heard) do if now - t > 600 then heard[tag] = nil end end
+    local tags = {}
+    for tag in pairs(heardRealms) do tags[#tags + 1] = tag end
+    table.sort(tags)
+    for _, tag in ipairs(tags) do
+      local parts = {}
+      for realm, t in pairs(heardRealms[tag]) do
+        if now - t <= 600 then parts[#parts + 1] = string.format("%s (%ds ago)", realm, math.floor(now - t)) end
+      end
+      if #parts > 0 then
         n = n + 1
-        Print(string.format("%s%s - heard %ds ago", tag, tag == GetTag() and " (your guild)" or "", now - t))
+        table.sort(parts)
+        local note = ""
+        if not (heard[tag] and now - heard[tag] <= 600) and tag ~= GetTag() then note = " | NOT reaching " .. mine end
+        Print(string.format("%s%s - %s%s", tag, tag == GetTag() and " (your guild)" or "", table.concat(parts, ", "), note))
       end
     end
     if n == 0 then Print("no guilds heard on the link in the last 10 minutes.") end
+    local realms = {}
+    for realm in pairs(guildRealms) do realms[#realms + 1] = realm end
+    if not guildRealms[mine] then realms[#realms + 1] = mine end
+    table.sort(realms)
+    Print("your realm: " .. mine .. " | your guild runs CORELink on: " .. table.concat(realms, ", "))
   elseif cmd == "window" then
     local n = tonumber(arg)
     if n and _G["ChatFrame" .. n] then
