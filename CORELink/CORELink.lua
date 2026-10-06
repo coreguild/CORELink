@@ -464,8 +464,9 @@ local function Display(tag, author, class, msg, officerLabel, nick)
   end
 end
 
-local function OnLinkMessage(text)
+local function OnLinkMessage(text, sender)
   if issecret(text) or not text then return end
+  sender = (type(sender) == "string" and not issecret(sender)) and sender or "?"
   local proto, rest = text:match("^(%w+)" .. SEP .. "(.*)$")
   local id, tag, author, class, flags, msg, nick
   if proto == "CL4" then
@@ -481,14 +482,15 @@ local function OnLinkMessage(text)
     id, tag, author, msg = rest:match("^(%x+)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP ..
       "([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
   else
+    Debug("packet from %s dropped: unknown protocol %s", sender, tostring(proto))
     return
   end
-  if not id then return end
+  if not id then Debug("packet from %s dropped: could not parse (%d bytes): %s", sender, #text, text:sub(1, 48)) return end
   seen[id] = GetTime()
   heard[tag] = GetTime()
   pending[id] = nil                  -- another client already relayed it
   if msg == "" then return end       -- presence beacon, nothing to display
-  if displayed[id] then return end
+  if displayed[id] then Debug("packet %s from %s <%s> already shown", id, sender, tostring(tag)) return end
   displayed[id] = GetTime()
   if tag == GetTag() then Debug("ignored %s packet %s: own guild tag", proto, id) return end -- own guild saw it natively
   if db.muted[tag:lower()] then Debug("ignored %s packet %s: tag %s muted", proto, id, tag) return end
@@ -619,8 +621,11 @@ f:SetScript("OnEvent", function(self, event, ...)
     if chatType == "GUILD" then
       OnGuildAddon(text, sender)
     elseif chatType == "CHANNEL" then
-      if IsLinkChannel(chanName) or (localId and localId == ChannelId()) then
-        OnLinkMessage(text)
+      if IsLinkChannel(chanName) or (localId and not issecret(localId) and localId == ChannelId()) then
+        OnLinkMessage(text, sender)
+      else
+        Debug("packet from %s dropped: channel name=%s localId=%s, ours=%s id %s", tostring(sender),
+          tostring(chanName), tostring(localId), tostring(db.channel), tostring(ChannelId()))
       end
     end
   end

@@ -142,10 +142,19 @@ n0 = #chatLines
 H(nil, "CHAT_MSG_ADDON", "CORELink", "CL1~0badf00d~OLD~Eve~old client says hi", "CHANNEL", "Eve", nil, 0, 6, "CORELink7100")
 check("legacy CL1 packet displayed", #chatLines > n0 and chatLines[#chatLines].text:find("old client says hi", 1, true) ~= nil)
 
--- packets on some other channel are ignored
+-- packets on some other channel are ignored, and every silent drop leaves a log line for /cl report
 n0 = #chatLines
 H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0badf00e~ALT~Carol~PRIEST~~~wrong channel", "CHANNEL", "Carol", nil, 0, 2, "Trade")
 check("packet on another channel ignored", #chatLines == n0)
+H(nil, "CHAT_MSG_ADDON", "CORELink", "CL9~0badf00f~ALT~Carol", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~not-hex~ALT~Carol~~~~x", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~deadbeef~ALT~Carol~PRIEST~~~hi from alts", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+lastSetText = nil; slash("report")
+check("drops are logged: other channel, unknown protocol, unparseable, duplicate",
+  (lastSetText or ""):find("packet from Carol dropped: channel name=Trade localId=2", 1, true)
+  and (lastSetText or ""):find("dropped: unknown protocol CL9", 1, true)
+  and (lastSetText or ""):find("dropped: could not parse", 1, true)
+  and (lastSetText or ""):find("packet deadbeef from Carol <ALT> already shown", 1, true), lastSetText)
 
 -- nickname sync over the guild addon channel, then shown as a prefix in real guild chat via the filter
 H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Bobby", "GUILD", "Bob-Beta")
