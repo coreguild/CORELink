@@ -156,9 +156,15 @@ check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "st
 check("raw channel text hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6. CORELink7100") == true)
 check("other channel text not hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "2. Trade") ~= true)
 
--- GM-only commands refused for a member, allowed for the GM
+-- GM-only commands refused for a member, allowed for the GM; per-client commands open to members
 n0 = #chatLines; slash("setup Other pw2 X")
 check("member cannot run /cl setup", chatLines[#chatLines].text:find("only the guild master", 1, true) ~= nil and CORELinkDB.channel == "CORELink7100")
+slash("off"); check("member can run /cl off", CORELinkDB.enabled == false)
+slash("on");  check("member can run /cl on", CORELinkDB.enabled == true)
+slash("mute alt"); check("member can mute a guild tag", CORELinkDB.muted["alt"] == true)
+slash("unmute alt"); check("member can unmute a guild tag", CORELinkDB.muted["alt"] == nil)
+n0 = #chatLines; slash("reload")
+check("member can run /cl reload", chatLines[#chatLines].text:find("re-read Guild Info", 1, true) ~= nil, chatLines[#chatLines].text)
 myRank = 0; slash("officerrank 2"); myRank = 3
 check("GM can change officer rank cutoff", CORELinkDB.officerRank == 2)
 -- /cl publish always writes all four fields, including the default officer rank 1 (#16)
@@ -265,7 +271,7 @@ do
   check("report shows guild info state, join attempts and the last notice",
     (lastSetText or ""):find("guildInfo line ", 1, true) and (lastSetText or ""):find("joinAttempts ", 1, true) and (lastSetText or ""):find("lastNotice WRONG_PASSWORD at ", 1, true) and (lastSetText or ""):find("joinHold WRONG_PASSWORD", 1, true), lastSetText)
   check("debug log uses wall-clock timestamps", (lastSetText or ""):match("log: %d%d:%d%d:%d%d ") ~= nil)
-  myRank = 0; slash("reload"); myRank = 3          -- reload is GM-only until #23 lands
+  slash("reload")                                   -- a member may reload (#23)
   check("/cl reload clears the hold and retries the join", #joinCalls == jc + 1, #joinCalls - jc)
 end
 
