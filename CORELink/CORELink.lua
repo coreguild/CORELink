@@ -152,15 +152,11 @@ local function SetConfig(channel, password, tag, source)
 end
 
 ---------------------------------------------------------------- Guild Info config
+-- Always writes all four fields ("-" for an empty tag) so the GM can see the officer rank cutoff.
 local function BuildLine()
   local hasTag = db.tag and db.tag ~= ""
-  local line = "CORELink: " .. db.channel .. " " .. (db.password ~= "" and db.password or "-")
-  if (db.officerRank or 1) ~= 1 then
-    line = line .. " " .. (hasTag and db.tag or "-") .. " " .. db.officerRank
-  elseif hasTag then
-    line = line .. " " .. db.tag
-  end
-  return line
+  return "CORELink: " .. db.channel .. " " .. (db.password ~= "" and db.password or "-")
+    .. " " .. (hasTag and db.tag or "-") .. " " .. (db.officerRank or 1)
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
