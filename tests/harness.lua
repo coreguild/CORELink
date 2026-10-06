@@ -57,6 +57,7 @@ CreateFrame = function(kind, name, parent, template)
 end
 UIParent = {}
 UnitName = function() return "Shockly" end
+UnitGUID = function() return "guid-me" end
 UnitClass = function() return "Mage", "MAGE" end
 Ambiguate = function(n) return (n:match("^[^-]+")) end
 IsInGuild = function() return true end
@@ -65,12 +66,12 @@ GetGuildInfo = function() return "CORE Forever", "Member", myRank end
 local guildInfoText = "Welcome!\nCORELink: CORELink7100 pw1 MAIN 1\n"
 GetGuildInfoText = function() return guildInfoText end
 local roster = {
-  { "Shockly-Beta", "Member", 3, "MAGE" },
+  { "Shockly-Beta", "Member", 3, "MAGE", "guid-me" },
   { "Bob-Beta", "Officer", 1, "WARRIOR" },
   { "Tanner-Beta", "Guild Master", 0, "PRIEST" },
 }
 GetNumGuildMembers = function() return #roster end
-GetGuildRosterInfo = function(i) local r = roster[i]; if r then return r[1], r[2], r[3], 60, r[4], "Zone", "", "", true, 0, r[4] end end
+GetGuildRosterInfo = function(i) local r = roster[i]; if r then return r[1], r[2], r[3], 60, r[4], "Zone", "", "", true, 0, r[4], nil, nil, nil, nil, nil, r[5] end end
 GetPlayerInfoByGUID = function(guid) local map = { ["guid-bob"] = "WARRIOR", ["guid-me"] = "MAGE" }; if map[guid] then return "", map[guid] end end
 math.randomseed(7)
 wipe = function(t) for k in pairs(t) do t[k] = nil end end
@@ -123,7 +124,7 @@ H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~deadbeef~ALT~Carol~PRIEST~OCaptain~Cee
 local shown = {}
 for i = n0 + 1, #chatLines do shown[#shown + 1] = chatLines[i] end
 check("incoming packet displayed in both GUILD windows (1 and 3)", #shown == 2 and shown[1].frame == 1 and shown[2].frame == 3, #shown)
-check("display has tag, class colour, officer label and nickname", shown[1] and shown[1].text:find("[ALT]", 1, true) and shown[1].text:find("|cffffffff[Carol]|r", 1, true) and shown[1].text:find("(Captain - Cee)", 1, true), shown[1] and shown[1].text)
+check("display has tag, class colour, officer label and nickname", shown[1] and shown[1].text:find("[ALT]", 1, true) and shown[1].text:find("|cffffffff[Carol]|r", 1, true) and shown[1].text:find("(Captain Cee)", 1, true), shown[1] and shown[1].text)
 
 -- own tag echo is ignored; beacon (empty message) is not displayed but counts as heard
 n0 = #chatLines
@@ -147,7 +148,7 @@ check("packet on another channel ignored", #chatLines == n0)
 -- nickname sync over the guild addon channel, then shown as a prefix in real guild chat via the filter
 H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Bobby", "GUILD", "Bob-Beta")
 local _, newMsg = filters.CHAT_MSG_GUILD(nil, "CHAT_MSG_GUILD", "yo", "Bob-Beta")
-check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "string" and newMsg:find("(Officer - Bobby) yo", 1, true) ~= nil, newMsg)
+check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "string" and newMsg:find("(Officer Bobby) yo", 1, true) ~= nil, newMsg)
 
 -- link channel packets are hidden from chat windows by the filter
 check("raw channel text hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6. CORELink7100") == true)
@@ -240,6 +241,30 @@ do
   H(nil, "CHANNEL_UI_UPDATE")
   check("CHANNEL_UI_UPDATE triggers a rejoin when not in the channel", #joinCalls == jc + 1)
   JoinChannelByName = savedJoin
+end
+
+-- WoW: Forever reports "First Surname" in chat and the roster while UnitName gives the first name only.
+-- The nickname must still apply to our own guild lines, and our own lines must be recognised as ours.
+do
+  -- self-contained: a configured, joined client regardless of what earlier blocks left behind
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  advance(8)
+  roster[1][1] = "Shockly Stormgale-Beta"
+  now = now + 10; H(nil, "GUILD_ROSTER_UPDATE")            -- roster refresh learns our full name via GUID
+  myRank = 0
+  slash("nickname Jake")
+  check("nickname is stored under the roster/chat name", CORELinkDB.nicks["Shockly Stormgale"] == "Jake" and CORELinkDB.nicks["Shockly"] == nil, CORELinkDB.nicks["Shockly"])
+  local _, ownLine = filters.CHAT_MSG_GUILD(nil, "CHAT_MSG_GUILD", "hi all", "Shockly Stormgale-Beta")
+  check("own guild line shows rank and nickname with the surname name format", type(ownLine) == "string" and ownLine:find("Jake) hi all", 1, true) ~= nil and ownLine:find("(Member", 1, true) ~= nil, ownLine)
+  local sentBefore = #sentAddon
+  H(nil, "CHAT_MSG_GUILD", "my own line", "Shockly Stormgale-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
+  advance(2)
+  check("own line is relayed immediately (recognised by GUID) with the nickname", #sentAddon == sentBefore + 1 and sentAddon[#sentAddon].text:find("~Jake~my own line", 1, true) ~= nil, sentAddon[#sentAddon] and sentAddon[#sentAddon].text)
+  myRank = 3; roster[1][1] = "Shockly-Beta"; slash("nickname clear")
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))
