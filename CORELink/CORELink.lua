@@ -70,6 +70,27 @@ end
 
 local function Configured() return db and db.channel and db.channel ~= "" end
 
+-- Who am I, in the format chat events and the roster use. On WoW: Forever that is "First Surname", while
+-- UnitName("player") may return only the first name, so identify ourselves by GUID and learn the name from
+-- the roster or from our own guild messages. Nicknames are keyed by this name.
+local myGUID, myName
+local function LearnMyName(name)
+  if not name or name == "" or myName == name then return end
+  local old = myName or UnitName("player")
+  myName = name
+  if db and db.nicks and old ~= name and db.nicks[old] and not db.nicks[name] then
+    db.nicks[name] = db.nicks[old]; db.nicks[old] = nil      -- re-key a nickname saved under the short name
+  end
+end
+local function MyName() return myName or UnitName("player") end
+local function IsMe(author, guid)
+  if guid and myGUID and not issecret(guid) and guid == myGUID then
+    LearnMyName(author)
+    return true
+  end
+  return author == MyName() or author == UnitName("player")
+end
+
 local function GetTag()
   if db.tag and db.tag ~= "" then return db.tag end
   local g = GetGuildInfo("player")
@@ -227,7 +248,7 @@ local function ClassOf(author, guid)
     local ok, _, class = pcall(GetPlayerInfoByGUID, guid)
     if ok and type(class) == "string" then return class end
   end
-  if author == UnitName("player") then
+  if IsMe(author, guid) then
     local _, class = UnitClass("player")
     return class or ""
   end
@@ -239,11 +260,12 @@ local function RefreshRoster()
   if not IsInGuild() then return end
   wipe(rankOf); wipe(rankNameOf)
   for i = 1, (GetNumGuildMembers() or 0) do
-    local name, rankName, rankIndex = GetGuildRosterInfo(i)
+    local name, rankName, rankIndex, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
     if not name then break end
     name = Ambiguate(name, "none")
     rankOf[name] = rankIndex
     rankNameOf[name] = rankName
+    if myGUID and guid and not issecret(guid) and guid == myGUID then LearnMyName(name) end
   end
 end
 
@@ -252,7 +274,7 @@ end
 local function OfficerRank(author)
   if not db or db.officer == false then return nil end
   local rank, rankName
-  if author == UnitName("player") then
+  if IsMe(author) then
     local _, rn, r = GetGuildInfo("player")
     rank, rankName = r, rn
   else
@@ -275,11 +297,11 @@ local function CleanNick(str)
   return str:sub(1, 20)
 end
 
--- (Rank - Nickname) for officers with a nickname, (Rank) for officers without,
+-- (Rank Nickname) for officers with a nickname, (Rank) for officers without,
 -- (Nickname) for everyone else, nothing if neither applies.
 local function BuildTag(rank, nick)
   if nick and nick ~= "" then
-    if rank then return "(" .. rank .. " - " .. nick .. ") " end
+    if rank then return "(" .. rank .. " " .. nick .. ") " end
     return "(" .. nick .. ") "
   end
   if rank then return "(" .. rank .. ") " end
@@ -294,7 +316,7 @@ local function SendGuildAddon(text)
 end
 
 local function BroadcastNick()
-  SendGuildAddon("NICK" .. SEP .. (db.nicks[UnitName("player")] or ""))
+  SendGuildAddon("NICK" .. SEP .. (db.nicks[MyName()] or ""))
 end
 
 -- Messages on the guild addon channel: NICK~<name> and NREQ (please re-send).
@@ -306,7 +328,7 @@ local function OnGuildAddon(text, sender)
     local n = CleanNick(rest)
     db.nicks[sender] = (n ~= "") and n or nil
   elseif cmd == "NREQ" then
-    if sender ~= UnitName("player") and db.nicks[UnitName("player")] then
+    if not IsMe(sender) and db.nicks[MyName()] then
       C_Timer.After(1 + math.random() * 6, BroadcastNick)
     end
   end
@@ -339,6 +361,7 @@ local function OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local tag = GetTag()
   if not tag then return end
   author = Ambiguate(author, "none")
+  local mine = IsMe(author, guid)      -- also learns our chat-format name from our own messages
   local class = ClassOf(author, guid)
   local rn = OfficerRank(author)
   local flags = rn and ("O" .. rn) or ""
@@ -347,7 +370,7 @@ local function OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local now = GetTime()
   if (seen[id] and now - seen[id] < DEDUPE_SECS) or pending[id] then return end
   pending[id] = true
-  if author == UnitName("player") then
+  if mine then
     Relay(id, tag, author, msg, class, flags, nick)
   else
     -- random back-off: normally only one member's client relays
@@ -521,10 +544,11 @@ f:SetScript("OnEvent", function(self, event, ...)
       C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
     end
   elseif event == "PLAYER_LOGIN" then
+    myGUID = UnitGUID and UnitGUID("player") or nil
     if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() end
     C_Timer.After(5, LoginSync)
     C_Timer.After(25, function()
-      if db.nicks[UnitName("player")] then BroadcastNick() end
+      if db.nicks[MyName()] then BroadcastNick() end
       SendGuildAddon("NREQ")
     end)
     C_Timer.After(20, function()
@@ -685,7 +709,7 @@ SlashCmdList["CORELINK"] = function(input)
       Print("officer rank cutoff: " .. (db.officerRank or 1) .. " (usage: /cl officerrank <n>)")
     end
   elseif cmd == "nickname" then
-    local me = UnitName("player")
+    local me = MyName()
     if arg == "" then
       Print("your nickname: " .. (db.nicks[me] or "(none)") .. "  (usage: /cl nickname <name> | clear)")
     elseif arg:lower() == "clear" then
