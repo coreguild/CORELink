@@ -356,8 +356,67 @@ do
   local sentBefore = #sentAddon
   H(nil, "CHAT_MSG_GUILD", "my own line", "Shockly Stormgale-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
   advance(2)
-  check("own line is relayed immediately (recognised by GUID) with the nickname", #sentAddon == sentBefore + 1 and sentAddon[#sentAddon].text:find("~Jake~my own line", 1, true) ~= nil, sentAddon[#sentAddon] and sentAddon[#sentAddon].text)
+  local ownSent
+  for i = sentBefore + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" and sentAddon[i].text:find("~Jake~my own line", 1, true) then ownSent = sentAddon[i].text end end
+  check("own line is relayed immediately (recognised by GUID) with the nickname", ownSent ~= nil, sentAddon[#sentAddon] and sentAddon[#sentAddon].text)
   myRank = 3; roster[1][1] = "Shockly-Beta"; slash("nickname clear")
+end
+
+-- Cross-realm bridge (#38): foreign lines heard on our realm are forwarded to the guild; forwards from
+-- guildmates on other realms are re-sent into our realm's channel; nothing loops or duplicates.
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
+  advance(601)                                   -- let earlier blocks' realm knowledge expire (10 min TTL)
+  local function guildSends(from) local t = {} for i = from + 1, #sentAddon do if sentAddon[i].kind == "GUILD" and sentAddon[i].text:find("^BRIDGE~") then t[#t + 1] = sentAddon[i].text end end return t end
+  local function channelSends(from) local t = {} for i = from + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" then t[#t + 1] = sentAddon[i].text end end return t end
+  -- no guildmates known elsewhere: a foreign line is NOT forwarded
+  local mark = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~b0000001~ALT~Carol~PRIEST~~~first line", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(3)
+  check("bridge: nothing forwarded while no guildmate is known on another realm", #guildSends(mark) == 0, table.concat(guildSends(mark), " / "))
+  -- a guildmate on PvE2 reports in; now foreign lines are forwarded once
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~PvE2~", "GUILD", "Tanner-Beta")
+  mark = #sentAddon
+  local pkt = "CL4~b0000002~ALT~Carol~PRIEST~~~second line"
+  H(nil, "CHAT_MSG_ADDON", "CORELink", pkt, "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", pkt, "CHANNEL", "Dave", nil, 0, 6, "CORELink7100")   -- a second relayer's copy
+  advance(3)
+  local fw = guildSends(mark)
+  check("bridge: a foreign line heard on our realm is forwarded to the guild exactly once", #fw == 1 and fw[1] == "BRIDGE~" .. pkt, table.concat(fw, " / "))
+  -- our own guild's line is not forwarded (our couriers on each realm already relay it)
+  mark = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~b0000003~MAIN~Bob~WARRIOR~~~ours", "CHANNEL", "Bob", nil, 0, 6, "CORELink7100")
+  advance(3)
+  check("bridge: our own guild's lines are not forwarded", #guildSends(mark) == 0)
+  -- a guildmate on the other realm saw a foreign line we have not: we re-send it into our channel, once
+  mark = #sentAddon
+  local far = "CL4~b0000004~ALT~Erin~MAGE~~~from the other realm"
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "BRIDGE~" .. far, "GUILD", "Tanner-Beta")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "BRIDGE~" .. far, "GUILD", "Frank-Beta")   -- a second forwarder
+  advance(3)
+  local rs = channelSends(mark)
+  check("bridge: a forward for a line not on our realm is re-sent into our channel exactly once", #rs == 1 and rs[1] == far, table.concat(rs, " / "))
+  -- its echo on our channel shows the line as the original guild's and is not forwarded back
+  mark = #sentAddon; n0 = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", far, "CHANNEL", "Shockly", nil, 0, 6, "CORELink7100")
+  advance(3)
+  check("bridge: the re-sent line displays as <ALT> and does not bounce back to the guild",
+    #chatLines > n0 and chatLines[#chatLines].text:find("[ALT]", 1, true) ~= nil and chatLines[#chatLines].text:find("from the other realm", 1, true) ~= nil and #guildSends(mark) == 0, chatLines[#chatLines] and chatLines[#chatLines].text)
+  -- a forward for a line we already heard on our realm is ignored
+  mark = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "BRIDGE~" .. pkt, "GUILD", "Tanner-Beta")
+  advance(3)
+  check("bridge: forwards for lines already on our realm are not re-sent", #channelSends(mark) == 0)
+  -- /cl bridge off stops forwarding; report shows it
+  slash("bridge off"); mark = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~b0000005~ALT~Carol~PRIEST~~~while off", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(3)
+  lastSetText = nil; slash("report")
+  check("bridge: /cl bridge off stops forwarding and the report says so", #guildSends(mark) == 0 and (lastSetText or ""):match("bridge off fwd=%d+ resent=1 ") ~= nil, lastSetText)
+  slash("bridge on")
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))

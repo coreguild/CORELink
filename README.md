@@ -59,6 +59,7 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
 | `/cl nicknames on/off`, `/cl classcolor on/off`, `/cl officer on/off` | all | Display toggles (this client only). |
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
 | `/cl window <n>` | all | Force bridged lines into chat window n; no argument = windows with Guild chat. |
+| `/cl bridge on/off` | all | Whether this client forwards other guilds' lines to guildmates on other realms and re-sends forwards into its realm. Default on. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
 | `/cl debug on/off` | all | Echo debug events to chat as they happen. Events are always kept for `/cl report`. |
 
@@ -76,6 +77,11 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
   lines reach a realm only while that guild has an addon user online on that realm. Clients tell their guild
   (over the guild addon channel, which does cross realms) which guilds they hear on their realm; `/cl guilds`
   merges that and warns when a linked guild has no relay on yours.
+* **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
+  the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
+  channel if it has not arrived there. Any guild with addon users on two realms therefore bridges every linked
+  guild across them. Loops and duplicates are prevented by the per-message id memory and the same short random
+  wait the relay uses. `/cl bridge off` opts a client out.
 
 ## Troubleshooting
 

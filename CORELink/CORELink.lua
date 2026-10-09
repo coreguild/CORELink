@@ -26,6 +26,12 @@ local heardRealms = {}      -- tag -> realm -> last time heard there (ours or a 
 local guildRealms = {}      -- realm -> last time one of our own guildmates reported from it
 local lastHeardSent, lastHeardSig = 0, ""
 local coverageWarned = {}   -- tag -> true once we warned that it is not reaching our realm
+-- Cross-realm bridge: a client that hears another guild's line on its realm forwards it to its own guild
+-- (guild addon messages cross realms); a guildmate on another realm re-sends it into that realm's channel.
+-- Guild lines of our own guild are not bridged: our couriers on each realm already relay them.
+local bridged = {}          -- packet id -> time it was forwarded (by us or a guildmate) on the guild channel
+local bridgeStats = { forwarded = 0, resent = 0, skipped = 0 }
+local OnBridgeReceived      -- defined after the guild addon handler that calls it
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
 local db
@@ -382,6 +388,8 @@ local function OnGuildAddon(text, sender)
     if not IsMe(sender) and db.nicks[MyName()] then
       C_Timer.After(1 + math.random() * 6, BroadcastNick)
     end
+  elseif cmd == "BRIDGE" then
+    OnBridgeReceived(rest, sender)
   elseif cmd == "HEARD" then
     -- HEARD~<realm>~tag1,tag2: a guildmate reports which guild tags it hears on its realm
     local realm, tags = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
@@ -408,10 +416,52 @@ local function BroadcastHeard()
   for tag, t in pairs(heard) do if now - t <= 600 then tags[#tags + 1] = tag end end
   table.sort(tags)
   local sig = table.concat(tags, ",")
-  if sig == "" then return end
   if sig == lastHeardSig and now - lastHeardSent < 300 then return end
   lastHeardSent, lastHeardSig = now, sig
   SendGuildAddon("HEARD" .. SEP .. MyRealm() .. SEP .. sig:sub(1, 200))
+end
+
+-- Do we know of guildmates on a realm other than ours? (learned from HEARD reports)
+local function HasGuildmatesElsewhere()
+  local now, mine = GetTime(), MyRealm()
+  for realm, t in pairs(guildRealms) do
+    if realm ~= mine and now - t <= 600 then return true end
+  end
+  return false
+end
+
+local function BridgeEnabled() return db and db.enabled and db.bridge ~= false and Configured() end
+
+-- Heard a foreign guild's line on our realm's channel: forward it to our guild for other realms.
+local function ForwardToGuild(id, text)
+  if not BridgeEnabled() or not HasGuildmatesElsewhere() then return end
+  if #text + 7 > 255 then bridgeStats.skipped = bridgeStats.skipped + 1 return end
+  C_Timer.After(0.3 + math.random() * 1.2, function()
+    if bridged[id] then return end          -- a guildmate on our realm already forwarded it
+    bridged[id] = GetTime()
+    bridgeStats.forwarded = bridgeStats.forwarded + 1
+    SendGuildAddon("BRIDGE" .. SEP .. text)
+    Debug("bridged %s to the guild for other realms", id)
+  end)
+end
+
+-- A guildmate forwarded a foreign line it heard on its realm: if it has not reached ours, re-send it here.
+OnBridgeReceived = function(text, sender)
+  local id = text:match("^CL%d+" .. SEP .. "(%x+)" .. SEP)
+  if not id then return end
+  bridged[id] = GetTime()
+  if IsMe(sender) then return end
+  if not BridgeEnabled() then return end
+  if seen[id] then return end              -- already on our realm's channel (same-realm guildmate forwarded it)
+  pending[id] = true
+  C_Timer.After(0.3 + math.random() * 1.2, function()
+    if not pending[id] or seen[id] then pending[id] = nil return end   -- someone else re-sent it meanwhile
+    pending[id] = nil
+    seen[id] = GetTime()
+    table.insert(sendQueue, text)          -- verbatim packet; receivers display it as the original guild's line
+    bridgeStats.resent = bridgeStats.resent + 1
+    Debug("re-sent bridged %s from %s into %s", id, sender, tostring(db.channel))
+  end)
 end
 
 local function Split(rest, n)   -- n fields; the last one takes the remainder
@@ -502,7 +552,7 @@ local function Display(tag, author, class, msg, officerLabel, nick)
   if db.classColor ~= false and class and class ~= "" then
     local cc = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
     if cc then
-      name = string.format("|cff%02x%02x%02x%s|r", cc.r * 255, cc.g * 255, cc.b * 255, name)
+      name = string.format("|cff%02x%02x%02x%s|r", math.floor(cc.r * 255 + 0.5), math.floor(cc.g * 255 + 0.5), math.floor(cc.b * 255 + 0.5), name)
     end
   end
   local line = string.format("[%s] |Hplayer:%s|h%s|h: %s", tag, author, name, msg)
@@ -536,6 +586,7 @@ local function OnLinkMessage(text)
   NoteHeard(tag, MyRealm(), GetTime())
   pending[id] = nil                  -- another client already relayed it
   if msg == "" then return end       -- presence beacon, nothing to display
+  if tag ~= GetTag() and not bridged[id] then ForwardToGuild(id, text) end
   if displayed[id] then return end
   displayed[id] = GetTime()
   if tag == GetTag() then Debug("ignored %s packet %s: own guild tag", proto, id) return end -- own guild saw it natively
@@ -718,6 +769,7 @@ C_Timer.NewTicker(60, function()
     if next(realms) == nil then heardRealms[tag] = nil end
   end
   for realm, t in pairs(guildRealms) do if now - t > 600 then guildRealms[realm] = nil end end
+  for k, v in pairs(bridged) do if now - v > 60 then bridged[k] = nil end end
   BroadcastHeard()
   ReadGuildInfo()
   EnsureChannel()
@@ -827,6 +879,9 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "nicknames" then
     db.showNick = not (arg:lower() == "off")
     Print("showing nicknames: " .. (db.showNick and "on" or "off"))
+  elseif cmd == "bridge" then
+    db.bridge = not (arg:lower() == "off")
+    Print("cross-realm bridging: " .. (db.bridge and "on" or "off") .. " (forward other guilds' lines to your guildmates on other realms)")
   elseif cmd == "classcolor" then
     db.classColor = not (arg:lower() == "off")
     Print("class-coloured names: " .. (db.classColor and "on" or "off"))
@@ -870,6 +925,8 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
+      string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
+        bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       "debug " .. tostring(db.debug == true),
       "log: " .. (#debugLog > 0 and table.concat(debugLog, " / ") or "empty"),
     }, " | ")
@@ -926,9 +983,9 @@ SlashCmdList["CORELINK"] = function(input)
     Print(StatusLine())
     if Configured() and lastSendResult then Print("last send result: " .. lastSendResult .. " (0 = success)") end
     if IsGM() then
-      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | reload | clear | on | off | mute | unmute | report | debug on|off")
+      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | bridge on|off | reload | clear | on | off | mute | unmute | report | debug on|off")
     else
-      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | report | debug on|off")
+      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off | report | debug on|off")
     end
   end
 end
