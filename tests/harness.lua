@@ -59,6 +59,8 @@ end
 UIParent = {}
 UnitName = function() return "Shockly" end
 UnitGUID = function() return "guid-me" end
+GetNormalizedRealmName = function() return "PvE" end
+GetRealmName = function() return "Classic Beta PvE" end
 UnitClass = function() return "Mage", "MAGE" end
 Ambiguate = function(n) return (n:match("^[^-]+")) end
 IsInGuild = function() return true end
@@ -135,7 +137,32 @@ H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000001~RAID~~~~~", "CHANNEL", "Zed",
 check("own-tag echo and presence beacon produce no chat lines", #chatLines == n0)
 n0 = #chatLines; slash("guilds")
 local guildsOut = table.concat((function() local t = {} for i = n0 + 1, #chatLines do t[#t + 1] = chatLines[i].text end return t end)(), "\n")
-check("/cl guilds lists the beaconing guild", guildsOut:find("RAID", 1, true) ~= nil, guildsOut)
+check("/cl guilds lists the beaconing guild with our realm", guildsOut:find("RAID", 1, true) ~= nil and guildsOut:find("RAID - PvE (", 1, true) ~= nil, guildsOut)
+
+-- realm coverage (#37): a guildmate on another realm reports what it hears there
+n0 = #chatLines
+H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~PvE2~Trois,RAID", "GUILD", "Tanner-Beta")
+local warn = 0
+for i = n0 + 1, #chatLines do if chatLines[i].text:find("guild Trois is reaching PvE2 but not PvE: it has no member running CORELink on your realm", 1, true) then warn = warn + 1 end end
+check("warns once when a guild reaches a guildmate's realm but not ours", warn == 1, warn)
+H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~PvE2~Trois,RAID", "GUILD", "Tanner-Beta")
+local warn2 = 0
+for i = n0 + 1, #chatLines do if chatLines[i].text:find("guild Trois is reaching", 1, true) then warn2 = warn2 + 1 end end
+check("the coverage warning is not repeated", warn2 == 1, warn2)
+n0 = #chatLines; slash("guilds")
+guildsOut = table.concat((function() local t = {} for i = n0 + 1, #chatLines do t[#t + 1] = chatLines[i].text end return t end)(), "\n")
+check("/cl guilds shows realms per guild and flags the one not reaching us",
+  guildsOut:find("Trois - PvE2 (", 1, true) and guildsOut:find("NOT reaching PvE", 1, true)
+  and guildsOut:find("RAID - PvE (", 1, true) and guildsOut:find("PvE2 (", 1, true)
+  and guildsOut:find("your realm: PvE | your guild runs CORELink on: PvE, PvE2", 1, true), guildsOut)
+lastSetText = nil; slash("report")
+check("report has realm and reach fields", (lastSetText or ""):find("| realm PvE |", 1, true) and (lastSetText or ""):find("Trois@PvE2", 1, true) and (lastSetText or ""):find("RAID@PvE+PvE2", 1, true), lastSetText)
+-- the housekeeping tick tells our guild what we hear on our realm
+local sentMark = #sentAddon
+advance(60)
+local heardMsg
+for i = sentMark + 1, #sentAddon do if sentAddon[i].kind == "GUILD" and sentAddon[i].text:find("^HEARD~PvE~") then heardMsg = sentAddon[i].text end end
+check("HEARD report sent to the guild with our realm and heard tags", heardMsg ~= nil and heardMsg:find("RAID", 1, true) ~= nil, heardMsg)
 
 -- legacy CL1 packet still parses
 n0 = #chatLines

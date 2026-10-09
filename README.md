@@ -54,7 +54,7 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
 | `/cl reload` | GM | Re-read Guild Info now. |
 | `/cl clear`, `/cl on`, `/cl off` | GM | Clear settings, enable, disable. |
 | `/cl mute <tag>`, `/cl unmute <tag>` | GM | Silence a linked guild. |
-| `/cl guilds` | all | Which guild tags were heard on the link in the last 10 minutes. |
+| `/cl guilds` | all | Which guild tags were heard on the link in the last 10 minutes, and on which realms (yours, plus what your guildmates on other realms hear). Flags guilds not reaching your realm. |
 | `/cl nickname <name>` or `clear` | all | Your nickname, shown to your guild and linked guilds. |
 | `/cl nicknames on/off`, `/cl classcolor on/off`, `/cl officer on/off` | all | Display toggles (this client only). |
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
@@ -72,6 +72,20 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
   that has Guild chat enabled.
 * Nicknames travel over the guild addon-message channel (`NICK`, `NREQ`).
 * In chat-messaging lockdown (instanced content on Midnight-era clients) relaying pauses.
+* **Realms.** Custom channels are per realm. Guild chat crosses realms, the relay channel does not, so a guild's
+  lines reach a realm only while that guild has an addon user online on that realm. Clients tell their guild
+  (over the guild addon channel, which does cross realms) which guilds they hear on their realm; `/cl guilds`
+  merges that and warns when a linked guild has no relay on yours.
+
+## Troubleshooting
+
+| Symptom | Cause | What to do |
+|---|---|---|
+| We only see guild X when player Y is online | Y is the only member of X with the addon on your realm | X needs an addon user online on your realm; `/cl guilds` shows `NOT reaching <realm>` |
+| Two players can't see each other even in a plain `/join test` channel | They are on different realms (`/run print(GetRealmName())`) | Expected; see Realms above |
+| Lines from one guild never arrive | `/cl report` on the receiving client: `reach` shows which realms each guild is heard on | Fix realm coverage; if the guild is heard on your realm and still not shown, share the report |
+| "could not join ...: wrong channel password" | Guild Info line differs from the other guilds' | GM re-publishes with `/cl publish`, members `/cl reload` |
+| Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
 
 Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
