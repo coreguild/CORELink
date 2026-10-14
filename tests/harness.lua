@@ -479,7 +479,7 @@ do
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
   check("mirror: /cl publish keeps the club token on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=23112951", lastSetText)
   lastSetText = nil; slash("report")
-  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 id=23112951 type=0 member=true stream=1:General channels=2 posted=1 carried=0 waiting=0 failed=0 shown=0 skipped=0 hidden=0 focused=true hooks=editbox+send", 1, true) ~= nil, lastSetText)
+  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 id=23112951 type=0 member=true stream=1:General channels=1 posted=1 failed=0 shown=0 skipped=0 hidden=0 focused=true hooks=editbox+send", 1, true) ~= nil, lastSetText)
   -- SendChatMessage hook: "/g text" from another chat type, macros and other addons are mirrored too
   local sendHook = hooks["SendChatMessage"]
   check("mirror: SendChatMessage is hooked", type(sendHook) == "function" and type(hooks[C_ChatInfo] and hooks[C_ChatInfo].SendChatMessage) == "function")
@@ -682,12 +682,22 @@ do
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
   typeLine("before the channel")
   check("channels: without a channel for our tag, General gets [TAG] text", #clubPosts == 1 and clubPosts[1].stream == 1 and clubPosts[1].text == "[MAIN] before the channel", clubPosts[1] and clubPosts[1].text)
-  clubStreams = { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" }, { streamId = 3, name = "Main" }, { streamId = 4, name = "Trois" } }
+  clubStreams = { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" }, { streamId = 3, name = "Main" },
+                  { streamId = 4, name = "Trois", subject = "CORELink guild channel" }, { streamId = 5, name = "Deux", subject = "nothing special" },
+                  { streamId = 6, name = "Raids", subject = "CORELink", leadersAndModeratorsOnly = true } }
   H(nil, "CLUB_STREAM_ADDED", 23149801, 3); H(nil, "CLUB_STREAM_ADDED", 23149801, 4)
   advance(2); typeLine("in our channel")
   check("channels: a channel named after our tag (any case) takes our posts, without the tag in the text", #clubPosts == 2 and clubPosts[2].stream == 3 and clubPosts[2].text == "in our channel", clubPosts[2] and (clubPosts[2].stream .. " " .. clubPosts[2].text))
   lastSetText = nil; slash("report")
-  check("channels: report names the post channel and counts channels", (lastSetText or ""):find("stream=3:Main channels=4", 1, true) ~= nil and (lastSetText or ""):find("focused=true", 1, true) ~= nil, lastSetText)
+  check("channels: report names the post channel and counts only guild channels plus General", (lastSetText or ""):find("stream=3:Main channels=3", 1, true) ~= nil and (lastSetText or ""):find("focused=true", 1, true) ~= nil, lastSetText)
+  clubMessages[405] = { messageId = 405, content = sealed("officer talk"), author = { memberId = 7 } }
+  clubMessages[406] = { messageId = 406, content = sealed("deux without a description"), author = { memberId = 7 } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 2, 405); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 5, 406); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 6, 405); advance(2)
+  check("channels: channels that are not guild channels (no CORELink description, unknown tag, leaders-only) are ignored", #chatLines == n0, #chatLines - n0)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000d001~Deux~Dee Vale~MAGE~~~heard on the relay", "CHANNEL", "Dee", nil, 0, 6, "CORELink7100")
+  H(nil, "CLUB_STREAM_ADDED", 23149801, 5); advance(1)
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 5, 406); advance(2)
+  check("channels: a channel named after a tag heard on the relay becomes a guild channel", #chatLines == n0 + 2 and chatLines[#chatLines].text:find("[Deux] |Hplayer:Zag Mathris|h", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
   slash("nickname Jake"); myRank = 0; advance(2); typeLine("ranked"); myRank = 3; slash("nickname"); advance(2)
   check("channels: rank and nickname still travel in the text", #clubPosts == 3 and clubPosts[3].text == "(Member Jake) ranked", clubPosts[3] and clubPosts[3].text)
   clubMembers[7] = { memberId = 7, name = "Zag Mathris", guid = "guid-zag", classID = 8 }
@@ -708,76 +718,12 @@ do
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 404); advance(2)
   check("channels: General still shows under the name with the text as posted", #chatLines == n0 + 2 and chatLines[#chatLines].text:find("|Hplayer:Zag Mathris|h|cff40c7eb[Zag Mathris]|r|h: [Deux] general line", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
   local cf = filters["CHAT_MSG_COMMUNITIES_CHANNEL"]
-  check("channels: raw copies from every channel of the community are hidden",
+  check("channels: raw copies from General and the guild channels are hidden, other channels left alone",
     cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23149801:4") == true and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23149801:1") == true
-    and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23149801:9") ~= true)
-  -- a carried line in our channel keeps the author in the text
-  advance(1000)
-  H(nil, "CHAT_MSG_GUILD", "no addon", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(2); typeLine("carrying")
-  check("channels: carried lines in our channel read Name: text", #clubPosts == 5 and clubPosts[5].stream == 3 and clubPosts[5].text == "Dora: no addon", clubPosts[5] and clubPosts[5].text)
+    and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23149801:2") ~= true and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23149801:9") ~= true)
   clubStreams = { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } }
   guildInfoText = savedTextForRestore
 end
-
--- Piggyback: a guild line from a member without the addon rides along the next line an addon user types
-do
-  CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true
-  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild\n"
-  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
-  H(nil, "CHAT_MSG_GUILD", "no addon here", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(2)
-  local doraId
-  for _, m in ipairs(sentAddon) do local id = m.text:match("^CL4~(%x+)~MAIN~Dora~[^~]*~[^~]*~[^~]*~no addon here$"); if id then doraId = id end end
-  check("piggyback: the line is relayed on the channel but not posted to the community", doraId ~= nil and #clubPosts == 0, tostring(doraId) .. "/" .. #clubPosts)
-  lastSetText = nil; slash("report")
-  local carried0 = tonumber((lastSetText or ""):match("carried=(%d+)")) or 0
-  check("piggyback: report shows the waiting line", (lastSetText or ""):find("waiting=1", 1, true) ~= nil, lastSetText)
-  local nSent = #sentAddon
-  typeLine("mine now")
-  check("piggyback: the next typed line posts itself and then the waiting line with the author in the text",
-    #clubPosts == 2 and clubPosts[1].text == "[MAIN] mine now" and clubPosts[2].text == "[MAIN] Dora: no addon here", clubPosts[2] and clubPosts[2].text)
-  local claimed = false
-  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "GUILD" and sentAddon[i].text == "CARRIED~" .. doraId then claimed = true end end
-  check("piggyback: the carried line is claimed to guildmates", claimed)
-  advance(3)
-  local noted = false
-  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" and sentAddon[i].text:match("^CARRY~Shockly[^~]*~1$") then noted = true end end
-  check("piggyback: same-realm readers are told one carried copy follows", noted)
-  lastSetText = nil; slash("report")
-  check("piggyback: report counts carried and nothing waiting", (lastSetText or ""):find("carried=" .. (carried0 + 1) .. " waiting=0", 1, true) ~= nil, lastSetText)
-  -- an officer's carried line keeps the rank and nickname
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Dee", "GUILD", "Dora-Beta")      -- oops: that marks Dora as an addon user
-  H(nil, "CHAT_MSG_GUILD", "from an addon user", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(2); typeLine("again")
-  check("piggyback: lines from guildmates who run the addon are not carried (they post their own)", #clubPosts == 3, #clubPosts)
-  H(nil, "CHAT_MSG_GUILD", "officer line", "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob")
-  check("piggyback: known addon users are never queued", #clubPosts == 3)
-  -- a claim from a guildmate drops the line before we type
-  advance(1000)                                                               -- everyone's addon-user mark expires
-  H(nil, "CHAT_MSG_GUILD", "claimed elsewhere", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(2)
-  local cid
-  for _, m in ipairs(sentAddon) do local id = m.text:match("^CL4~(%x+)~MAIN~Dora~[^~]*~[^~]*~[^~]*~claimed elsewhere$"); if id then cid = id end end
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "CARRIED~" .. tostring(cid), "GUILD", "Tanner-Beta")
-  typeLine("after claim")
-  check("piggyback: a line a guildmate already carried is not posted again", #clubPosts == 4 and clubPosts[4].text == "[MAIN] after claim", #clubPosts)
-  -- too old: not carried
-  advance(1000)
-  H(nil, "CHAT_MSG_GUILD", "stale line", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(310); typeLine("late")
-  check("piggyback: a line older than five minutes is dropped", #clubPosts == 5 and clubPosts[5].text == "[MAIN] late", #clubPosts)
-  -- reader side: a CARRY note reserves a slot so the sealed carried copy is not shown after the relayed line
-  advance(10); n0 = #chatLines
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000c01~Trois~Pip Vale~MAGE~~~pip's line", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "CARRY~Zag Mathris~1", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
-  clubMessages[301] = { messageId = 301, content = sealed("[Trois] Pip Vale: pip's line"), author = { memberId = 7 } }
-  clubMessages[302] = { messageId = 302, content = sealed("[Trois] zag's own line"), author = { memberId = 7 } }
-  H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 301); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 302); advance(2)
-  check("piggyback: the carried copy is dropped and the carrier's own line still shows", #chatLines == n0 + 4 and chatLines[#chatLines].text:find("zag's own line", 1, true) ~= nil, #chatLines - n0)
-  guildInfoText = savedTextForRestore
-end
-
 
 -- Echo: with echo=on in Guild Info, one addon user per guild re-posts other guilds' readable lines as real
 -- guild messages for members without the addon; addon users hide them and never relay or carry them.
@@ -812,7 +758,7 @@ do
   local relayed = false
   for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" and sentAddon[i].text:find("hi echo", 1, true) then relayed = true end end
   lastSetText = nil; slash("report")
-  check("echo: an echoed line is neither relayed nor queued for carrying", not relayed and (lastSetText or ""):find("waiting=0", 1, true) ~= nil and (lastSetText or ""):find("echo on me=on sent=1 hidden=1", 1, true) ~= nil, lastSetText)
+  check("echo: an echoed line is not relayed and is counted as hidden", not relayed and (lastSetText or ""):find("echo on me=on sent=1 hidden=1", 1, true) ~= nil, lastSetText)
   slash("echo off")
   H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e003~ALT~Carol~PRIEST~~~after opt out", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
   advance(2)

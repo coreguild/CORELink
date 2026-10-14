@@ -46,8 +46,9 @@ To mirror chat into a Blizzard Community: create a **World of Warcraft community
 show account names instead of characters and are the only kind that crosses factions), give it a short name that
 no other community of yours uses, append `club=<short name>` (or the full name without spaces, e.g.
 `club=CoreTest2`, or the numeric id) to every co-guild's line, and share the invite link. Then add one channel to
-the community per guild, named after that guild's tag (Settings > Add Channel). Members read linked guilds in
-their guild chat; they do not need the community in a chat tab.
+the community per guild, named after that guild's tag, with `CORELink` in the channel description (Settings >
+Add Channel). Other channels of the community are left alone. Members read linked guilds in their guild chat;
+they do not need the community in a chat tab.
 
 ## Commands
 
@@ -105,11 +106,6 @@ their guild chat; they do not need the community in a chat tab.
   the relay channel is dropped when the same author was shown there within five seconds. The raw community
   channel copy is hidden so nothing reads twice, and the community stream is loaded before every post and
   reloaded after a community error, since posting fails until it is loaded.
-  Guild lines typed by members **without** the addon ride along: the next guild line any addon user of that
-  guild types also posts the waiting lines (up to ten, at most five minutes old) as `[TAG] Name (Rank Nick): text`,
-  the first client to do so claims them for its guildmates, and same-realm readers are told to drop the copies
-  they already saw from the relay. They arrive when someone with the addon next talks, with that person as the
-  community author and the original name in the text.
   `/cl mirror off` opts a client out; `/cl mirror read off`, `post off` or `hide off` for one piece.
 * **Guild-chat echo (optional, per guild).** With `echo=on` on the Guild Info line, one addon user re-posts each
   other-guild line that arrived readable (relay or bridge; community text cannot be read) as a real guild message,

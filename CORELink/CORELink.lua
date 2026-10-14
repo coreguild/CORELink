@@ -40,19 +40,13 @@ local OnBridgeReceived      -- defined after the guild addon handler that calls 
 -- ("club=<id|short name>" token on the Guild Info line). Community sends only work inside the player's
 -- keypress, so this is done from the chat send hooks and never for relayed lines.
 local mirror = { hooks = "not installed", streamId = nil, posted = 0, failed = 0, reminded = false, shown = 0,
-                 focused = false, hidden = 0, lastText = nil, lastAt = 0, skipped = 0, clubType = nil, carried = 0 }
+                 focused = false, hidden = 0, lastText = nil, lastAt = 0, skipped = 0, clubType = nil }
 -- A line can reach us twice: on the relay channel (readable) and in the community (text sealed, so it cannot be
 -- hashed). Each displayed line is remembered by author and time; the other path's copy within a few seconds is dropped.
 local recentFrom = {}   -- author -> { { t = time, via = "relay"|"club" }, ... }
 local CROSS_SECS = 5
--- Piggyback: a guild line typed by a member without the addon cannot be posted to the community by anyone
--- (only the typist's own keypress may post), so it waits here and rides along the next guild line an addon
--- user of this guild types. The first client to post claims the line for its guildmates (CARRIED) and tells
--- same-realm readers how many carried copies follow (CARRY), so they do not show the relayed line twice.
-local carry = {}            -- { id, author, text, t, rank, nick }, oldest first
-local carried = {}          -- line id -> time it was posted to the community, by us or a guildmate
-local addonUsers = {}       -- guildmate -> last time a CORELink guild message came from them (they post their own)
-local CARRY_MAX, CARRY_SECS, ADDON_USER_SECS, CLUB_SHOW_DELAY = 10, 300, 900, 2
+local addonUsers = {}       -- guildmate -> last time a CORELink guild message came from them
+local ADDON_USER_SECS = 900
 -- Echo: with "echo=on" on the Guild Info line, one addon user per guild re-posts other guilds' readable lines
 -- (relay and bridge; community text cannot be read) as real guild messages, so members without the addon see
 -- them. The first client to claim a line (ECHO~id over the guild addon channel) posts it. Addon users hide
@@ -455,11 +449,6 @@ local function OnGuildAddon(text, sender)
   local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
   if cmd == "ECHO" then
     echoed[rest] = GetTime()              -- a guildmate is echoing this line: we do not
-  elseif cmd == "CARRIED" then
-    -- a guildmate posted these lines to the community: drop them from our piggyback queue
-    local now = GetTime()
-    for id in rest:gmatch("[^,]+") do carried[id] = now end
-    for i = #carry, 1, -1 do if carried[carry[i].id] then table.remove(carry, i) end end
   elseif cmd == "NICK" then
     local n = CleanNick(rest)
     db.nicks[sender] = (n ~= "") and n or nil
@@ -583,11 +572,6 @@ local function OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   if mine then
     Relay(id, tag, author, msg, class, flags, nick)
   else
-    if db.mirror ~= false and db.club and not (addonUsers[author] and now - addonUsers[author] < ADDON_USER_SECS)
-       and not carried[id] then
-      carry[#carry + 1] = { id = id, author = author, text = msg, t = now, rank = rn, nick = nick }
-      while #carry > CARRY_MAX do table.remove(carry, 1) end
-    end
     -- random back-off: normally only one member's client relays
     C_Timer.After(0.3 + math.random() * 1.2, function()
       if pending[id] and not (seen[id] and GetTime() - seen[id] < DEDUPE_SECS) then
@@ -669,17 +653,7 @@ local function OnLinkMessage(text)
   if issecret(text) or not text then return end
   local proto, rest = text:match("^(%w+)" .. SEP .. "(.*)$")
   local id, tag, author, class, flags, msg, nick
-  if proto == "CARRY" then
-    -- "<poster>~<n>": the next n community lines from that character are carried copies of lines already
-    -- relayed on this realm; reserve relay slots so the community copies are dropped
-    local poster, n = rest:match("^([^" .. SEP .. "]+)" .. SEP .. "(%d+)$")
-    if poster then
-      local list = recentFrom[poster] or {}
-      recentFrom[poster] = list
-      for _ = 1, math.min(tonumber(n) or 0, CARRY_MAX) do list[#list + 1] = { t = GetTime(), via = "relay" } end
-    end
-    return
-  elseif proto == "CL4" then
+  if proto == "CL4" then
     id, tag, author, class, flags, nick, msg = Split(rest, 7)
     if id and not id:match("^%x+$") then id = nil end
   elseif proto == "CL3" then
@@ -783,9 +757,13 @@ local function ClubMember()
   return ok and info ~= nil
 end
 
--- The community's channels (streams): id -> name. Community text is unreadable, so a guild's tag travels in
--- the channel name instead: each guild posts into the channel named after its tag when the community has
--- one, and readers take the tag from the channel. Guilds without a channel use General with the tag in the text.
+local function StreamKey(name) return (name:lower():gsub("[%s%-_]", "")) end
+
+-- The community's channels (streams) we use: id -> name. Community text is unreadable, so a guild's tag
+-- travels in the channel name instead: each guild posts into the channel named after its tag when the
+-- community has one, and readers take the tag from the channel. A channel counts as a guild channel when its
+-- description mentions CORELink, or its name is our tag or a tag we have heard; anything else in the community
+-- (an Officers or Raids channel, say) is left alone. Guilds without a channel use General with the tag in the text.
 local function ClubStreams()
   if mirror.streams then return mirror.streams end
   local id = ResolveClubId()
@@ -793,21 +771,31 @@ local function ClubStreams()
   local ok, streams = pcall(C_Club.GetStreams, id)
   if not ok or type(streams) ~= "table" then return nil end
   local map, general, lowest = {}, nil, nil
+  local myTag = GetTag()
   for _, st in ipairs(streams) do
     if type(st.streamId) == "number" and type(st.name) == "string" and not issecret(st.name) then
-      map[st.streamId] = st.name
-      if st.name == "General" then general = st.streamId end
+      local key = StreamKey(st.name)
+      local subject = (type(st.subject) == "string" and not issecret(st.subject)) and st.subject:lower() or ""
+      local isGuild = not st.leadersAndModeratorsOnly and (subject:find("corelink", 1, true) ~= nil
+        or (myTag and key == StreamKey(myTag)) or false)
+      if not isGuild then
+        for tag in pairs(heard) do if StreamKey(tag) == key then isGuild = true break end end
+      end
+      if st.name == "General" then
+        general = st.streamId; map[st.streamId] = st.name
+      elseif isGuild then
+        map[st.streamId] = st.name
+      end
       if not lowest or st.streamId < lowest then lowest = st.streamId end
     end
   end
   if lowest then
+    if not general then general = lowest; map[lowest] = map[lowest] or "General" end
     mirror.streams = map
-    mirror.general = general or lowest
+    mirror.general = general
   end
   return mirror.streams
 end
-
-local function StreamKey(name) return (name:lower():gsub("[%s%-_]", "")) end
 
 -- The channel this guild posts into: the one named after our tag, else General.
 local function ClubStream()
@@ -857,24 +845,7 @@ local function MirrorTypedLine(text)
   end
   local ok, err = pcall(C_Club.SendMessage, id, stream, line:sub(1, 250))
   if ok then mirror.posted = mirror.posted + 1
-  else mirror.failed = mirror.failed + 1; mirror.focused = false; Debug("mirror failed: %s", tostring(err)) return end
-  -- carry guildmates' waiting lines in this keypress: "[TAG] Name (Rank Nick): text"
-  local now, ids = GetTime(), {}
-  for k, t in pairs(carried) do if now - t > 600 then carried[k] = nil end end
-  for _, e in ipairs(carry) do
-    if now - e.t <= CARRY_SECS and not carried[e.id] then
-      local who = BuildTag(e.rank, (db.showNick ~= false) and e.nick or nil)
-      who = e.author .. (who ~= "" and (" " .. who:sub(1, -2)) or "")
-      local okc = pcall(C_Club.SendMessage, id, stream, ((tagChannel and "" or ("[" .. tag .. "] ")) .. who .. ": " .. e.text):sub(1, 250))
-      if okc then carried[e.id] = now; ids[#ids + 1] = e.id; mirror.carried = mirror.carried + 1 end
-    end
-  end
-  wipe(carry)
-  if #ids > 0 then
-    SendGuildAddon("CARRIED" .. SEP .. table.concat(ids, ","))
-    table.insert(sendQueue, "CARRY" .. SEP .. me .. SEP .. #ids)
-    Debug("carried %d guild line(s) into the community", #ids)
-  end
+  else mirror.failed = mirror.failed + 1; mirror.focused = false; Debug("mirror failed: %s", tostring(err)) end
 end
 
 -- Typed in a chat box whose type is already Guild.
@@ -1023,11 +994,9 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if channelTag then
     -- "[TAG] [Name]: (Rank Nick) text", the same shape as a relayed line; the text itself stays unreadable
     heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
-    C_Timer.After(CLUB_SHOW_DELAY, function()
-      if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
-      mirror.shown = mirror.shown + 1
-      Display(tag, who, class, content, label, nick, true)
-    end)
+    if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
+    mirror.shown = mirror.shown + 1
+    Display(tag, who, class, content, label, nick, true)
   elseif tag then
     local id = Hash(tag .. who .. msg)
     if displayed[id] then return end                         -- already shown from the relay channel
@@ -1038,11 +1007,9 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
     -- "[TAG] text" lines (WoW community) already carry "(Rank Nick)" in the text; the full format does not
     Display(tag, who, class, msg, label, nick, pname == nil)
   else
-    C_Timer.After(CLUB_SHOW_DELAY, function()
-      if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
-      mirror.shown = mirror.shown + 1
-      Display(nil, who, class, content, label, nick, true)
-    end)
+    if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
+    mirror.shown = mirror.shown + 1
+    Display(nil, who, class, content, label, nick, true)
   end
 end
 
@@ -1410,7 +1377,7 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
-      string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s channels=%d posted=%d carried=%d waiting=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
+      string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s channels=%d posted=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
         (db.mirror ~= false) and "on" or "off", (db.mirrorRead ~= false) and "on" or "off", tostring(db.club),
         tostring(ResolveClubId()), (db.club and ClubIsCharacter()) and "wow" or tostring(mirror.clubType),
         tostring(db.club and ClubMember()), (function()
@@ -1418,8 +1385,7 @@ SlashCmdList["CORELINK"] = function(input)
           if not sid then return "nil" end
           return sid .. ":" .. (StreamTag(sid) or "General")
         end)(), (function() local n = 0 for _ in pairs(ClubStreams() or {}) do n = n + 1 end return n end)(),
-        mirror.posted, mirror.carried, #carry,
-        mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
+        mirror.posted, mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       string.format("echo %s me=%s sent=%d hidden=%d", db.echo and "on" or "off", (db.echoer ~= false) and "on" or "off", echoStats.sent, echoStats.hidden),
