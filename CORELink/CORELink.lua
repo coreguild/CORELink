@@ -52,7 +52,7 @@ local CROSS_SECS = 5
 local carry = {}            -- { id, author, text, t, rank, nick }, oldest first
 local carried = {}          -- line id -> time it was posted to the community, by us or a guildmate
 local addonUsers = {}       -- guildmate -> last time a CORELink guild message came from them (they post their own)
-local CARRY_MAX, CARRY_SECS, ADDON_USER_SECS, CLUB_SHOW_DELAY = 10, 120, 900, 2
+local CARRY_MAX, CARRY_SECS, ADDON_USER_SECS, CLUB_SHOW_DELAY = 10, 300, 900, 2
 local FocusClubStream       -- defined after the reminder that calls it
 local MAX_MSG, DEDUPE_SECS = 200, 10
 

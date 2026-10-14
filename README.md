@@ -101,7 +101,7 @@ guilds in their guild chat; they do not need the community in a chat tab.
   channel copy is hidden so nothing reads twice, and the community stream is loaded before every post and
   reloaded after a community error, since posting fails until it is loaded.
   Guild lines typed by members **without** the addon ride along: the next guild line any addon user of that
-  guild types also posts the waiting lines (up to ten, at most two minutes old) as `[TAG] Name (Rank Nick): text`,
+  guild types also posts the waiting lines (up to ten, at most five minutes old) as `[TAG] Name (Rank Nick): text`,
   the first client to do so claims them for its guildmates, and same-realm readers are told to drop the copies
   they already saw from the relay. They arrive when someone with the addon next talks, with that person as the
   community author and the original name in the text.

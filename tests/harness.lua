@@ -714,8 +714,8 @@ do
   -- too old: not carried
   advance(1000)
   H(nil, "CHAT_MSG_GUILD", "stale line", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(130); typeLine("late")
-  check("piggyback: a line older than two minutes is dropped", #clubPosts == 5 and clubPosts[5].text == "[MAIN] late", #clubPosts)
+  advance(310); typeLine("late")
+  check("piggyback: a line older than five minutes is dropped", #clubPosts == 5 and clubPosts[5].text == "[MAIN] late", #clubPosts)
   -- reader side: a CARRY note reserves a slot so the sealed carried copy is not shown after the relayed line
   advance(10); n0 = #chatLines
   H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000c01~Trois~Pip Vale~MAGE~~~pip's line", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
