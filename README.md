@@ -63,7 +63,7 @@ append `club=<id>` to every co-guild's line, share the invite link, and have mem
 | `/cl nicknames on/off`, `/cl classcolor on/off`, `/cl officer on/off` | all | Display toggles (this client only). |
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
 | `/cl window <n>` | all | Force bridged lines into chat window n; no argument = windows with Guild chat. |
-| `/cl mirror on/off` | all | Whether this client posts its own typed guild lines into the community named by `club=`. Default on. |
+| `/cl mirror on/off`, `read off`, `post off` | all | Post your typed guild lines into the community named by `club=`, and show the community's lines in guild chat. Default both on. |
 | `/cl bridge on/off` | all | Whether this client forwards other guilds' lines to guildmates on other realms and re-sends forwards into its realm. Default on. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
 | `/cl debug on/off` | all | Echo debug events to chat as they happen. Events are always kept for `/cl report`. |
@@ -86,7 +86,9 @@ append `club=<id>` to every co-guild's line, share the invite link, and have mem
   typed guild lines are also posted into that Blizzard Community as `[TAG] Name: text`, from inside the keypress
   that sent them (community sends are refused from timers and event handlers, so relayed lines cannot be
   mirrored). Everyone, with or without the addon, reads the community by adding it to a chat tab; it crosses
-  realms and keeps history. `/cl mirror off` opts a client out.
+  realms and keeps history. Lines that arrive in the community from other guilds are shown in your guild chat
+  windows too (de-duplicated against the relay), and plain community chat shows under the community's name.
+  `/cl mirror off` opts a client out; `/cl mirror read off` or `post off` for one direction.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
   channel if it has not arrived there. Any guild with addon users on two realms therefore bridges every linked

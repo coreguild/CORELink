@@ -94,10 +94,13 @@ local function typeLine(text, chatType)
 end
 -- Blizzard Communities
 local clubMember, clubPosts = true, {}
+local clubMessages = {}
 C_Club = {
   GetClubInfo = function(id) if clubMember and id == 23112951 then return { clubId = id, name = "Core Test" } end end,
   GetStreams = function(id) if id == 23112951 then return { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } } end return {} end,
   SendMessage = function(id, stream, text) clubPosts[#clubPosts + 1] = { club = id, stream = stream, text = text } end,
+  FocusStream = function() return true end,
+  GetMessageInfo = function(id, stream, mid) return clubMessages[mid] end,
 }
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
@@ -452,7 +455,32 @@ do
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
   check("mirror: /cl publish keeps the club token on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=23112951", lastSetText)
   lastSetText = nil; slash("report")
-  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror on club=23112951 member=true stream=1 posted=1 failed=0 hooks=installed", 1, true) ~= nil, lastSetText)
+  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 member=true stream=1 posted=1 failed=0 shown=0 focused=", 1, true) ~= nil, lastSetText)
+  -- inbound: a formatted line from another guild in the club shows in guild chat; own guild's and own lines don't
+  clubMessages[101] = { messageId = 101, content = "[ALT] Carol Smith (Cee): hi from the community", author = { name = "Carol Smith", isSelf = false } }
+  clubMessages[102] = { messageId = 102, content = "[MAIN] Bob Jones: our own guild", author = { name = "Bob Jones", isSelf = false } }
+  clubMessages[103] = { messageId = 103, content = "[MAIN] Shockly Stormgale: me", author = { name = "Shockly Stormgale", isSelf = true } }
+  clubMessages[104] = { messageId = 104, content = "just chatting in the community", author = { name = "Dana Reed", isSelf = false } }
+  n0 = #chatLines
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 101)
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 101)      -- duplicate delivery
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 102)
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 103)
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 2, 101)      -- other stream
+  local clubShown = {}
+  for i = n0 + 1, #chatLines do clubShown[#clubShown + 1] = chatLines[i].text end
+  local clubJoined = table.concat(clubShown, "\n")
+  check("mirror read: another guild's community line shows once as [ALT] with the nickname",
+    clubJoined:find("[ALT]", 1, true) ~= nil and clubJoined:find("[Carol Smith]", 1, true) ~= nil and clubJoined:find("(Cee) hi from the community", 1, true) ~= nil
+    and select(2, clubJoined:gsub("hi from the community", "")) == 2, clubJoined)   -- 2 = both GUILD windows, once each
+  check("mirror read: own guild's and own lines from the community are not shown", clubJoined:find("our own guild", 1, true) == nil and clubJoined:find("Stormgale: me", 1, true) == nil)
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 104)
+  check("mirror read: plain community chat shows under the community name", #chatLines > n0 and chatLines[#chatLines].text:find("[Core Test]", 1, true) ~= nil and chatLines[#chatLines].text:find("just chatting", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  slash("mirror read off"); n0 = #chatLines
+  clubMessages[105] = { messageId = 105, content = "[ALT] Carol Smith: while read off", author = { name = "Carol Smith", isSelf = false } }
+  H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 105)
+  check("mirror read: /cl mirror read off stops showing", #chatLines == n0)
+  slash("mirror on")
   slash("mirror off"); typeLine("while off")
   check("mirror: /cl mirror off stops posting", #clubPosts == 1)
   slash("mirror on")

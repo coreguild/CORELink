@@ -35,7 +35,8 @@ local OnBridgeReceived      -- defined after the guild addon handler that calls 
 -- Community mirror: the player's own typed guild lines are also posted into a Blizzard Community
 -- ("club=<id>" token on the Guild Info line). Community sends only work inside the player's keypress,
 -- so this is done from the chat edit box hook and never for relayed lines.
-local mirror = { hooks = "not installed", streamId = nil, posted = 0, failed = 0, reminded = false }
+local mirror = { hooks = "not installed", streamId = nil, posted = 0, failed = 0, reminded = false, shown = 0, focused = false }
+local FocusClubStream       -- defined after the reminder that calls it
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
 local db
@@ -681,8 +682,50 @@ local function RemindAboutClub()
   if mirror.reminded or not db or not db.clubId or db.mirror == false then return end
   if not C_Club then return end
   mirror.reminded = true
+  FocusClubStream()
   if not ClubMember() then
     Print("your guild mirrors chat into community " .. db.clubId .. " but this character is not a member. Ask the Guild Master for the invite link, then add the community to a chat tab to read every linked guild.")
+  end
+end
+
+-- Subscribe to the club stream so CLUB_MESSAGE_ADDED fires for it.
+FocusClubStream = function()
+  if mirror.focused or not db or not db.clubId or not C_Club or not C_Club.FocusStream then return end
+  local stream = ClubStream()
+  if not stream or not ClubMember() then return end
+  if pcall(C_Club.FocusStream, db.clubId, stream) then mirror.focused = true end
+end
+
+-- A message arrived in the club: show it in guild chat unless it is ours, our own guild's, muted, or a line
+-- we already displayed from the relay channel (same id: Hash(tag .. author .. msg)).
+local function OnClubMessage(clubId, streamId, messageId)
+  if not db or db.mirrorRead == false or not db.clubId or clubId ~= db.clubId then return end
+  if streamId ~= ClubStream() then return end
+  if not C_Club or not C_Club.GetMessageInfo then return end
+  local ok, info = pcall(C_Club.GetMessageInfo, clubId, streamId, messageId)
+  if not ok or type(info) ~= "table" or type(info.content) ~= "string" or info.destroyed then return end
+  local author = info.author or {}
+  if author.isSelf then return end
+  local content = info.content
+  if issecret(content) then return end
+  local tag, name, nick, msg = content:match("^%[([^%]]+)%] ([^:(]+)%s?%(?([^):]*)%)?: (.*)$")
+  if tag and name and msg then
+    name = name:gsub("%s+$", "")
+    if tag == GetTag() then return end                       -- our guild: already in our guild chat
+    if db.muted[tag:lower()] then return end
+    local id = Hash(tag .. name .. msg)
+    if displayed[id] then return end                         -- already shown from the relay channel
+    displayed[id] = GetTime(); seen[id] = GetTime()
+    heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
+    mirror.shown = mirror.shown + 1
+    Display(tag, name, "", msg, nil, (nick ~= "" and nick) or nil)
+  else
+    -- plain community chat from someone (addon or not): show it under the community's name
+    local who = (type(author.name) == "string" and not issecret(author.name)) and author.name or "?"
+    local clubName = "Community"
+    if C_Club.GetClubInfo then local okc, ci = pcall(C_Club.GetClubInfo, clubId); if okc and ci and ci.name then clubName = ci.name end end
+    mirror.shown = mirror.shown + 1
+    Display(clubName, who, "", content, nil, nil)
   end
 end
 
@@ -746,6 +789,7 @@ f:RegisterEvent("CHAT_MSG_ADDON")
 f:RegisterEvent("GUILD_ROSTER_UPDATE")
 f:RegisterEvent("CHANNEL_UI_UPDATE")
 f:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+f:RegisterEvent("CLUB_MESSAGE_ADDED")
 
 local lastRead, warned = 0, false
 f:SetScript("OnEvent", function(self, event, ...)
@@ -781,6 +825,9 @@ f:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CHANNEL_UI_UPDATE" then
     -- the channel system just became ready (or changed); make sure we are in the link channel
     if Configured() then EnsureChannel() end
+  elseif event == "CLUB_MESSAGE_ADDED" then
+    local clubId, streamId, messageId = ...
+    OnClubMessage(clubId, streamId, messageId)
   elseif event == "CHAT_MSG_CHANNEL_NOTICE" then
     local notice, _, _, channelName, _, _, _, _, channelBaseName = ...
     OnChannelNotice(notice, channelName, channelBaseName)
@@ -954,8 +1001,13 @@ SlashCmdList["CORELINK"] = function(input)
     db.showNick = not (arg:lower() == "off")
     Print("showing nicknames: " .. (db.showNick and "on" or "off"))
   elseif cmd == "mirror" then
-    db.mirror = not (arg:lower() == "off")
-    Print("community mirror: " .. (db.mirror and "on" or "off") .. (db.clubId and (" (club " .. db.clubId .. ")") or " (no club= token in Guild Info)"))
+    local what, val = arg:lower():match("^(%a*)%s*(%a*)$")
+    if what == "read" then db.mirrorRead = (val ~= "off")
+    elseif what == "post" then db.mirror = (val ~= "off")
+    else db.mirror = (what ~= "off"); db.mirrorRead = (what ~= "off") end
+    Print(string.format("community mirror: post %s, read %s%s", (db.mirror ~= false) and "on" or "off",
+      (db.mirrorRead ~= false) and "on" or "off", db.clubId and (" (club " .. db.clubId .. ")") or " (no club= token in Guild Info)"))
+    FocusClubStream()
   elseif cmd == "bridge" then
     db.bridge = not (arg:lower() == "off")
     Print("cross-realm bridging: " .. (db.bridge and "on" or "off") .. " (forward other guilds' lines to your guildmates on other realms)")
@@ -1002,9 +1054,10 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
-      string.format("mirror %s club=%s member=%s stream=%s posted=%d failed=%d hooks=%s",
-        (db.mirror ~= false) and "on" or "off", tostring(db.clubId), tostring(db.clubId and ClubMember()),
-        tostring(db.clubId and ClubStream()), mirror.posted, mirror.failed, mirror.hooks),
+      string.format("mirror post=%s read=%s club=%s member=%s stream=%s posted=%d failed=%d shown=%d focused=%s hooks=%s",
+        (db.mirror ~= false) and "on" or "off", (db.mirrorRead ~= false) and "on" or "off", tostring(db.clubId),
+        tostring(db.clubId and ClubMember()), tostring(db.clubId and ClubStream()), mirror.posted, mirror.failed,
+        mirror.shown, tostring(mirror.focused), mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       "debug " .. tostring(db.debug == true),
@@ -1063,9 +1116,9 @@ SlashCmdList["CORELINK"] = function(input)
     Print(StatusLine())
     if Configured() and lastSendResult then Print("last send result: " .. lastSendResult .. " (0 = success)") end
     if IsGM() then
-      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | bridge on|off | mirror on|off | reload | clear | on | off | mute | unmute | report | debug on|off")
+      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | bridge on|off | mirror on|off|read off|post off | reload | clear | on | off | mute | unmute | report | debug on|off")
     else
-      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off | mirror on|off | report | debug on|off")
+      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off | mirror on|off|read off|post off | report | debug on|off")
     end
   end
 end
