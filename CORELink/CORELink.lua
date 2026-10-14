@@ -23,6 +23,9 @@ local heard = {}   -- guild tag -> last time seen on the link channel (on OUR re
 -- Guildmates on other realms tell us what they hear (HEARD messages on the guild addon channel), so
 -- /cl guilds can show which realms each linked guild is actually reaching.
 local heardRealms = {}      -- tag -> realm -> last time heard there (ours or a guildmate's realm)
+-- What we know about authors from relay packets: class token and officer label, keyed by chat name.
+-- Community lines carry neither, so this is how they get class and officer colours.
+local authorClass, authorOfficer = {}, {}
 local guildRealms = {}      -- realm -> last time one of our own guildmates reported from it
 local lastHeardSent, lastHeardSig = 0, ""
 local coverageWarned = {}   -- tag -> true once we warned that it is not reaching our realm
@@ -604,6 +607,8 @@ local function OnLinkMessage(text)
     label = (flags:sub(2):gsub("[~|]", ""))
     if label == "" then label = "Officer" end
   end
+  if class and class ~= "" then authorClass[author] = class end
+  authorOfficer[author] = label                    -- nil clears a stale officer label
   nick = CleanNick(nick)
   Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
 end
@@ -717,8 +722,15 @@ local function OnClubMessage(clubId, streamId, messageId)
     if displayed[id] then return end                         -- already shown from the relay channel
     displayed[id] = GetTime(); seen[id] = GetTime()
     heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
+    local class = ""
+    if author.classID and not issecret(author.classID) and GetClassInfo then
+      local okc, _, token = pcall(GetClassInfo, author.classID)
+      if okc and type(token) == "string" then class = token end
+    end
+    if class == "" then class = authorClass[name] or "" end
+    local label = (db.officer ~= false) and authorOfficer[name] or nil
     mirror.shown = mirror.shown + 1
-    Display(tag, name, "", msg, nil, (nick ~= "" and nick) or nil)
+    Display(tag, name, class, msg, label, (nick ~= "" and nick) or nil)
   else
     -- plain community chat from someone (addon or not): show it under the community's name
     local who = (type(author.name) == "string" and not issecret(author.name)) and author.name or "?"

@@ -476,6 +476,16 @@ do
     clubJoined:find("[ALT]", 1, true) ~= nil and clubJoined:find("[Carol Smith]", 1, true) ~= nil and clubJoined:find("(Cee) hi from the community", 1, true) ~= nil
     and select(2, clubJoined:gsub("hi from the community", "")) == 2, clubJoined)   -- 2 = both GUILD windows, once each
   check("mirror read: own guild's and own lines from the community are not shown", clubJoined:find("our own guild", 1, true) == nil and clubJoined:find("Stormgale: me", 1, true) == nil)
+  -- colours: class from the member record when given, else from what relay packets taught us; officer from the relay cache
+  GetClassInfo = function(id) if id == 8 then return "Mage", "MAGE" end end
+  clubMessages[110] = { messageId = 110, content = "[ALT] Fay Brook: classy", author = { name = "Fay Brook", isSelf = false, classID = 8 } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 110)
+  check("mirror read: class colour from the community member record", #chatLines > n0 and chatLines[#chatLines].text:find("|cff40c7eb[Fay Brook]|r", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~c0000001~ALT~Gus Pine~WARRIOR~OCaptain~~via relay", "CHANNEL", "Gus Pine", nil, 0, 6, "CORELink7100")
+  clubMessages[111] = { messageId = 111, content = "[ALT] Gus Pine: now via the community", author = { name = "Gus Pine", isSelf = false } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 111)
+  local last = chatLines[#chatLines]
+  check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and last.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and last.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(last.r * 255 + 0.5) == 0xe8, last.text .. " r=" .. tostring(last.r))
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 104)
   check("mirror read: plain community chat shows under the community name", #chatLines > n0 and chatLines[#chatLines].text:find("[Core Test]", 1, true) ~= nil and chatLines[#chatLines].text:find("just chatting", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
   slash("mirror read off"); n0 = #chatLines
