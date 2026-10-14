@@ -40,7 +40,8 @@ A copy box shows the Guild Info line. Paste it into Guild Information and save.
 Every co-guild uses the same channel and password and a different tag.
 Members pick the settings up automatically within a minute of logging in.
 
-Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on]`
+Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on] [guilds=<name>, <name>]`
+(`guilds=` must be last; names may contain spaces.)
 
 To mirror chat into a Blizzard Community: create a **World of Warcraft community** (not a Battle.net one; those
 show account names instead of characters and are the only kind that crosses factions), give it a short name that
@@ -68,6 +69,9 @@ they do not need the community in a chat tab.
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
 | `/cl window <n>` | all | Force bridged lines into chat window n; no argument = windows with Guild chat. |
 | `/cl mirror on/off`, `read off`, `post off`, `hide off` | all | Post your typed guild lines into the community named by `club=`, and show the community's lines in guild chat. Default both on. `hide off` shows the raw community channel lines again if you keep the community in a chat tab. |
+| `/cl whisper on/off` | all | Whether this client takes part in the whisper bridge (courier duty and relaying whispered lines). Default on. |
+| `/cl who` | all | Run the directory round now: ask who is online in each guild of `guilds=` and greet new names. Only the courier queries. |
+| `/cl peers` | all | List known peers (other guilds' addon users), their realm, guild, and whether they answered. |
 | `/cl echo on/off` | all | Whether this client may be the one that re-posts other guilds' lines into real guild chat (needs `echo=on` on the Guild Info line). Default on. |
 | `/cl bridge on/off` | all | Whether this client forwards other guilds' lines to guildmates on other realms and re-sends forwards into its realm. Default on. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
@@ -113,6 +117,17 @@ they do not need the community in a chat tab.
   client to claim a line over the guild addon channel posts it, after the same random back-off as the relay.
   Addon users hide the echoed copy (they already saw the coloured line) and never relay, carry or mirror it.
   Echoed lines count as real guild chat for everyone: logs, mobile apps and other addons see them.
+* **Whisper bridge (optional, per guild).** For guilds that share no realm with yours, so neither the relay
+  channel nor the guild bridge can reach them. `guilds=Trois Royaume, Deux` on the Guild Info line names the
+  collective. On each realm your guild's courier (the alphabetically first guildmate running the addon there; every
+  client computes the same answer) asks the server who is online in each listed guild, learns which realms they
+  are on, greets a few of them over whisper addon messages, and keeps the ones that answer as peers. A player
+  without the addon never answers and is skipped. Peers share their peer lists, so one good contact teaches the
+  rest, and peers are saved between sessions. When a line is heard on your realm, the courier whispers it to one
+  peer on every realm that nothing else reaches (no addon user of the origin guild there, no guildmate of yours
+  there); that peer drops it into its own realm's channel, where it shows like any relayed line, readable, with
+  colours, and eligible for the echo. Nothing needs a keypress. `/cl guilds` lists each guild's online members
+  per realm from the last round; `/cl peers` lists peers; `/cl who` runs a round now.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
   channel if it has not arrived there. Any guild with addon users on two realms therefore bridges every linked

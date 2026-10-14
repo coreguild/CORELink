@@ -123,6 +123,13 @@ C_Club = {
   FocusStream = function() return true end,
   GetMessageInfo = function(id, stream, mid) return clubMessages[mid] end,
 }
+local whoResults, whoSent = {}, {}
+C_FriendList = {
+  SetWhoToUi = function() end,
+  SendWho = function(filter) whoSent[#whoSent + 1] = filter end,
+  GetNumWhoResults = function() return #whoResults end,
+  GetWhoInfo = function(i) return whoResults[i] end,
+}
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
   SendChatMessage = function() end,
@@ -770,6 +777,105 @@ do
   H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e004~ALT~Carol~PRIEST~~~no echo", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
   advance(2)
   check("echo: without echo=on nothing is re-posted", #chatSends == 0, #chatSends)
+  guildInfoText = savedTextForRestore
+end
+
+
+-- Whisper bridge: guilds= names the collective; the courier asks who is online per guild, greets a few over
+-- whisper addon messages, remembers who answers, and whispers lines to realms nothing else reaches.
+do
+  CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true; whoSent = {}; whoResults = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  check("whisper: guilds= parsed from the end of the line, other tokens intact", CORELinkDB.guilds and #CORELinkDB.guilds == 2 and CORELinkDB.guilds[1] == "Trois Royaume" and CORELinkDB.guilds[2] == "Deux" and CORELinkDB.echo == true, CORELinkDB.guilds and table.concat(CORELinkDB.guilds, "|"))
+  myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
+  check("whisper: /cl publish writes guilds= last", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
+  lastSetText = nil; slash("report")
+  check("whisper: we are the courier when no guildmate runs the addon on our realm", (lastSetText or ""):find("whisper on courier=true guilds=2 peers=0", 1, true) ~= nil, lastSetText)
+  -- who round: one silent query per other guild, results give realms and online counts
+  advance(60); whoSent = {}                                       -- earlier logins' 45 s rounds have come and gone
+  slash("who")
+  check("whisper: a who round queries the first other guild of the collective", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
+  whoResults = { { fullName = "Zag Mathris-ClassicBetaPvE2" }, { fullName = "Cosmo Vale-ClassicBetaPvE2" }, { fullName = "Pip Vale" }, { fullName = "Shockly" } }
+  H(nil, "WHO_LIST_UPDATE"); advance(4)
+  check("whisper: the next guild is queried after the results arrive", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
+  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
+  local hellos = {}
+  for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
+  check("whisper: who results are greeted over whisper addon messages (not ourselves)", hellos["Zag Mathris-ClassicBetaPvE2"] and hellos["Cosmo Vale-ClassicBetaPvE2"] and hellos["Pip Vale"] and not hellos["Shockly"])
+  n0 = #chatLines; slash("guilds")
+  local collectiveOut = {}
+  for i = n0 + 1, #chatLines do collectiveOut[#collectiveOut + 1] = chatLines[i].text end
+  check("whisper: /cl guilds lists online members per realm for each guild of the collective", table.concat(collectiveOut, "\n"):find("Trois Royaume - ClassicBetaPvE2: 2 online, PvE: 2 online", 1, true) ~= nil, table.concat(collectiveOut, "\n"))
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~PvE~MAIN", "GUILD", "Aaron-Beta")
+  lastSetText = nil; slash("report")
+  check("whisper: the alphabetically first guildmate on our realm is the courier", (lastSetText or ""):find("courier=false", 1, true) ~= nil, lastSetText)
+  advance(400)                                                   -- Aaron's report ages out
+  lastSetText = nil; slash("report")
+  check("whisper: courier role returns when that guildmate goes quiet", (lastSetText or ""):find("courier=true", 1, true) ~= nil, lastSetText)
+  -- a player without the addon never answers; one with it answers PEER and becomes a peer
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~ClassicBetaPvE2~Trois Royaume", "WHISPER", "Zag Mathris-ClassicBetaPvE2")
+  lastSetText = nil; slash("report")
+  check("whisper: a PEER answer is remembered", (lastSetText or ""):find("peers=1", 1, true) ~= nil and CORELinkDB.peers["Zag Mathris-ClassicBetaPvE2"].tag == "Trois", lastSetText)
+  -- someone greets us: we answer PEER and share our directory
+  local nSent = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HELLO~Deux~ClassicBetaPvE2~Deux", "WHISPER", "Dee Vale-ClassicBetaPvE2"); advance(3)
+  local gotPeer, gotDir = false, false
+  for i = nSent + 1, #sentAddon do
+    if sentAddon[i].kind == "WHISPER" and sentAddon[i].target == "Dee Vale-ClassicBetaPvE2" then
+      if sentAddon[i].text == "PEER~MAIN~PvE~CORE Forever" then gotPeer = true end
+      if sentAddon[i].text:find("^DIR~.*Zag Mathris%-ClassicBetaPvE2@ClassicBetaPvE2@Trois@Trois Royaume") then gotDir = true end
+    end
+  end
+  check("whisper: a HELLO is answered with PEER and a directory of live peers", gotPeer and gotDir)
+  -- routing: a line heard natively on our realm goes to one peer per realm that nothing else covers
+  nSent = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000f001~ALT~Carol~PRIEST~~~over the water", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(3)
+  local wb = {}
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text == "WB~CL4~0000f001~ALT~Carol~PRIEST~~~over the water" then wb[#wb + 1] = sentAddon[i].target end end
+  check("whisper: the line is whispered once to the far realm, to its freshest peer", #wb == 1 and (wb[1] == "Zag Mathris-ClassicBetaPvE2" or wb[1] == "Dee Vale-ClassicBetaPvE2"), #wb .. " " .. tostring(wb[1]))
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~ClassicBetaPvE2~ALT,MAIN", "GUILD", "Tanner-Beta")   -- our guild now has someone there: the bridge covers it
+  nSent = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000f002~ALT~Carol~PRIEST~~~bridge covers", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(3)
+  local whispered = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find("bridge covers", 1, true) then whispered = true end end
+  check("whisper: realms a guildmate of ours already bridges to are not whispered", not whispered)
+  -- inbound: a whispered line is dropped into our realm's channel and shown once
+  nSent = #sentAddon; n0 = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "WHISPER", "Zag Mathris-ClassicBetaPvE2")
+  advance(4)
+  local resent = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" and sentAddon[i].text == "CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across" then resent = true; H(nil, "CHAT_MSG_ADDON", "CORELink", sentAddon[i].text, "CHANNEL", "Shockly", nil, 0, 6, "CORELink7100") end end
+  check("whisper: a whispered line is re-sent into our channel and displayed once", resent and #chatLines == n0 + 2 and chatLines[#chatLines].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil, tostring(resent) .. " " .. (#chatLines - n0))
+  nSent = #sentAddon
+  advance(3)
+  local bounced = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find("from across", 1, true) then bounced = true end end
+  check("whisper: a line that arrived by whisper is not whispered onward", not bounced)
+  lastSetText = nil; slash("report")
+  check("whisper: report counts who, hellos, answers, sent and received", (lastSetText or ""):find("hello=3 answered=2 sent=1 recv=1", 1, true) ~= nil, lastSetText)
+  -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
+  nSent = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale-ClassicBetaPvE2@ClassicBetaPvE2@Deux@Deux", "WHISPER", "Zag Mathris-ClassicBetaPvE2"); advance(2)
+  local greeted = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].target == "Rook Hale-ClassicBetaPvE2" and sentAddon[i].text:find("^HELLO~") then greeted = true end end
+  check("whisper: a name learned from gossip is greeted, not trusted", greeted and CORELinkDB.peers["Rook Hale-ClassicBetaPvE2"].seen == 0)
+  local sf = filters["CHAT_MSG_SYSTEM"]
+  check("whisper: the game's 'not playing' line for our own hello is hidden", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Rook Hale' is currently playing.") == true)
+  check("whisper: other 'not playing' lines are left alone", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Someone Else' is currently playing.") ~= true)
+  n0 = #chatLines; slash("peers")
+  local peersOut = {}
+  for i = n0 + 1, #chatLines do peersOut[#peersOut + 1] = chatLines[i].text end
+  check("whisper: /cl peers lists peers with guild, realm and state", table.concat(peersOut, "\n"):find("Zag Mathris - Trois on ClassicBetaPvE2 (Trois Royaume) seen", 1, true) ~= nil and table.concat(peersOut, "\n"):find("Rook Hale - Deux on ClassicBetaPvE2 (Deux) not yet answered", 1, true) ~= nil, table.concat(peersOut, "\n"))
+  slash("whisper off")
+  nSent = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000f004~ALT~Carol~PRIEST~~~while off", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100"); advance(3)
+  local offSent = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find("while off", 1, true) then offSent = true end end
+  check("whisper: /cl whisper off stops whispering lines", not offSent)
+  slash("whisper on")
   guildInfoText = savedTextForRestore
 end
 

@@ -47,6 +47,20 @@ local recentFrom = {}   -- author -> { { t = time, via = "relay"|"club" }, ... }
 local CROSS_SECS = 5
 local addonUsers = {}       -- guildmate -> last time a CORELink guild message came from them
 local ADDON_USER_SECS = 900
+-- Whisper bridge: "guilds=Name One, Name Two" on the Guild Info line names the collective. Each guild's courier
+-- on a realm (alphabetically first guildmate running the addon there) asks the server who is online in each
+-- guild (silent /who), greets a few of them over whisper addon messages, and remembers who answered (peers;
+-- a player without the addon never answers). A line heard on this realm is whispered to one peer on every
+-- realm that would not otherwise get it; that peer drops it into its own realm's channel. Whispers need no
+-- keypress and are the only cross-realm path not tied to a guild or a community.
+local peers = {}             -- "Name-Realm" -> { tag=, realm=, guild=, seen= }  (saved in db.peers)
+local guildOnline = {}       -- guild name -> realm -> { n = online count, t = time }  (from /who)
+local helloAt = {}           -- whisper target -> last hello time
+local courierSeen = {}       -- guildmate -> { realm=, t= } from their HEARD reports (courier election)
+local whisperQueue = {}      -- { target=, text= }
+local whisperStats = { who = 0, hello = 0, answered = 0, sent = 0, recv = 0 }
+local whoQueue, whoPending, whoNext = {}, nil, 0
+local WHO_EVERY, HELLO_EVERY, PEER_ONLINE_SECS, PEER_KEEP_SECS, HELLO_PER_GUILD = 600, 600, 1200, 7 * 86400, 3
 -- Echo: with "echo=on" on the Guild Info line, one addon user per guild re-posts other guilds' readable lines
 -- (relay and bridge; community text cannot be read) as real guild messages, so members without the addon see
 -- them. The first client to claim a line (ECHO~id over the guild addon channel) posts it. Addon users hide
@@ -234,6 +248,7 @@ local function BuildLine()
     .. " " .. (hasTag and db.tag or "-") .. " " .. (db.officerRank or 1)
     .. (db.club and (" club=" .. db.club) or "")
     .. (db.echo and " echo=on" or "")
+    .. ((db.guilds and #db.guilds > 0) and (" guilds=" .. table.concat(db.guilds, ", ")) or "")
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
@@ -258,6 +273,13 @@ local function ReadGuildInfo()
   if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
   GIState("line read")
   db.officerRank = tonumber(orank) or 1
+  local guildsText = line:match("[%s]guilds=(.*)$")
+  db.guilds = {}
+  for raw in (guildsText or ""):gmatch("[^,]+") do
+    local g = raw:gsub("^%s+", ""):gsub("%s+$", "")
+    if g ~= "" then db.guilds[#db.guilds + 1] = g end
+  end
+  if guildsText then line = line:sub(1, (line:find("[%s]guilds=") or 0)) end   -- keep the short tokens parseable
   local echo = line:match("[%s]echo=(%w+)")
   db.echo = (echo ~= nil) and (echo:lower() == "on" or echo == "1" or echo:lower() == "yes") or false
   local club = line:match("[%s]club=([^%s]+)")
@@ -464,6 +486,7 @@ local function OnGuildAddon(text, sender)
     if not realm or realm == "" then return end
     local now = GetTime()
     guildRealms[realm] = now
+    courierSeen[sender] = { realm = realm, t = now }
     for tag in (tags or ""):gmatch("[^,]+") do
       NoteHeard(tag, realm, now)
       -- That guild reaches the guildmate's realm but has not reached ours in 10 minutes: no relay here.
@@ -530,6 +553,185 @@ OnBridgeReceived = function(text, sender)
     bridgeStats.resent = bridgeStats.resent + 1
     Debug("re-sent bridged %s from %s into %s", id, sender, tostring(db.channel))
   end)
+end
+
+---------------------------------------------------------------- whisper bridge
+-- Our guild's courier on this realm: the alphabetically first guildmate (us included) seen running the addon
+-- here in the last 6 minutes. Every client computes the same answer.
+local function IsCourier()
+  local me, now, mine = MyName(), GetTime(), MyRealm()
+  local first = me
+  for name, c in pairs(courierSeen) do
+    if c.realm == mine and now - c.t <= 360 and name < first then first = name end
+  end
+  return first == me
+end
+
+local function WhisperAvailable() return C_ChatInfo and C_ChatInfo.SendAddonMessage and not Locked() end
+local function QueueWhisper(target, text)
+  if not WhisperAvailable() then return end
+  whisperQueue[#whisperQueue + 1] = { target = target, text = text }
+end
+
+local function PeerName(key) return (key:match("^([^-]+)")) or key end
+
+local function RememberPeer(key, tag, realm, guild)
+  if not key or key == "" or not tag or tag == "" then return end
+  local p = peers[key] or {}
+  p.tag, p.realm, p.guild, p.seen = tag, (realm ~= "" and realm) or p.realm or "?", (guild ~= "" and guild) or p.guild, GetTime()
+  peers[key] = p
+  if db then db.peers = peers end
+  NoteHeard(tag, p.realm, GetTime())
+end
+
+local function Hello(target, kind)
+  local now = GetTime()
+  if helloAt[target] and now - helloAt[target] < HELLO_EVERY then return end
+  helloAt[target] = now
+  whisperStats.hello = whisperStats.hello + 1
+  local g = GetGuildInfo("player") or ""
+  QueueWhisper(target, (kind or "HELLO") .. SEP .. (GetTag() or "?") .. SEP .. MyRealm() .. SEP .. g:gsub(SEP, ""))
+end
+
+-- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest.
+local function Directory()
+  local now, out, size = GetTime(), {}, 0
+  for key, p in pairs(peers) do
+    if now - p.seen <= PEER_ONLINE_SECS then
+      local e = key .. "@" .. (p.realm or "?") .. "@" .. p.tag .. "@" .. (p.guild or "")
+      if size + #e + 1 > 230 then break end
+      out[#out + 1] = e; size = size + #e + 1
+    end
+  end
+  return table.concat(out, ";")
+end
+
+-- Silent /who per guild of the collective, one at a time, never while the player's Who window is open.
+local function WhoAvailable()
+  return C_FriendList and C_FriendList.SendWho and C_FriendList.GetNumWhoResults and C_FriendList.GetWhoInfo
+end
+local function RunWho()
+  if whoPending or #whoQueue == 0 or not WhoAvailable() then return end
+  if FriendsFrame and FriendsFrame.IsShown and FriendsFrame:IsShown() then C_Timer.After(30, RunWho) return end
+  local g = table.remove(whoQueue, 1)
+  whoPending = { guild = g, at = GetTime() }
+  if C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, true) end
+  local ok = pcall(C_FriendList.SendWho, 'g-"' .. g .. '"')
+  if not ok then whoPending = nil return end
+  whisperStats.who = whisperStats.who + 1
+  C_Timer.After(6, function() if whoPending and whoPending.guild == g then whoPending = nil; RunWho() end end)
+end
+local function ScheduleWho()
+  if not db or not db.guilds or #db.guilds == 0 or not IsCourier() then return end
+  if GetTime() < whoNext then return end
+  whoNext = GetTime() + WHO_EVERY
+  wipe(whoQueue)
+  local mineName = GetGuildInfo("player")
+  for _, g in ipairs(db.guilds) do if g ~= mineName then whoQueue[#whoQueue + 1] = g end end
+  RunWho()
+end
+
+local function OnWhoList()
+  if not whoPending then return end
+  local g = whoPending.guild
+  whoPending = nil
+  local n = C_FriendList.GetNumWhoResults() or 0
+  local mine, now = MyRealm(), GetTime()
+  local counts, candidates = {}, {}
+  for i = 1, n do
+    local okw, info = pcall(C_FriendList.GetWhoInfo, i)
+    local full = okw and type(info) == "table" and info.fullName
+    if type(full) == "string" and not issecret(full) and full ~= "" then
+      local name, realm = full:match("^([^-]+)-(.+)$")
+      name, realm = name or full, realm or mine
+      counts[realm] = (counts[realm] or 0) + 1
+      if not IsMe(name) then candidates[#candidates + 1] = { key = full, realm = realm } end
+    end
+  end
+  guildOnline[g] = guildOnline[g] or {}
+  for realm, c in pairs(counts) do guildOnline[g][realm] = { n = c, t = now } end
+  Debug("who %s: %d online", g, n)
+  -- greet a few members on realms where we have no live peer of this guild yet
+  local greeted, perRealm = 0, {}
+  for _, c in ipairs(candidates) do
+    local havePeer = false
+    for key, p in pairs(peers) do
+      if p.guild == g and p.realm == c.realm and now - p.seen <= PEER_ONLINE_SECS and key ~= c.key then havePeer = true break end
+    end
+    perRealm[c.realm] = perRealm[c.realm] or 0
+    if not havePeer and perRealm[c.realm] < HELLO_PER_GUILD and greeted < HELLO_PER_GUILD * 2 then
+      perRealm[c.realm] = perRealm[c.realm] + 1; greeted = greeted + 1
+      Hello(c.key)
+    end
+  end
+  C_Timer.After(3, RunWho)
+end
+
+-- A line heard natively on our realm: whisper it to one peer on every realm that would not otherwise get it
+-- (no addon user of the origin guild there, no guildmate of ours there to bridge it).
+local function WhisperOut(id, tag, text)
+  if not db or db.whisper == false or not IsCourier() or not WhisperAvailable() then return end
+  local now, mine = GetTime(), MyRealm()
+  local best = {}
+  for key, p in pairs(peers) do
+    local realm = p.realm
+    if realm and realm ~= mine and now - p.seen <= PEER_ONLINE_SECS
+       and not (heardRealms[tag] and heardRealms[tag][realm] and now - heardRealms[tag][realm] <= 600)
+       and not (guildRealms[realm] and now - guildRealms[realm] <= 600) then
+      if not best[realm] or p.seen > peers[best[realm]].seen then best[realm] = key end
+    end
+  end
+  for realm, key in pairs(best) do
+    QueueWhisper(key, "WB" .. SEP .. text)
+    whisperStats.sent = whisperStats.sent + 1
+    Debug("whispered %s to %s (%s on %s)", id, PeerName(key), peers[key].tag, realm)
+  end
+end
+
+local function OnWhisperAddon(text, sender)
+  if issecret(text) or issecret(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+  local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
+  if cmd == "HELLO" or cmd == "PEER" then
+    local tag, realm, guild = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
+    if not tag then return end
+    RememberPeer(sender, tag, realm, guild)
+    whisperStats.answered = whisperStats.answered + 1
+    if cmd == "HELLO" then
+      local g = GetGuildInfo("player") or ""
+      QueueWhisper(sender, "PEER" .. SEP .. (GetTag() or "?") .. SEP .. MyRealm() .. SEP .. g:gsub(SEP, ""))
+      local dir = Directory()
+      if dir ~= "" then QueueWhisper(sender, "DIR" .. SEP .. dir) end
+    end
+  elseif cmd == "DIR" then
+    -- gossip: names worth greeting, never trusted as live peers until they answer a hello of ours
+    local greeted = 0
+    for entry in rest:gmatch("[^;]+") do
+      local key, realm, tag, guild = entry:match("^([^@]+)@([^@]*)@([^@]*)@(.*)$")
+      if key and tag ~= "" and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
+        peers[key] = { tag = tag, realm = realm, guild = guild, seen = 0 }   -- known, not yet confirmed
+        if db then db.peers = peers end
+        greeted = greeted + 1
+        Hello(key)
+      end
+    end
+  elseif cmd == "WB" then
+    if not db or db.whisper == false then return end
+    whisperStats.recv = whisperStats.recv + 1
+    if peers[sender] then peers[sender].seen = GetTime() end
+    OnBridgeReceived(rest, sender)
+  end
+end
+
+-- Keep live peers fresh: couriers ping known peers every 10 minutes; anyone answers.
+local function PeerUpkeep()
+  if not db then return end
+  local now = GetTime()
+  for key, p in pairs(peers) do
+    if now - p.seen > PEER_KEEP_SECS then peers[key] = nil
+    elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY then Hello(key, "HELLO") end
+  end
+  if db then db.peers = peers end
+  ScheduleWho()
 end
 
 local function Split(rest, n)   -- n fields; the last one takes the remainder
@@ -675,6 +877,7 @@ local function OnLinkMessage(text)
   pending[id] = nil                  -- another client already relayed it
   if msg == "" then return end       -- presence beacon, nothing to display
   if tag ~= GetTag() and not bridged[id] then ForwardToGuild(id, text) end
+  if not bridged[id] and not displayed[id] then WhisperOut(id, tag, text) end
   if displayed[id] then return end
   displayed[id] = GetTime()
   if tag == GetTag() then Debug("ignored %s packet %s: own guild tag", proto, id) return end -- own guild saw it natively
@@ -1081,6 +1284,22 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_COMMUNITIES_CHANNEL", function(self, e
   return false
 end)
 
+-- A hello to someone who logged off makes the game print "No player named 'X' is currently playing."; hide it
+-- when it is about a name we whispered in the last few seconds, and forget that peer for now.
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(self, event, msg)
+  if issecret(msg) or type(msg) ~= "string" then return false end
+  local name = msg:match("^No player named '([^']+)' is currently playing")
+  if not name then return false end
+  local now = GetTime()
+  for key, t in pairs(helloAt) do
+    if now - t <= 10 and (key == name or PeerName(key) == name or key:gsub("%-.*$", "") == name) then
+      if peers[key] then peers[key].seen = 0 end
+      return true
+    end
+  end
+  return false
+end)
+
 ---------------------------------------------------------------- events
 local f = CreateFrame("Frame")
 f:RegisterEvent("ADDON_LOADED")
@@ -1092,6 +1311,7 @@ f:RegisterEvent("CHANNEL_UI_UPDATE")
 f:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 f:RegisterEvent("CLUB_MESSAGE_ADDED")
 f:RegisterEvent("CLUB_ERROR")
+f:RegisterEvent("WHO_LIST_UPDATE")
 f:RegisterEvent("CLUB_STREAMS_LOADED")
 f:RegisterEvent("CLUB_STREAM_ADDED")
 f:RegisterEvent("CLUB_STREAM_REMOVED")
@@ -1106,6 +1326,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     db.debug = false          -- debug echo is per session: always off at login, /cl debug on to enable
     db.muted = db.muted or {}
     db.nicks = db.nicks or {}
+    if type(db.peers) == "table" then peers = db.peers end
     if db.clubId and not db.club then db.club = tostring(db.clubId) end   -- saved by versions before club names
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
       C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
@@ -1121,6 +1342,7 @@ f:SetScript("OnEvent", function(self, event, ...)
       if db.nicks[MyName()] then BroadcastNick() end
       SendGuildAddon("NREQ")
     end)
+    C_Timer.After(45, ScheduleWho)
     C_Timer.After(20, function()
       if not Configured() and not warned then
         warned = true
@@ -1135,6 +1357,8 @@ f:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CLUB_MESSAGE_ADDED" then
     local clubId, streamId, messageId = ...
     OnClubMessage(clubId, streamId, messageId)
+  elseif event == "WHO_LIST_UPDATE" then
+    OnWhoList()
   elseif event == "CLUB_STREAMS_LOADED" or event == "CLUB_STREAM_ADDED" or event == "CLUB_STREAM_REMOVED" then
     if (...) == ResolveClubId() then
       mirror.streams, mirror.streamId, mirror.focused = nil, nil, false
@@ -1154,6 +1378,8 @@ f:SetScript("OnEvent", function(self, event, ...)
     if prefix ~= PREFIX then return end
     if chatType == "GUILD" then
       OnGuildAddon(text, sender)
+    elseif chatType == "WHISPER" then
+      OnWhisperAddon(text, sender)
     elseif chatType == "CHANNEL" then
       if IsLinkChannel(chanName) or (localId and localId == ChannelId()) then
         OnLinkMessage(text)
@@ -1165,6 +1391,10 @@ end)
 -- 1 channel message per second
 C_Timer.NewTicker(1, function()
   if not db then return end
+  local w = table.remove(whisperQueue, 1)
+  if w and not Locked() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+    pcall(C_ChatInfo.SendAddonMessage, PREFIX, w.text, "WHISPER", w.target)
+  end
   local text = table.remove(sendQueue, 1)
   if not text then return end
   if Locked() then wipe(sendQueue) return end   -- cannot send during lockdown
@@ -1196,6 +1426,7 @@ C_Timer.NewTicker(30, function()
 end)
 
 -- housekeeping, re-read Guild Info, rejoin if dropped
+C_Timer.NewTicker(60, PeerUpkeep)
 C_Timer.NewTicker(60, function()
   if not db then return end
   local now = GetTime()
@@ -1330,6 +1561,27 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "bridge" then
     db.bridge = not (arg:lower() == "off")
     Print("cross-realm bridging: " .. (db.bridge and "on" or "off") .. " (forward other guilds' lines to your guildmates on other realms)")
+  elseif cmd == "whisper" then
+    db.whisper = not (arg:lower() == "off")
+    Print("whisper bridge: " .. (db.whisper and "on" or "off"))
+  elseif cmd == "who" then
+    whoNext = 0
+    if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.")
+    elseif not IsCourier() then Print("a guildmate is the courier on " .. MyRealm() .. "; only the courier queries.")
+    else ScheduleWho(); Print("asking who is online in " .. #db.guilds .. " guild(s).") end
+  elseif cmd == "peers" then
+    local now, n = GetTime(), 0
+    local keys = {}
+    for key in pairs(peers) do keys[#keys + 1] = key end
+    table.sort(keys)
+    for _, key in ipairs(keys) do
+      local p = peers[key]
+      n = n + 1
+      Print(string.format("%s - %s on %s (%s) %s", PeerName(key), p.tag, tostring(p.realm), p.guild or "?",
+        p.seen == 0 and "not yet answered" or (now - p.seen <= PEER_ONLINE_SECS and ("seen " .. math.floor(now - p.seen) .. "s ago") or "offline")))
+    end
+    if n == 0 then Print("no peers yet. Guild leaders: add guilds=<name>, <name> to the CORELink line in Guild Info.") end
+    Print("courier on " .. MyRealm() .. ": " .. (IsCourier() and "you" or "a guildmate"))
   elseif cmd == "echo" then
     db.echoer = not (arg:lower() == "off")
     Print("this client " .. (db.echoer and "may echo" or "will not echo") .. " other guilds' lines into guild chat"
@@ -1386,6 +1638,10 @@ SlashCmdList["CORELINK"] = function(input)
           return sid .. ":" .. (StreamTag(sid) or "General")
         end)(), (function() local n = 0 for _ in pairs(ClubStreams() or {}) do n = n + 1 end return n end)(),
         mirror.posted, mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
+      string.format("whisper %s courier=%s guilds=%d peers=%d who=%d hello=%d answered=%d sent=%d recv=%d",
+        (db.whisper ~= false) and "on" or "off", tostring(IsCourier()), db.guilds and #db.guilds or 0,
+        (function() local n = 0 for _, p in pairs(peers) do if GetTime() - p.seen <= PEER_ONLINE_SECS then n = n + 1 end end return n end)(),
+        whisperStats.who, whisperStats.hello, whisperStats.answered, whisperStats.sent, whisperStats.recv),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       string.format("echo %s me=%s sent=%d hidden=%d", db.echo and "on" or "off", (db.echoer ~= false) and "on" or "off", echoStats.sent, echoStats.hidden),
@@ -1420,6 +1676,15 @@ SlashCmdList["CORELINK"] = function(input)
     if not guildRealms[mine] then realms[#realms + 1] = mine end
     table.sort(realms)
     Print("your realm: " .. mine .. " | your guild runs CORELink on: " .. table.concat(realms, ", "))
+    local names = {}
+    for g in pairs(guildOnline) do names[#names + 1] = g end
+    table.sort(names)
+    for _, g in ipairs(names) do
+      local parts = {}
+      for realm, e in pairs(guildOnline[g]) do parts[#parts + 1] = string.format("%s: %d online", realm, e.n) end
+      table.sort(parts)
+      Print(string.format("%s - %s", g, table.concat(parts, ", ")))
+    end
   elseif cmd == "window" then
     local n = tonumber(arg)
     if n and _G["ChatFrame" .. n] then
