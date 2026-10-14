@@ -32,3 +32,11 @@ Read before changing anything in the relay, channel or chat code.
     2026-10-08). So a community can carry only lines typed by the player, never relays for others.
 10. **Interface numbers.** Forever = `16001`. Do not put dotted versions like `12.3.1` in `## Interface:`; use the
     numeric form only.
+
+12. **Community message text is a Kstring placeholder.** `C_Club.GetMessageInfo(...).content` on Forever is a token
+    such as `|Kw158|k` (8 bytes). `issecretvalue` says false, string functions run on it, but it carries no text:
+    the chat frame renders it, the addon cannot match it, and on another client it draws as "Unknown", so it
+    cannot be relayed or forwarded. Author name, guid and class come from `info.author` and
+    `C_Club.GetMemberInfo`; our own and guildmates' posts are recognised by guid against the roster. Put anything
+    readers must see (tag, rank, nickname) in the posted text itself. Measured 2026-10-13 with the probe
+    `print(#i.content, i.content:byte(1, 12))`.

@@ -909,7 +909,11 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if IsGuildmate(name, guid) then return end          -- our own guild: already in our guild chat
   local content = info.content
   local tag, pname, nick, msg
-  if type(content) == "string" and not issecret(content) then
+  -- Community text reaches addons as a Kstring placeholder ("|Kw158|k", measured 2026-10-13 on Forever): the
+  -- chat frame draws the real text, the addon holds only this client-local token. Not a secret value, but
+  -- unreadable all the same, and meaningless on any other client, so it cannot be forwarded.
+  local sealed = type(content) ~= "string" or issecret(content) or content:match("^|K.*|k$") ~= nil
+  if not sealed then
     local okp, t, a, b, c = pcall(string.match, content, CLUB_LINE_FULL)
     if okp and t then tag, pname, nick, msg = t, (a:gsub("%s+$", "")), b, c
     else
