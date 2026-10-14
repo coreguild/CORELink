@@ -100,6 +100,11 @@ guilds in their guild chat; they do not need the community in a chat tab.
   the relay channel is dropped when the same author was shown there within five seconds. The raw community
   channel copy is hidden so nothing reads twice, and the community stream is loaded before every post and
   reloaded after a community error, since posting fails until it is loaded.
+  Guild lines typed by members **without** the addon ride along: the next guild line any addon user of that
+  guild types also posts the waiting lines (up to ten, at most two minutes old) as `[TAG] Name (Rank Nick): text`,
+  the first client to do so claims them for its guildmates, and same-realm readers are told to drop the copies
+  they already saw from the relay. They arrive when someone with the addon next talks, with that person as the
+  community author and the original name in the text.
   `/cl mirror off` opts a client out; `/cl mirror read off`, `post off` or `hide off` for one piece.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
