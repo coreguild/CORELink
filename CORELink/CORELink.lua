@@ -258,7 +258,7 @@ local function ReadGuildInfo()
   local club = line:match("[%s]club=([^%s]+)")
   if club ~= db.club then
     db.club, db.clubId = club, nil          -- the id is resolved from the token when first needed
-    mirror.streamId, mirror.focused, mirror.clubType = nil, false, nil
+    mirror.streamId, mirror.streams, mirror.focused, mirror.clubType = nil, nil, false, nil
   end
   db.lastGI = line
   pw = (pw == "-") and "" or Clean(pw)
@@ -740,19 +740,54 @@ local function ClubMember()
   return ok and info ~= nil
 end
 
-local function ClubStream()
-  if mirror.streamId then return mirror.streamId end
+-- The community's channels (streams): id -> name. Community text is unreadable, so a guild's tag travels in
+-- the channel name instead: each guild posts into the channel named after its tag when the community has
+-- one, and readers take the tag from the channel. Guilds without a channel use General with the tag in the text.
+local function ClubStreams()
+  if mirror.streams then return mirror.streams end
   local id = ResolveClubId()
   if not id or not C_Club or not C_Club.GetStreams then return nil end
   local ok, streams = pcall(C_Club.GetStreams, id)
   if not ok or type(streams) ~= "table" then return nil end
-  local best
+  local map, general, lowest = {}, nil, nil
   for _, st in ipairs(streams) do
-    if st.name == "General" then best = st.streamId break end
-    if not best or (st.streamId and st.streamId < best) then best = st.streamId end
+    if type(st.streamId) == "number" and type(st.name) == "string" and not issecret(st.name) then
+      map[st.streamId] = st.name
+      if st.name == "General" then general = st.streamId end
+      if not lowest or st.streamId < lowest then lowest = st.streamId end
+    end
+  end
+  if lowest then
+    mirror.streams = map
+    mirror.general = general or lowest
+  end
+  return mirror.streams
+end
+
+local function StreamKey(name) return (name:lower():gsub("[%s%-_]", "")) end
+
+-- The channel this guild posts into: the one named after our tag, else General.
+local function ClubStream()
+  if mirror.streamId then return mirror.streamId end
+  local streams = ClubStreams()
+  if not streams then return nil end
+  local tag = GetTag()
+  local best = mirror.general
+  if tag then
+    local want = StreamKey(tag)
+    for sid, name in pairs(streams) do
+      if StreamKey(name) == want then best = sid break end
+    end
   end
   mirror.streamId = best
   return best
+end
+
+-- The guild tag a community channel stands for, or nil for General.
+local function StreamTag(streamId)
+  local streams = ClubStreams()
+  if not streams or streamId == mirror.general then return nil end
+  return streams[streamId]
 end
 
 -- Called from the chat hooks, i.e. inside the keypress that sent the guild line. Two hooks can fire for
@@ -770,9 +805,10 @@ local function MirrorTypedLine(text)
   local me = MyName()
   local nick = (db.showNick ~= false) and db.nicks[me] or nil
   local line
+  local tagChannel = StreamTag(stream) ~= nil      -- our own channel: the tag is the channel name
   if ClubIsCharacter() then
     -- the rank and nickname travel in the text: readers cannot inspect community text, but they can draw it
-    line = string.format("[%s] %s%s", tag, BuildTag(OfficerRank(me), nick), text)
+    line = (tagChannel and "" or ("[" .. tag .. "] ")) .. BuildTag(OfficerRank(me), nick) .. text
   else
     line = string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
   end
@@ -786,7 +822,7 @@ local function MirrorTypedLine(text)
     if now - e.t <= CARRY_SECS and not carried[e.id] then
       local who = BuildTag(e.rank, (db.showNick ~= false) and e.nick or nil)
       who = e.author .. (who ~= "" and (" " .. who:sub(1, -2)) or "")
-      local okc = pcall(C_Club.SendMessage, id, stream, ("[" .. tag .. "] " .. who .. ": " .. e.text):sub(1, 250))
+      local okc = pcall(C_Club.SendMessage, id, stream, ((tagChannel and "" or ("[" .. tag .. "] ")) .. who .. ": " .. e.text):sub(1, 250))
       if okc then carried[e.id] = now; ids[#ids + 1] = e.id; mirror.carried = mirror.carried + 1 end
     end
   end
@@ -847,9 +883,14 @@ end
 FocusClubStream = function()
   if mirror.focused or not C_Club or not C_Club.FocusStream then return end
   local id = ResolveClubId()
-  local stream = ClubStream()
-  if not id or not stream or not ClubMember() then return end
-  if pcall(C_Club.FocusStream, id, stream) then mirror.focused = true end
+  local streams = ClubStreams()
+  if not id or not streams or not ClubMember() then return end
+  local all = true
+  for sid in pairs(streams) do
+    if not pcall(C_Club.FocusStream, id, sid) then all = false end
+  end
+  if C_Club.FocusCommunityStreams then pcall(C_Club.FocusCommunityStreams) end
+  mirror.focused = all
 end
 
 local function Plain(v) if v == nil or issecret(v) then return nil end return v end
@@ -891,7 +932,8 @@ local CLUB_LINE_TAG = "^%[([^%]]+)%] (.*)$"                                -- [T
 local CLUB_RETRY = { 0.5, 1, 2 }
 local function OnClubMessage(clubId, streamId, messageId, attempt)
   if not db or db.mirrorRead == false or clubId ~= ResolveClubId() then return end
-  if streamId ~= ClubStream() then return end
+  local streams = ClubStreams()
+  if not streams or not streams[streamId] then return end
   if not C_Club or not C_Club.GetMessageInfo then return end
   local ok, info = pcall(C_Club.GetMessageInfo, clubId, streamId, messageId)
   if not ok or type(info) ~= "table" or info.content == nil or info.destroyed then return end
@@ -913,7 +955,10 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   -- chat frame draws the real text, the addon holds only this client-local token. Not a secret value, but
   -- unreadable all the same, and meaningless on any other client, so it cannot be forwarded.
   local sealed = type(content) ~= "string" or issecret(content) or content:match("^|K.*|k$") ~= nil
-  if not sealed then
+  local channelTag = StreamTag(streamId)
+  if channelTag then
+    tag = channelTag                                   -- the channel is the guild: text is "(Rank Nick) text"
+  elseif not sealed then
     local okp, t, a, b, c = pcall(string.match, content, CLUB_LINE_FULL)
     if okp and t then tag, pname, nick, msg = t, (a:gsub("%s+$", "")), b, c
     else
@@ -930,9 +975,16 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if class == "" then class = authorClass[who] or "" end
   local label = ClubOfficerLabel(who, role)
   nick = (nick and nick ~= "" and nick) or authorNick[who]
-  if tag then
-    if tag == GetTag() then return end
-    if db.muted[tag:lower()] then return end
+  if tag and ((GetTag() and StreamKey(tag) == StreamKey(GetTag())) or db.muted[tag:lower()]) then return end
+  if channelTag then
+    -- "[TAG] [Name]: (Rank Nick) text", the same shape as a relayed line; the text itself stays unreadable
+    heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
+    C_Timer.After(CLUB_SHOW_DELAY, function()
+      if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
+      mirror.shown = mirror.shown + 1
+      Display(tag, who, class, content, label, nick, true)
+    end)
+  elseif tag then
     local id = Hash(tag .. who .. msg)
     if displayed[id] then return end                         -- already shown from the relay channel
     displayed[id] = GetTime(); seen[id] = GetTime()
@@ -1008,8 +1060,8 @@ local function IsClubChannel(name)
   if type(name) ~= "string" or issecret(name) then return false end
   local c, st = name:match("^[Cc]ommunity:(%d+):(%d+)")
   if not c then return false end
-  local id, stream = ResolveClubId(), ClubStream()
-  return id ~= nil and tonumber(c) == id and (stream == nil or tonumber(st) == stream)
+  local id, streams = ResolveClubId(), ClubStreams()
+  return id ~= nil and tonumber(c) == id and (streams == nil or streams[tonumber(st)] ~= nil)
 end
 ChatFrame_AddMessageEventFilter("CHAT_MSG_COMMUNITIES_CHANNEL", function(self, event, msg, author, lang, channelString, _, _, _, _, channelBaseName)
   if not db or db.mirrorRead == false or db.hideClub == false then return false end
@@ -1028,6 +1080,9 @@ f:RegisterEvent("CHANNEL_UI_UPDATE")
 f:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
 f:RegisterEvent("CLUB_MESSAGE_ADDED")
 f:RegisterEvent("CLUB_ERROR")
+f:RegisterEvent("CLUB_STREAMS_LOADED")
+f:RegisterEvent("CLUB_STREAM_ADDED")
+f:RegisterEvent("CLUB_STREAM_REMOVED")
 
 local lastRead, warned = 0, false
 f:SetScript("OnEvent", function(self, event, ...)
@@ -1068,6 +1123,11 @@ f:SetScript("OnEvent", function(self, event, ...)
   elseif event == "CLUB_MESSAGE_ADDED" then
     local clubId, streamId, messageId = ...
     OnClubMessage(clubId, streamId, messageId)
+  elseif event == "CLUB_STREAMS_LOADED" or event == "CLUB_STREAM_ADDED" or event == "CLUB_STREAM_REMOVED" then
+    if (...) == ResolveClubId() then
+      mirror.streams, mirror.streamId, mirror.focused = nil, nil, false
+      FocusClubStream()
+    end
   elseif event == "CLUB_ERROR" then
     local action, err = ...
     Debug("community error: action=%s error=%s", tostring(action), tostring(err))
@@ -1301,10 +1361,15 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
-      string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s posted=%d carried=%d waiting=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
+      string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s channels=%d posted=%d carried=%d waiting=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
         (db.mirror ~= false) and "on" or "off", (db.mirrorRead ~= false) and "on" or "off", tostring(db.club),
         tostring(ResolveClubId()), (db.club and ClubIsCharacter()) and "wow" or tostring(mirror.clubType),
-        tostring(db.club and ClubMember()), tostring(db.club and ClubStream()), mirror.posted, mirror.carried, #carry,
+        tostring(db.club and ClubMember()), (function()
+          local sid = db.club and ClubStream()
+          if not sid then return "nil" end
+          return sid .. ":" .. (StreamTag(sid) or "General")
+        end)(), (function() local n = 0 for _ in pairs(ClubStreams() or {}) do n = n + 1 end return n end)(),
+        mirror.posted, mirror.carried, #carry,
         mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),

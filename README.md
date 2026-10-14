@@ -45,8 +45,9 @@ Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCu
 To mirror chat into a Blizzard Community: create a **World of Warcraft community** (not a Battle.net one; those
 show account names instead of characters and are the only kind that crosses factions), give it a short name that
 no other community of yours uses, append `club=<short name>` (or the full name without spaces, e.g.
-`club=CoreTest2`, or the numeric id) to every co-guild's line, and share the invite link. Members read linked
-guilds in their guild chat; they do not need the community in a chat tab.
+`club=CoreTest2`, or the numeric id) to every co-guild's line, and share the invite link. Then add one channel to
+the community per guild, named after that guild's tag (Settings > Add Channel). Members read linked guilds in
+their guild chat; they do not need the community in a chat tab.
 
 ## Commands
 
@@ -91,11 +92,14 @@ guilds in their guild chat; they do not need the community in a chat tab.
   community it is `[TAG] Name (nick): text`, since that kind shows account names. Both the chat edit box and
   `SendChatMessage` are hooked, so `/g text`, macros and other addons' guild sends are mirrored too. Everyone,
   with or without the addon, can also read the community in a chat tab; it crosses realms and keeps history.
-  An officer's post carries their rank and nickname in the text, `[TAG] (Rank Nick) text`, so every reader
-  sees it. Lines that arrive in the community from other guilds are shown in your guild chat windows as
-  `[Character Name]: [TAG] (Rank Nick) text`, with the class colour from the community member record and the
-  officer colour from the relay when this character has been heard there, otherwise from the community role
-  (make your officers Moderators of the community to get the colour across realms). The game hands addons community text as a sealed value it can draw but not read,
+  An officer's post carries their rank and nickname in the text, `(Rank Nick) text`, so every reader sees it.
+  Each guild posts into the community channel named after its tag, so readers get the tag from the channel and
+  the character from the member record, and lines from other guilds show in your guild chat windows as
+  `[TAG] [Character Name]: (Rank Nick) text`, the same shape as relayed lines, with the class colour from the
+  member record and the officer colour from the relay when this character has been heard there, otherwise from
+  the community role (make your officers Moderators of the community to get the colour across realms). A guild
+  without a channel of its own posts `[TAG] (Rank Nick) text` into General and shows as
+  `[Character Name]: [TAG] (Rank Nick) text`. The game hands addons community text as a sealed value it can draw but not read,
   so your own guild's posts are recognised by the author's guild roster entry, and a line that also arrived on
   the relay channel is dropped when the same author was shown there within five seconds. The raw community
   channel copy is hidden so nothing reads twice, and the community stream is loaded before every post and
