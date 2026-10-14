@@ -600,6 +600,9 @@ do
   check("wow club: a short name shared by two communities picks the WoW one", CORELinkDB.clubId == 23149801, CORELinkDB.clubId)
   typeLine("short post")
   check("wow club: posts carry only the tag, no character name", #clubPosts == 1 and clubPosts[1].club == 23149801 and clubPosts[1].text == "[MAIN] short post", clubPosts[1] and clubPosts[1].text)
+  slash("nickname Jake"); myRank = 0; advance(2); typeLine("as the gm"); myRank = 3
+  check("wow club: an officer's post carries (Rank Nick) in the text", #clubPosts == 2 and clubPosts[2].text == "[MAIN] (Member Jake) as the gm", clubPosts[2] and clubPosts[2].text)
+  slash("nickname"); advance(2)
   lastSetText = nil; slash("report")
   check("wow club: report shows type=wow", (lastSetText or ""):find("club=Guild id=23149801 type=wow member=true", 1, true) ~= nil, lastSetText)
   clubMembers[7] = { memberId = 7, name = "Zag Mathris", guid = "guid-zag", classID = 8 }
@@ -618,9 +621,18 @@ do
   clubMessages[204] = { messageId = 204, content = sealed("[Trois] late author"), author = { memberId = 11 } }
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 204)
   check("wow club: a message without an author yet is not shown immediately", #chatLines == n0)
-  clubMembers[11] = { memberId = 11, name = "Cosmo Vale", guid = "guid-cosmo", classID = 1 }
+  clubMembers[11] = { memberId = 11, name = "Cosmo Vale", guid = "guid-cosmo", classID = 1, role = 3 }
   advance(2)
   check("wow club: it is shown once the member record loads", #chatLines == n0 + 2 and chatLines[#chatLines].text:find("[Cosmo Vale]", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  local cl = chatLines[#chatLines]
+  check("wow club: a community Moderator never heard on the relay gets the officer colour, text prefix untouched",
+    math.floor(cl.r * 255 + 0.5) == 0xe8 and cl.text:find("|h: [Trois] late author", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
+  clubMessages[212] = { messageId = 212, content = sealed("[Trois] (Captain Zaggy) ranked"), author = { memberId = 7 } }
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000b01~Trois~Zag Mathris~MAGE~~Zaggy~plain member", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
+  advance(10); n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 212)
+  cl = chatLines[#chatLines]
+  check("wow club: relay knowledge wins: a non-officer's sealed line is not officer-coloured and the prefix is not doubled",
+    #chatLines == n0 + 2 and math.floor(cl.r * 255 + 0.5) ~= 0xe8 and cl.text:find("|h: [Trois] (Captain Zaggy) ranked", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
   -- relay first, community copy within 5 s: shown once
   advance(10); n0 = #chatLines
   H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000cafe~Trois~Zag Mathris~MAGE~~Zaggy~both ways", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
@@ -633,7 +645,7 @@ do
   advance(10); n0 = #chatLines
   clubMessages[206] = { messageId = 206, content = sealed("[Trois] club first"), author = { memberId = 7 } }
   H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 206)
-  check("wow club: nickname from an earlier relay packet is shown on the sealed line", chatLines[#chatLines].text:find("(Zaggy) [Trois] club first", 1, true) ~= nil, chatLines[#chatLines].text)
+  check("wow club: a sealed line is shown as posted, without a locally added prefix (the poster's client wrote it)", chatLines[#chatLines].text:find("|h: [Trois] club first", 1, true) ~= nil, chatLines[#chatLines].text)
   advance(1)
   H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000beef~Trois~Zag Mathris~MAGE~~Zaggy~club first", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
   check("wow club: the relay copy of a line already shown from the community is dropped", #chatLines == n0 + 2, #chatLines - n0)

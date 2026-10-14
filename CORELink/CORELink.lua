@@ -25,7 +25,7 @@ local heard = {}   -- guild tag -> last time seen on the link channel (on OUR re
 local heardRealms = {}      -- tag -> realm -> last time heard there (ours or a guildmate's realm)
 -- What we know about authors from relay packets: class token and officer label, keyed by chat name.
 -- Community lines carry neither, so this is how they get class and officer colours.
-local authorClass, authorOfficer, authorNick = {}, {}, {}
+local authorClass, authorOfficer, authorNick, authorSeen = {}, {}, {}, {}   -- learned from relay packets
 local rosterGuid = {}   -- guild member guid -> name (to recognise guildmates' community posts)
 local guildRealms = {}      -- realm -> last time one of our own guildmates reported from it
 local lastHeardSent, lastHeardSig = 0, ""
@@ -583,9 +583,9 @@ local function GuildFrames()
   return frames
 end
 
-local function Display(tag, author, class, msg, officerLabel, nick)
+local function Display(tag, author, class, msg, officerLabel, nick, textHasPrefix)
   local c = ChatTypeInfo["GUILD"] or { r = .25, g = 1, b = .25 }
-  local prefix = BuildTag(officerLabel, (db.showNick ~= false) and nick or nil)
+  local prefix = textHasPrefix and "" or BuildTag(officerLabel, (db.showNick ~= false) and nick or nil)
   if officerLabel then
     local r, g, b = HexToRGB(db.officerColorHex)
     c = { r = r, g = g, b = b }
@@ -642,6 +642,7 @@ local function OnLinkMessage(text)
   end
   if class and class ~= "" then authorClass[author] = class end
   authorOfficer[author] = label                    -- nil clears a stale officer label
+  authorSeen[author] = true
   nick = CleanNick(nick)
   authorNick[author] = nick ~= "" and nick or nil
   if CrossSeen(author, "relay") then Debug("skipped %s packet %s: shown from the community", proto, id) return end
@@ -737,12 +738,13 @@ local function MirrorTypedLine(text)
   if not stream then return end
   FocusClubStream()                 -- posting fails with "Couldn't send message" until the stream is loaded
   local tag = GetTag() or "?"
+  local me = MyName()
+  local nick = (db.showNick ~= false) and db.nicks[me] or nil
   local line
   if ClubIsCharacter() then
-    line = string.format("[%s] %s", tag, text)
+    -- the rank and nickname travel in the text: readers cannot inspect community text, but they can draw it
+    line = string.format("[%s] %s%s", tag, BuildTag(OfficerRank(me), nick), text)
   else
-    local me = MyName()
-    local nick = (db.showNick ~= false) and db.nicks[me] or nil
     line = string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
   end
   local ok, err = pcall(C_Club.SendMessage, id, stream, line:sub(1, 250))
@@ -809,7 +811,7 @@ local function Plain(v) if v == nil or issecret(v) then return nil end return v 
 -- The character behind a community post: the message's author record, completed from the member list.
 -- WoW communities give the character name, guid and class; Battle.net communities give the account name.
 local function ClubAuthor(clubId, author)
-  local name, guid, classID = Plain(author.name), Plain(author.guid), Plain(author.classID)
+  local name, guid, classID, role = Plain(author.name), Plain(author.guid), Plain(author.classID), nil
   local mid = Plain(author.memberId)
   if mid and C_Club.GetMemberInfo then
     local ok, m = pcall(C_Club.GetMemberInfo, clubId, mid)
@@ -817,10 +819,20 @@ local function ClubAuthor(clubId, author)
       name = Plain(m.name) or name
       guid = Plain(m.guid) or guid
       classID = classID or Plain(m.classID)
+      role = Plain(m.role)
     end
   end
   if name == "" then name = nil end
-  return name, guid, classID
+  return name, guid, classID, role
+end
+
+-- Officer colour for a community author. The relay packet is authoritative when we have heard one from this
+-- character; otherwise (other realm, community only) a community role of Owner, Leader or Moderator counts.
+local function ClubOfficerLabel(who, role)
+  if not db or db.officer == false then return nil end
+  if authorSeen[who] then return authorOfficer[who] end
+  if type(role) == "number" and role >= 1 and role <= 3 then return "Officer" end
+  return nil
 end
 
 local CLUB_LINE_FULL = "^%[([^%]]+)%] ([^:(]+)%s?%(?([^):]*)%)?: (.*)$"   -- [TAG] Name (nick): text
@@ -839,7 +851,7 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if not ok or type(info) ~= "table" or info.content == nil or info.destroyed then return end
   local author = info.author or {}
   if author.isSelf == true then return end
-  local name, guid, classID = ClubAuthor(clubId, author)
+  local name, guid, classID, role = ClubAuthor(clubId, author)
   if not name and not guid then
     attempt = (attempt or 0) + 1
     if CLUB_RETRY[attempt] then
@@ -866,7 +878,7 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
     if okc and type(token) == "string" then class = token end
   end
   if class == "" then class = authorClass[who] or "" end
-  local label = (db.officer ~= false) and authorOfficer[who] or nil
+  local label = ClubOfficerLabel(who, role)
   nick = (nick and nick ~= "" and nick) or authorNick[who]
   if tag then
     if tag == GetTag() then return end
@@ -877,11 +889,12 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
     heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
     CrossSeen(who, "club")
     mirror.shown = mirror.shown + 1
-    Display(tag, who, class, msg, label, nick)
+    -- "[TAG] text" lines (WoW community) already carry "(Rank Nick)" in the text; the full format does not
+    Display(tag, who, class, msg, label, nick, pname == nil)
   else
     if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
     mirror.shown = mirror.shown + 1
-    Display(nil, who, class, content, label, nick)
+    Display(nil, who, class, content, label, nick, true)
   end
 end
 
