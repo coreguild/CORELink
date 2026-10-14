@@ -447,6 +447,8 @@ do
   JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
   check("mirror: club id parsed from the Guild Info line", CORELinkDB.clubId == 23112951, CORELinkDB.clubId)
+  lastSetText = nil; slash("report")
+  check("mirror: stream is focused as soon as login connects", (lastSetText or ""):find("focused=true", 1, true) ~= nil, lastSetText)
   typeLine("hello everyone")
   check("mirror: a typed guild line is posted to the club's General stream as [TAG] Name: text",
     #clubPosts == 1 and clubPosts[1].club == 23112951 and clubPosts[1].stream == 1 and clubPosts[1].text:match("^%[MAIN%] Shockly[^:]*: hello everyone$") ~= nil, clubPosts[1] and clubPosts[1].text)

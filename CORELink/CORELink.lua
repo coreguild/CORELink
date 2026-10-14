@@ -738,6 +738,7 @@ local function LoginSync()
   Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured() and true or false), tostring(ChannelId() ~= nil))
   if Configured() and ChannelId() then
     Print(StatusLine())
+    FocusClubStream()                 -- subscribe to the community stream now; the reminder retries in 10 s
     C_Timer.After(10, RemindAboutClub)
     return
   end
@@ -894,6 +895,7 @@ C_Timer.NewTicker(60, function()
   BroadcastHeard()
   ReadGuildInfo()
   EnsureChannel()
+  FocusClubStream()
   if C_GuildInfo and C_GuildInfo.GuildRoster and math.random() < 0.5 then C_GuildInfo.GuildRoster() end
 end)
 
