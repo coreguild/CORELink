@@ -53,7 +53,15 @@ local carry = {}            -- { id, author, text, t, rank, nick }, oldest first
 local carried = {}          -- line id -> time it was posted to the community, by us or a guildmate
 local addonUsers = {}       -- guildmate -> last time a CORELink guild message came from them (they post their own)
 local CARRY_MAX, CARRY_SECS, ADDON_USER_SECS, CLUB_SHOW_DELAY = 10, 300, 900, 2
+-- Echo: with "echo=on" on the Guild Info line, one addon user per guild re-posts other guilds' readable lines
+-- (relay and bridge; community text cannot be read) as real guild messages, so members without the addon see
+-- them. The first client to claim a line (ECHO~id over the guild addon channel) posts it. Addon users hide
+-- the echoed line and never relay, carry or mirror it, so nothing loops.
+local echoed = {}           -- line id -> time it was claimed/echoed
+local echoStats = { sent = 0, hidden = 0 }
+local echoing = false       -- true while our own echo send runs, so the chat hooks ignore it
 local FocusClubStream       -- defined after the reminder that calls it
+local MaybeEcho             -- defined after Display
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
 local db
@@ -231,6 +239,7 @@ local function BuildLine()
   return "CORELink: " .. db.channel .. " " .. (db.password ~= "" and db.password or "-")
     .. " " .. (hasTag and db.tag or "-") .. " " .. (db.officerRank or 1)
     .. (db.club and (" club=" .. db.club) or "")
+    .. (db.echo and " echo=on" or "")
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
@@ -255,6 +264,8 @@ local function ReadGuildInfo()
   if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
   GIState("line read")
   db.officerRank = tonumber(orank) or 1
+  local echo = line:match("[%s]echo=(%w+)")
+  db.echo = (echo ~= nil) and (echo:lower() == "on" or echo == "1" or echo:lower() == "yes") or false
   local club = line:match("[%s]club=([^%s]+)")
   if club ~= db.club then
     db.club, db.clubId = club, nil          -- the id is resolved from the token when first needed
@@ -416,6 +427,15 @@ local function BuildTag(rank, nick)
   return ""
 end
 
+-- An echoed line in real guild chat: "[TAG] Name (Rank Nick): text" sent by a guildmate who runs the addon.
+local function IsEchoLine(msg, sender)
+  if not db or not db.echo or type(msg) ~= "string" then return false end
+  local seenAt = addonUsers[sender]
+  if not ((seenAt and GetTime() - seenAt < ADDON_USER_SECS) or IsMe(sender)) then return false end
+  local tag = msg:match("^%[([^%]]+)%] [^:]+: ")
+  return tag ~= nil and tag ~= GetTag()
+end
+
 local function SendGuildAddon(text)
   if not IsInGuild() or Locked() then return end
   if C_ChatInfo and C_ChatInfo.SendAddonMessage then
@@ -433,7 +453,9 @@ local function OnGuildAddon(text, sender)
   sender = Ambiguate(sender, "none")
   addonUsers[sender] = GetTime()
   local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
-  if cmd == "CARRIED" then
+  if cmd == "ECHO" then
+    echoed[rest] = GetTime()              -- a guildmate is echoing this line: we do not
+  elseif cmd == "CARRIED" then
     -- a guildmate posted these lines to the community: drop them from our piggyback queue
     local now = GetTime()
     for id in rest:gmatch("[^,]+") do carried[id] = now end
@@ -549,6 +571,7 @@ local function OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   if not tag then return end
   author = Ambiguate(author, "none")
   local mine = IsMe(author, guid)      -- also learns our chat-format name from our own messages
+  if IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours to relay
   local class = ClassOf(author, guid)
   local rn = OfficerRank(author)
   local flags = rn and ("O" .. rn) or ""
@@ -623,6 +646,25 @@ local function Display(tag, author, class, msg, officerLabel, nick, textHasPrefi
   end
 end
 
+-- One client per guild re-posts the line into real guild chat for members without the addon. Random back-off
+-- then a claim, like the relay courier, so two addon users rarely echo the same line.
+MaybeEcho = function(id, tag, author, msg, label, nick)
+  if not db.echo or db.echoer == false or not IsInGuild() or echoed[id] or not SendChatMessage then return end
+  C_Timer.After(0.3 + math.random() * 1.2, function()
+    if echoed[id] or Locked() or not db.echo then return end
+    local now = GetTime()
+    echoed[id] = now
+    for k, t in pairs(echoed) do if now - t > 600 then echoed[k] = nil end end
+    SendGuildAddon("ECHO" .. SEP .. id)
+    local who = BuildTag(label, (db.showNick ~= false) and nick or nil)
+    who = author .. (who ~= "" and (" " .. who:sub(1, -2)) or "")
+    echoing = true
+    local ok = pcall(SendChatMessage, Trim("[" .. tag .. "] " .. who .. ": " .. msg, 250), "GUILD")
+    echoing = false
+    if ok then echoStats.sent = echoStats.sent + 1; Debug("echoed %s into guild chat", id) end
+  end)
+end
+
 local function OnLinkMessage(text)
   if issecret(text) or not text then return end
   local proto, rest = text:match("^(%w+)" .. SEP .. "(.*)$")
@@ -676,6 +718,7 @@ local function OnLinkMessage(text)
   authorNick[author] = nick ~= "" and nick or nil
   if CrossSeen(author, "relay") then Debug("skipped %s packet %s: shown from the community", proto, id) return end
   Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
+  MaybeEcho(id, tag, author, msg, label, nick ~= "" and nick or nil)
 end
 
 ---------------------------------------------------------------- status
@@ -845,6 +888,7 @@ end
 
 -- Any guild send: "/g text" typed in another chat type, macros, other addons.
 local function OnSendChatMessage(msg, chatType)
+  if echoing then return end
   if type(chatType) ~= "string" or issecret(chatType) or chatType:upper() ~= "GUILD" then return end
   if type(msg) ~= "string" or issecret(msg) or not msg:match("%S") then return end
   MirrorTypedLine(msg)
@@ -1036,6 +1080,7 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", function(self, event, msg, aut
     return false
   end
   local who = Ambiguate(author, "none")
+  if IsEchoLine(msg, who) then echoStats.hidden = echoStats.hidden + 1 return true end
   local nick = (db.showNick ~= false) and db.nicks[who] or nil
   local rn = OfficerRank(who)
   local tagText = BuildTag(rn, nick)
@@ -1318,6 +1363,10 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "bridge" then
     db.bridge = not (arg:lower() == "off")
     Print("cross-realm bridging: " .. (db.bridge and "on" or "off") .. " (forward other guilds' lines to your guildmates on other realms)")
+  elseif cmd == "echo" then
+    db.echoer = not (arg:lower() == "off")
+    Print("this client " .. (db.echoer and "may echo" or "will not echo") .. " other guilds' lines into guild chat"
+      .. (db.echo and "" or " (echo is off for this guild: the Guild Master adds echo=on to the CORELink line)"))
   elseif cmd == "classcolor" then
     db.classColor = not (arg:lower() == "off")
     Print("class-coloured names: " .. (db.classColor and "on" or "off"))
@@ -1373,6 +1422,7 @@ SlashCmdList["CORELINK"] = function(input)
         mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
+      string.format("echo %s me=%s sent=%d hidden=%d", db.echo and "on" or "off", (db.echoer ~= false) and "on" or "off", echoStats.sent, echoStats.hidden),
       "debug " .. tostring(db.debug == true),
       "log: " .. (#debugLog > 0 and table.concat(debugLog, " / ") or "empty"),
     }, " | ")

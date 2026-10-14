@@ -40,7 +40,7 @@ A copy box shows the Guild Info line. Paste it into Guild Information and save.
 Every co-guild uses the same channel and password and a different tag.
 Members pick the settings up automatically within a minute of logging in.
 
-Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>]`
+Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on]`
 
 To mirror chat into a Blizzard Community: create a **World of Warcraft community** (not a Battle.net one; those
 show account names instead of characters and are the only kind that crosses factions), give it a short name that
@@ -67,6 +67,7 @@ their guild chat; they do not need the community in a chat tab.
 | `/cl officercolor [RRGGBB|reset]` | all | Officer text colour; no argument opens the colour picker. |
 | `/cl window <n>` | all | Force bridged lines into chat window n; no argument = windows with Guild chat. |
 | `/cl mirror on/off`, `read off`, `post off`, `hide off` | all | Post your typed guild lines into the community named by `club=`, and show the community's lines in guild chat. Default both on. `hide off` shows the raw community channel lines again if you keep the community in a chat tab. |
+| `/cl echo on/off` | all | Whether this client may be the one that re-posts other guilds' lines into real guild chat (needs `echo=on` on the Guild Info line). Default on. |
 | `/cl bridge on/off` | all | Whether this client forwards other guilds' lines to guildmates on other realms and re-sends forwards into its realm. Default on. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
 | `/cl debug on/off` | all | Echo debug events to chat as they happen. Events are always kept for `/cl report`. |
@@ -110,6 +111,12 @@ their guild chat; they do not need the community in a chat tab.
   they already saw from the relay. They arrive when someone with the addon next talks, with that person as the
   community author and the original name in the text.
   `/cl mirror off` opts a client out; `/cl mirror read off`, `post off` or `hide off` for one piece.
+* **Guild-chat echo (optional, per guild).** With `echo=on` on the Guild Info line, one addon user re-posts each
+  other-guild line that arrived readable (relay or bridge; community text cannot be read) as a real guild message,
+  `[TAG] Name (Rank Nick): text`, so members without the addon see linked guilds in plain guild chat. The first
+  client to claim a line over the guild addon channel posts it, after the same random back-off as the relay.
+  Addon users hide the echoed copy (they already saw the coloured line) and never relay, carry or mirror it.
+  Echoed lines count as real guild chat for everyone: logs, mobile apps and other addons see them.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
   channel if it has not arrived there. Any guild with addon users on two realms therefore bridges every linked

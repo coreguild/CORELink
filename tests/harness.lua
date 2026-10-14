@@ -97,7 +97,9 @@ end
 local clubMember, clubPosts = true, {}
 local clubMessages = {}
 local clubSendFails = false
-SendChatMessage = function() end
+local chatSends = {}
+SendChatMessage = function(msg, kind) chatSends[#chatSends + 1] = { text = msg, kind = kind }
+  local hk = hooks["SendChatMessage"]; if hk then hk(msg, kind) end end   -- hooksecurefunc runs the hook after the call
 issecretvalue = function(v) return type(v) == "table" and rawget(v, "__sealed") == true end
 local sealedMT = { __concat = function(a, b)
   if type(a) == "table" then a = a.t end
@@ -773,6 +775,55 @@ do
   clubMessages[302] = { messageId = 302, content = sealed("[Trois] zag's own line"), author = { memberId = 7 } }
   H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 301); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 302); advance(2)
   check("piggyback: the carried copy is dropped and the carrier's own line still shows", #chatLines == n0 + 4 and chatLines[#chatLines].text:find("zag's own line", 1, true) ~= nil, #chatLines - n0)
+  guildInfoText = savedTextForRestore
+end
+
+
+-- Echo: with echo=on in Guild Info, one addon user per guild re-posts other guilds' readable lines as real
+-- guild messages for members without the addon; addon users hide them and never relay or carry them.
+do
+  CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true; chatSends = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild echo=on\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  lastSetText = nil; slash("report")
+  check("echo: report shows the guild setting and this client's", (lastSetText or ""):find("echo on me=on sent=0 hidden=0", 1, true) ~= nil, lastSetText)
+  myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
+  check("echo: /cl publish keeps echo=on on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=Guild echo=on", lastSetText)
+  local nSent, nPosts = #sentAddon, #clubPosts
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e001~ALT~Carol~PRIEST~OCaptain~Cee~hi echo", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(2)
+  check("echo: another guild's relayed line is re-posted into real guild chat with name, rank and nickname",
+    #chatSends == 1 and chatSends[1].kind == "GUILD" and chatSends[1].text == "[ALT] Carol (Captain Cee): hi echo", chatSends[1] and chatSends[1].text)
+  local claimed = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "GUILD" and sentAddon[i].text == "ECHO~0000e001" then claimed = true end end
+  check("echo: the echo is claimed to guildmates first", claimed)
+  check("echo: our own echo send is not mirrored into the community", #clubPosts == nPosts, #clubPosts - nPosts)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e002~ALT~Carol~PRIEST~~~claimed by tanner", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "ECHO~0000e002", "GUILD", "Tanner-Beta")
+  advance(2)
+  check("echo: a line a guildmate already claimed is not echoed again", #chatSends == 1, #chatSends)
+  local gf = filters["CHAT_MSG_GUILD"]
+  check("echo: an echoed line from an addon user is hidden in our guild chat", gf(nil, "CHAT_MSG_GUILD", "[ALT] Carol (Captain Cee): hi echo", "Tanner-Beta") == true)
+  check("echo: the same text from a member without the addon is not hidden", gf(nil, "CHAT_MSG_GUILD", "[ALT] Carol: hi echo", "Dora-Beta") ~= true)
+  check("echo: our own guild's tag in brackets is not treated as an echo", gf(nil, "CHAT_MSG_GUILD", "[MAIN] Carol: not an echo", "Tanner-Beta") ~= true)
+  nSent = #sentAddon
+  H(nil, "CHAT_MSG_GUILD", "[ALT] Carol (Captain Cee): hi echo", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
+  advance(3)
+  local relayed = false
+  for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "CHANNEL" and sentAddon[i].text:find("hi echo", 1, true) then relayed = true end end
+  lastSetText = nil; slash("report")
+  check("echo: an echoed line is neither relayed nor queued for carrying", not relayed and (lastSetText or ""):find("waiting=0", 1, true) ~= nil and (lastSetText or ""):find("echo on me=on sent=1 hidden=1", 1, true) ~= nil, lastSetText)
+  slash("echo off")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e003~ALT~Carol~PRIEST~~~after opt out", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(2)
+  check("echo: /cl echo off stops this client echoing", #chatSends == 1, #chatSends)
+  slash("echo on")
+  CORELinkDB = {}; joined = {}; chatSends = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000e004~ALT~Carol~PRIEST~~~no echo", "CHANNEL", "Carol", nil, 0, 6, "CORELink7100")
+  advance(2)
+  check("echo: without echo=on nothing is re-posted", #chatSends == 0, #chatSends)
   guildInfoText = savedTextForRestore
 end
 
