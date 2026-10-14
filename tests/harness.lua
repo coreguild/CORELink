@@ -95,15 +95,22 @@ end
 -- Blizzard Communities
 local clubMember, clubPosts = true, {}
 local clubMessages = {}
+local clubSendFails = false
+SendChatMessage = function() end
 C_Club = {
-  GetClubInfo = function(id) if clubMember and id == 23112951 then return { clubId = id, name = "Core Test" } end end,
+  GetClubInfo = function(id) if clubMember and id == 23112951 then return { clubId = id, name = "Core Test", shortName = "CoreTest" } end end,
+  GetSubscribedClubs = function()
+    if not clubMember then return {} end
+    return { { clubId = 22703281, clubType = 2, name = "CORE Forever" }, { clubId = 23112951, clubType = 0, name = "Core Test", shortName = "CoreTest" } }
+  end,
   GetStreams = function(id) if id == 23112951 then return { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } } end return {} end,
-  SendMessage = function(id, stream, text) clubPosts[#clubPosts + 1] = { club = id, stream = stream, text = text } end,
+  SendMessage = function(id, stream, text) if clubSendFails then error("Couldn't send message") end clubPosts[#clubPosts + 1] = { club = id, stream = stream, text = text } end,
   FocusStream = function() return true end,
   GetMessageInfo = function(id, stream, mid) return clubMessages[mid] end,
 }
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
+  SendChatMessage = function() end,
   SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }; return addonSendResult end,
   GuildRoster = function() end,
 }
@@ -457,7 +464,41 @@ do
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
   check("mirror: /cl publish keeps the club token on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=23112951", lastSetText)
   lastSetText = nil; slash("report")
-  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 member=true stream=1 posted=1 failed=0 shown=0 focused=", 1, true) ~= nil, lastSetText)
+  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 id=23112951 member=true stream=1 posted=1 failed=0 shown=0 hidden=0 focused=true hooks=editbox+send", 1, true) ~= nil, lastSetText)
+  -- SendChatMessage hook: "/g text" from another chat type, macros and other addons are mirrored too
+  local sendHook = hooks["SendChatMessage"]
+  check("mirror: SendChatMessage is hooked", type(sendHook) == "function" and type(hooks[C_ChatInfo] and hooks[C_ChatInfo].SendChatMessage) == "function")
+  sendHook("from a macro", "GUILD")
+  check("mirror: a guild send outside the edit box is posted", #clubPosts == 2 and clubPosts[2].text:match(": from a macro$") ~= nil, clubPosts[2] and clubPosts[2].text)
+  sendHook("whisper text", "WHISPER", nil, "Bob"); sendHook("   ", "GUILD")
+  check("mirror: non-guild and blank sends are not posted", #clubPosts == 2, #clubPosts)
+  typeLine("same keypress"); sendHook("same keypress", "GUILD"); hooks[C_ChatInfo].SendChatMessage("same keypress", "GUILD")
+  check("mirror: one typed line that fires every hook is posted once", #clubPosts == 3, #clubPosts)
+  advance(2); sendHook("same keypress", "GUILD")
+  check("mirror: the same text sent again later is posted again", #clubPosts == 4, #clubPosts)
+  -- stream focus: lost on CLUB_ERROR or a failed post, re-done before the next post
+  H(nil, "CLUB_ERROR", 3, 7)
+  lastSetText = nil; slash("report")
+  check("mirror: CLUB_ERROR drops the stream focus", (lastSetText or ""):find("focused=false", 1, true) ~= nil, lastSetText)
+  advance(2); sendHook("after error", "GUILD")
+  lastSetText = nil; slash("report")
+  check("mirror: the stream is focused again before posting", #clubPosts == 5 and (lastSetText or ""):find("focused=true", 1, true) ~= nil, lastSetText)
+  clubSendFails = true; advance(2); sendHook("will fail", "GUILD"); clubSendFails = false
+  lastSetText = nil; slash("report")
+  check("mirror: a failed post is counted and drops the focus", (lastSetText or ""):find("failed=1", 1, true) ~= nil and (lastSetText or ""):find("focused=false", 1, true) ~= nil, lastSetText)
+  -- raw community channel lines are hidden while we show them in guild chat
+  local cf = filters["CHAT_MSG_COMMUNITIES_CHANNEL"]
+  check("mirror hide: community channel filter installed", type(cf) == "function")
+  check("mirror hide: our community's raw line is hidden", cf and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "[ALT] Zag Mathris: boink", "Zag", "", "Community:23112951:1") == true)
+  check("mirror hide: other communities and streams are left alone",
+    cf and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:22703281:1") ~= true and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23112951:2") ~= true)
+  slash("mirror hide off")
+  check("mirror hide: /cl mirror hide off shows raw lines again", cf and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23112951:1") ~= true)
+  slash("mirror hide on"); slash("mirror read off")
+  check("mirror hide: raw lines are not hidden while read is off", cf and cf(nil, "CHAT_MSG_COMMUNITIES_CHANNEL", "x", "Zag", "", "Community:23112951:1") ~= true)
+  slash("mirror read on")
+  lastSetText = nil; slash("report")
+  check("mirror hide: report counts hidden raw lines", (lastSetText or ""):find("hidden=1", 1, true) ~= nil, lastSetText)
   -- inbound: a formatted line from another guild in the club shows in guild chat; own guild's and own lines don't
   clubMessages[101] = { messageId = 101, content = "[ALT] Carol Smith (Cee): hi from the community", author = { name = "Carol Smith", isSelf = false } }
   clubMessages[102] = { messageId = 102, content = "[MAIN] Bob Jones: our own guild", author = { name = "Bob Jones", isSelf = false } }
@@ -494,18 +535,48 @@ do
   check("mirror read: /cl mirror read off stops showing", #chatLines == n0)
   slash("mirror on")
   slash("mirror off"); typeLine("while off")
-  check("mirror: /cl mirror off stops posting", #clubPosts == 1)
+  check("mirror: /cl mirror off stops posting", #clubPosts == 5, #clubPosts)
   slash("mirror on")
   -- not a member: nothing posted, one reminder after login
   clubMember = false
-  CORELinkDB = {}; joined = {}
+  CORELinkDB = {}; joined = {}; clubPosts = {}
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN")
   n0 = #chatLines; advance(20)
   local reminders = 0
   for i = n0 + 1, #chatLines do if chatLines[i].text:find("this character is not a member", 1, true) then reminders = reminders + 1 end end
   typeLine("not a member line")
-  check("mirror: non-member gets one reminder and nothing is posted", reminders == 1 and #clubPosts == 1, reminders .. "/" .. #clubPosts)
+  check("mirror: non-member gets one reminder and nothing is posted", reminders == 1 and #clubPosts == 0, reminders .. "/" .. #clubPosts)
   clubMember = true
+end
+
+-- Community named by short name (or full name without spaces) instead of its number
+do
+  CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=coretest\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
+  check("club name: token kept as written and resolved to the club id", CORELinkDB.club == "coretest" and CORELinkDB.clubId == 23112951, tostring(CORELinkDB.club) .. "/" .. tostring(CORELinkDB.clubId))
+  typeLine("by name")
+  check("club name: typed line posted to the named community", #clubPosts == 1 and clubPosts[1].club == 23112951, #clubPosts)
+  myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
+  check("club name: /cl publish keeps the name token", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=coretest", lastSetText)
+  lastSetText = nil; slash("report")
+  check("club name: report shows token and id", (lastSetText or ""):find("club=coretest id=23112951 member=true", 1, true) ~= nil, lastSetText)
+  clubMessages[120] = { messageId = 120, content = "[ALT] Hal Moss: named club", author = { name = "Hal Moss", isSelf = false } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 120)
+  check("club name: inbound lines from the named community are shown", #chatLines > n0 and chatLines[#chatLines].text:find("named club", 1, true) ~= nil)
+  -- a saved id from an older version keeps working and is written back as the token
+  CORELinkDB = { clubId = 23112951 }; guildInfoText = ""; joined = {}
+  H(nil, "ADDON_LOADED", "CORELink")
+  check("club name: old saved clubId migrates to the club token", CORELinkDB.club == "23112951")
+  -- unknown name: nothing resolves, nothing posts, reminder explains
+  CORELinkDB = {}; joined = {}; clubPosts = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=NoSuchClub\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); n0 = #chatLines; advance(20)
+  typeLine("nowhere")
+  local explained = false
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("no community you belong to has that name", 1, true) then explained = true end end
+  check("club name: unknown name posts nothing and the reminder says so", CORELinkDB.clubId == nil and #clubPosts == 0 and explained)
+  guildInfoText = savedTextForRestore
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))
