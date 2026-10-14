@@ -32,6 +32,10 @@ local coverageWarned = {}   -- tag -> true once we warned that it is not reachin
 local bridged = {}          -- packet id -> time it was forwarded (by us or a guildmate) on the guild channel
 local bridgeStats = { forwarded = 0, resent = 0, skipped = 0 }
 local OnBridgeReceived      -- defined after the guild addon handler that calls it
+-- Community mirror: the player's own typed guild lines are also posted into a Blizzard Community
+-- ("club=<id>" token on the Guild Info line). Community sends only work inside the player's keypress,
+-- so this is done from the chat edit box hook and never for relayed lines.
+local mirror = { hooks = "not installed", streamId = nil, posted = 0, failed = 0, reminded = false }
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
 local db
@@ -208,6 +212,7 @@ local function BuildLine()
   local hasTag = db.tag and db.tag ~= ""
   return "CORELink: " .. db.channel .. " " .. (db.password ~= "" and db.password or "-")
     .. " " .. (hasTag and db.tag or "-") .. " " .. (db.officerRank or 1)
+    .. (db.clubId and (" club=" .. db.clubId) or "")
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
@@ -232,6 +237,7 @@ local function ReadGuildInfo()
   if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
   GIState("line read")
   db.officerRank = tonumber(orank) or 1
+  db.clubId = tonumber(line:match("[%s]club=(%d+)")) or nil
   db.lastGI = line
   pw = (pw == "-") and "" or Clean(pw)
   tag = (tag ~= "" and tag ~= "-") and Clean(tag):sub(1, 8) or nil
@@ -614,6 +620,72 @@ end
 -- PLAYER_LOGIN, so retry the read-and-join a few times (5s, 10s, 15s ... up to ~75s) instead of once.
 -- Equivalent to the player typing /cl reload, then /cl once it is connected.
 local loginAttempts = 0
+---------------------------------------------------------------- community mirror
+local function ClubMember()
+  if not db or not db.clubId or not C_Club or not C_Club.GetClubInfo then return false end
+  local ok, info = pcall(C_Club.GetClubInfo, db.clubId)
+  return ok and info ~= nil
+end
+
+local function ClubStream()
+  if mirror.streamId then return mirror.streamId end
+  if not db or not db.clubId or not C_Club or not C_Club.GetStreams then return nil end
+  local ok, streams = pcall(C_Club.GetStreams, db.clubId)
+  if not ok or type(streams) ~= "table" then return nil end
+  local best
+  for _, st in ipairs(streams) do
+    if st.name == "General" then best = st.streamId break end
+    if not best or (st.streamId and st.streamId < best) then best = st.streamId end
+  end
+  mirror.streamId = best
+  return best
+end
+
+-- Called from the chat edit box hook, i.e. inside the keypress that sent the guild line.
+local function MirrorTypedLine(text)
+  if not db or db.mirror == false or not db.clubId or not Configured() then return end
+  if not C_Club or not C_Club.SendMessage or not ClubMember() then return end
+  local stream = ClubStream()
+  if not stream then return end
+  local tag = GetTag() or "?"
+  local me = MyName()
+  local nick = (db.showNick ~= false) and db.nicks[me] or nil
+  local line = string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
+  local ok, err = pcall(C_Club.SendMessage, db.clubId, stream, line:sub(1, 250))
+  if ok then mirror.posted = mirror.posted + 1 else mirror.failed = mirror.failed + 1; Debug("mirror failed: %s", tostring(err)) end
+end
+
+local function OnEditBoxParseText(editBox, send)
+  if send ~= 1 or not editBox or not editBox.GetAttribute then return end
+  if editBox:GetAttribute("chatType") ~= "GUILD" then return end
+  local text = editBox:GetText()
+  if type(text) ~= "string" or not text:match("%S") or text:sub(1, 1) == "/" then return end
+  MirrorTypedLine(text)
+end
+
+local function InstallMirrorHooks()
+  if mirror.hooks == "installed" then return end
+  local ok = false
+  if ChatFrame1EditBox and ChatFrame1EditBox.ParseText then
+    for i = 1, (NUM_CHAT_WINDOWS or 10) do
+      local eb = _G["ChatFrame" .. i .. "EditBox"]
+      if eb and eb.ParseText then hooksecurefunc(eb, "ParseText", OnEditBoxParseText); ok = true end
+    end
+  elseif ChatEdit_ParseText then
+    hooksecurefunc("ChatEdit_ParseText", OnEditBoxParseText); ok = true
+  end
+  mirror.hooks = ok and "installed" or "FAILED (no ParseText)"
+end
+
+local function RemindAboutClub()
+  if mirror.reminded or not db or not db.clubId or db.mirror == false then return end
+  if not C_Club then return end
+  mirror.reminded = true
+  if not ClubMember() then
+    Print("your guild mirrors chat into community " .. db.clubId .. " but this character is not a member. Ask the Guild Master for the invite link, then add the community to a chat tab to read every linked guild.")
+  end
+end
+
 local function LoginSync()
   if not db then return end
   loginAttempts = loginAttempts + 1
@@ -623,6 +695,7 @@ local function LoginSync()
   Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured() and true or false), tostring(ChannelId() ~= nil))
   if Configured() and ChannelId() then
     Print(StatusLine())
+    C_Timer.After(10, RemindAboutClub)
     return
   end
   if loginAttempts < 6 then
@@ -689,6 +762,7 @@ f:SetScript("OnEvent", function(self, event, ...)
     end
   elseif event == "PLAYER_LOGIN" then
     myGUID = UnitGUID and UnitGUID("player") or nil
+    InstallMirrorHooks()
     if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster()
     elseif GuildRoster then GuildRoster() end
     C_Timer.After(5, LoginSync)
@@ -879,6 +953,9 @@ SlashCmdList["CORELINK"] = function(input)
   elseif cmd == "nicknames" then
     db.showNick = not (arg:lower() == "off")
     Print("showing nicknames: " .. (db.showNick and "on" or "off"))
+  elseif cmd == "mirror" then
+    db.mirror = not (arg:lower() == "off")
+    Print("community mirror: " .. (db.mirror and "on" or "off") .. (db.clubId and (" (club " .. db.clubId .. ")") or " (no club= token in Guild Info)"))
   elseif cmd == "bridge" then
     db.bridge = not (arg:lower() == "off")
     Print("cross-realm bridging: " .. (db.bridge and "on" or "off") .. " (forward other guilds' lines to your guildmates on other realms)")
@@ -925,6 +1002,9 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
+      string.format("mirror %s club=%s member=%s stream=%s posted=%d failed=%d hooks=%s",
+        (db.mirror ~= false) and "on" or "off", tostring(db.clubId), tostring(db.clubId and ClubMember()),
+        tostring(db.clubId and ClubStream()), mirror.posted, mirror.failed, mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       "debug " .. tostring(db.debug == true),
@@ -983,9 +1063,9 @@ SlashCmdList["CORELINK"] = function(input)
     Print(StatusLine())
     if Configured() and lastSendResult then Print("last send result: " .. lastSendResult .. " (0 = success)") end
     if IsGM() then
-      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | bridge on|off | reload | clear | on | off | mute | unmute | report | debug on|off")
+      Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | bridge on|off | mirror on|off | reload | clear | on | off | mute | unmute | report | debug on|off")
     else
-      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off | report | debug on|off")
+      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off | mirror on|off | report | debug on|off")
     end
   end
 end

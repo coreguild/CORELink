@@ -81,6 +81,24 @@ math.randomseed(7)
 wipe = function(t) for k in pairs(t) do t[k] = nil end end
 local sentAddon = {}
 local addonSendResult = 0
+-- chat edit box + secure hooks (for the community mirror)
+local hooks = {}
+hooksecurefunc = function(a, b, c) if type(a) == "table" then hooks[a] = hooks[a] or {}; hooks[a][b] = c else hooks[a] = b end end
+local editAttrs, editText = { chatType = "GUILD" }, ""
+ChatFrame1EditBox = { ParseText = function() end, GetAttribute = function(_, k) return editAttrs[k] end, GetText = function() return editText end }
+ChatFrame2EditBox = ChatFrame1EditBox; ChatFrame3EditBox = ChatFrame1EditBox
+local function typeLine(text, chatType)
+  editText = text; editAttrs.chatType = chatType or "GUILD"
+  local h = hooks[ChatFrame1EditBox] and hooks[ChatFrame1EditBox].ParseText
+  if h then h(ChatFrame1EditBox, 1) end
+end
+-- Blizzard Communities
+local clubMember, clubPosts = true, {}
+C_Club = {
+  GetClubInfo = function(id) if clubMember and id == 23112951 then return { clubId = id, name = "Core Test" } end end,
+  GetStreams = function(id) if id == 23112951 then return { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } } end return {} end,
+  SendMessage = function(id, stream, text) clubPosts[#clubPosts + 1] = { club = id, stream = stream, text = text } end,
+}
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
   SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }; return addonSendResult end,
@@ -417,6 +435,37 @@ do
   lastSetText = nil; slash("report")
   check("bridge: /cl bridge off stops forwarding and the report says so", #guildSends(mark) == 0 and (lastSetText or ""):match("bridge off fwd=%d+ resent=1 ") ~= nil, lastSetText)
   slash("bridge on")
+end
+
+-- Community mirror: typed guild lines are posted into the club from the Guild Info "club=" token
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}; clubPosts = {}; clubMember = true
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=23112951\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
+  check("mirror: club id parsed from the Guild Info line", CORELinkDB.clubId == 23112951, CORELinkDB.clubId)
+  typeLine("hello everyone")
+  check("mirror: a typed guild line is posted to the club's General stream as [TAG] Name: text",
+    #clubPosts == 1 and clubPosts[1].club == 23112951 and clubPosts[1].stream == 1 and clubPosts[1].text:match("^%[MAIN%] Shockly[^:]*: hello everyone$") ~= nil, clubPosts[1] and clubPosts[1].text)
+  typeLine("/cl report"); typeLine("in say", "SAY")
+  check("mirror: slash commands and non-guild chat are not posted", #clubPosts == 1, #clubPosts)
+  myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
+  check("mirror: /cl publish keeps the club token on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=23112951", lastSetText)
+  lastSetText = nil; slash("report")
+  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror on club=23112951 member=true stream=1 posted=1 failed=0 hooks=installed", 1, true) ~= nil, lastSetText)
+  slash("mirror off"); typeLine("while off")
+  check("mirror: /cl mirror off stops posting", #clubPosts == 1)
+  slash("mirror on")
+  -- not a member: nothing posted, one reminder after login
+  clubMember = false
+  CORELinkDB = {}; joined = {}
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN")
+  n0 = #chatLines; advance(20)
+  local reminders = 0
+  for i = n0 + 1, #chatLines do if chatLines[i].text:find("this character is not a member", 1, true) then reminders = reminders + 1 end end
+  typeLine("not a member line")
+  check("mirror: non-member gets one reminder and nothing is posted", reminders == 1 and #clubPosts == 1, reminders .. "/" .. #clubPosts)
+  clubMember = true
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))

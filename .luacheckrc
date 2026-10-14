@@ -20,7 +20,7 @@ read_globals = {
   "GetChatWindowMessages", "GetChatWindowChannels", "ChatFrame1EditBox", "ChatEdit_ParseText", "hooksecurefunc",
   -- chat / channels
   "SendChatMessage", "SendAddonMessage", "JoinChannelByName", "JoinTemporaryChannel", "LeaveChannelByName",
-  "GetChannelName", "GetChannelList", "C_ChatInfo",
+  "GetChannelName", "GetChannelList", "C_ChatInfo", "C_Club",
   -- guild / player
   "GetGuildInfo", "GetGuildInfoText", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo", "GuildRoster",
   "C_GuildInfo", "GetRealmName", "GetNormalizedRealmName", "UnitName", "UnitGUID", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
