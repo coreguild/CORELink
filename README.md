@@ -42,10 +42,11 @@ Members pick the settings up automatically within a minute of logging in.
 
 Guild Info line format: `CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>]`
 
-To mirror chat into a Blizzard Community: create the community and give it a short name, append
-`club=<short name>` (or the full name without spaces, e.g. `club=CoreTest`, or the numeric id) to every
-co-guild's line, and share the invite link. Members read linked guilds in their guild chat; they do not need
-the community in a chat tab.
+To mirror chat into a Blizzard Community: create a **World of Warcraft community** (not a Battle.net one; those
+show account names instead of characters and are the only kind that crosses factions), give it a short name that
+no other community of yours uses, append `club=<short name>` (or the full name without spaces, e.g.
+`club=CoreTest2`, or the numeric id) to every co-guild's line, and share the invite link. Members read linked
+guilds in their guild chat; they do not need the community in a chat tab.
 
 ## Commands
 
@@ -84,14 +85,19 @@ the community in a chat tab.
   (over the guild addon channel, which does cross realms) which guilds they hear on their realm; `/cl guilds`
   merges that and warns when a linked guild has no relay on yours.
 * **Community mirror (optional).** If the Guild Info line carries `club=<community>`, each addon user's own
-  guild lines are also posted into that Blizzard Community as `[TAG] Name: text`, from inside the keypress
-  that sent them (community sends are refused from timers and event handlers, so relayed lines cannot be
-  mirrored). Both the chat edit box and `SendChatMessage` are hooked, so `/g text`, macros and other addons'
-  guild sends are mirrored too. Everyone, with or without the addon, can also read the community in a chat tab;
-  it crosses realms and keeps history. Lines that arrive in the community from other guilds are shown in your
-  guild chat windows (de-duplicated against the relay), plain community chat shows under the community's name,
-  and the raw community channel copy is hidden so nothing reads twice. The community stream is loaded before
-  every post and reloaded after a community error, since posting fails until it is loaded.
+  guild lines are also posted into that Blizzard Community from inside the keypress that sent them (community
+  sends are refused from timers and event handlers, so relayed lines cannot be mirrored). In a World of Warcraft
+  community the post is `[TAG] text`, since the community shows the character as the author; in a Battle.net
+  community it is `[TAG] Name (nick): text`, since that kind shows account names. Both the chat edit box and
+  `SendChatMessage` are hooked, so `/g text`, macros and other addons' guild sends are mirrored too. Everyone,
+  with or without the addon, can also read the community in a chat tab; it crosses realms and keeps history.
+  Lines that arrive in the community from other guilds are shown in your guild chat windows as
+  `[Character Name]: [TAG] text`, with the class colour, nickname and officer label taken from the community
+  member record and the relay. The game hands addons community text as a sealed value it can draw but not read,
+  so your own guild's posts are recognised by the author's guild roster entry, and a line that also arrived on
+  the relay channel is dropped when the same author was shown there within five seconds. The raw community
+  channel copy is hidden so nothing reads twice, and the community stream is loaded before every post and
+  reloaded after a community error, since posting fails until it is loaded.
   `/cl mirror off` opts a client out; `/cl mirror read off`, `post off` or `hide off` for one piece.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's

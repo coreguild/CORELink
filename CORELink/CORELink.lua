@@ -25,7 +25,8 @@ local heard = {}   -- guild tag -> last time seen on the link channel (on OUR re
 local heardRealms = {}      -- tag -> realm -> last time heard there (ours or a guildmate's realm)
 -- What we know about authors from relay packets: class token and officer label, keyed by chat name.
 -- Community lines carry neither, so this is how they get class and officer colours.
-local authorClass, authorOfficer = {}, {}
+local authorClass, authorOfficer, authorNick = {}, {}, {}
+local rosterGuid = {}   -- guild member guid -> name (to recognise guildmates' community posts)
 local guildRealms = {}      -- realm -> last time one of our own guildmates reported from it
 local lastHeardSent, lastHeardSig = 0, ""
 local coverageWarned = {}   -- tag -> true once we warned that it is not reaching our realm
@@ -39,7 +40,11 @@ local OnBridgeReceived      -- defined after the guild addon handler that calls 
 -- ("club=<id|short name>" token on the Guild Info line). Community sends only work inside the player's
 -- keypress, so this is done from the chat send hooks and never for relayed lines.
 local mirror = { hooks = "not installed", streamId = nil, posted = 0, failed = 0, reminded = false, shown = 0,
-                 focused = false, hidden = 0, lastText = nil, lastAt = 0 }
+                 focused = false, hidden = 0, lastText = nil, lastAt = 0, skipped = 0, clubType = nil }
+-- A line can reach us twice: on the relay channel (readable) and in the community (text sealed, so it cannot be
+-- hashed). Each displayed line is remembered by author and time; the other path's copy within a few seconds is dropped.
+local recentFrom = {}   -- author -> { { t = time, via = "relay"|"club" }, ... }
+local CROSS_SECS = 5
 local FocusClubStream       -- defined after the reminder that calls it
 local MAX_MSG, DEDUPE_SECS = 200, 10
 
@@ -245,7 +250,7 @@ local function ReadGuildInfo()
   local club = line:match("[%s]club=([^%s]+)")
   if club ~= db.club then
     db.club, db.clubId = club, nil          -- the id is resolved from the token when first needed
-    mirror.streamId, mirror.focused = nil, false
+    mirror.streamId, mirror.focused, mirror.clubType = nil, false, nil
   end
   db.lastGI = line
   pw = (pw == "-") and "" or Clean(pw)
@@ -337,8 +342,31 @@ local function RefreshRoster()
     name = Ambiguate(name, "none")
     rankOf[name] = rankIndex
     rankNameOf[name] = rankName
+    if guid and not issecret(guid) then rosterGuid[guid] = name end
     if myGUID and guid and not issecret(guid) and guid == myGUID then LearnMyName(name) end
   end
+end
+
+local function IsGuildmate(name, guid)
+  if guid and rosterGuid[guid] then return true end
+  return name ~= nil and rankOf[name] ~= nil
+end
+
+-- Did the other delivery path show a line from this author in the last few seconds? Consumes the match.
+local function CrossSeen(author, via)
+  local list = recentFrom[author]
+  local t = GetTime()
+  if list then
+    for i = #list, 1, -1 do
+      local e = list[i]
+      if t - e.t > CROSS_SECS then table.remove(list, i)
+      elseif e.via ~= via and not e.used then e.used = true return true end
+    end
+  else
+    list = {}; recentFrom[author] = list
+  end
+  list[#list + 1] = { t = t, via = via }
+  return false
 end
 
 -- Returns the author's guild rank name if they are at or above the officer
@@ -562,7 +590,6 @@ local function Display(tag, author, class, msg, officerLabel, nick)
     local r, g, b = HexToRGB(db.officerColorHex)
     c = { r = r, g = g, b = b }
   end
-  msg = prefix .. msg
   local name = "[" .. author .. "]"
   if db.classColor ~= false and class and class ~= "" then
     local cc = RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
@@ -570,7 +597,8 @@ local function Display(tag, author, class, msg, officerLabel, nick)
       name = string.format("|cff%02x%02x%02x%s|r", math.floor(cc.r * 255 + 0.5), math.floor(cc.g * 255 + 0.5), math.floor(cc.b * 255 + 0.5), name)
     end
   end
-  local line = string.format("[%s] |Hplayer:%s|h%s|h: %s", tag, author, name, msg)
+  -- msg may be sealed community text: it can be concatenated and drawn, but not formatted or inspected
+  local line = (tag and ("[" .. tag .. "] ") or "") .. "|Hplayer:" .. author .. "|h" .. name .. "|h: " .. prefix .. msg
   for _, f in ipairs(GuildFrames()) do
     f:AddMessage(line, c.r, c.g, c.b)
   end
@@ -615,6 +643,8 @@ local function OnLinkMessage(text)
   if class and class ~= "" then authorClass[author] = class end
   authorOfficer[author] = label                    -- nil clears a stale officer label
   nick = CleanNick(nick)
+  authorNick[author] = nick ~= "" and nick or nil
+  if CrossSeen(author, "relay") then Debug("skipped %s packet %s: shown from the community", proto, id) return end
   Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
 end
 
@@ -644,16 +674,33 @@ local function ResolveClubId()
   local ok, clubs = pcall(C_Club.GetSubscribedClubs)
   if not ok or type(clubs) ~= "table" then return nil end
   local want = db.club:lower()
+  local found
   for _, c in ipairs(clubs) do
     local short, name = c.shortName, c.name
     if type(short) == "string" and not issecret(short) and short:lower() == want
       or type(name) == "string" and not issecret(name) and (name:lower():gsub("%s", "")) == want then
-      db.clubId = c.clubId
-      Debug("community %s is club %s", db.club, tostring(c.clubId))
-      return db.clubId
+      -- several communities can share a short name: prefer a World of Warcraft (character) community
+      if not found or (c.clubType == 1 and found.clubType ~= 1) then found = c end
     end
   end
-  return nil
+  if not found then return nil end
+  db.clubId = found.clubId
+  Debug("community %s is club %s", db.club, tostring(found.clubId))
+  return db.clubId
+end
+
+-- 1 = World of Warcraft (character) community: the community window already shows the character as the
+-- author, so posted lines carry only the tag. 0 = Battle.net community: it shows account names, so the
+-- character name goes into the text.
+local function ClubIsCharacter()
+  if mirror.clubType == nil then
+    local id = ResolveClubId()
+    if id and C_Club and C_Club.GetClubInfo then
+      local ok, info = pcall(C_Club.GetClubInfo, id)
+      if ok and type(info) == "table" and type(info.clubType) == "number" then mirror.clubType = info.clubType end
+    end
+  end
+  return mirror.clubType == 1
 end
 
 local function ClubMember()
@@ -690,9 +737,14 @@ local function MirrorTypedLine(text)
   if not stream then return end
   FocusClubStream()                 -- posting fails with "Couldn't send message" until the stream is loaded
   local tag = GetTag() or "?"
-  local me = MyName()
-  local nick = (db.showNick ~= false) and db.nicks[me] or nil
-  local line = string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
+  local line
+  if ClubIsCharacter() then
+    line = string.format("[%s] %s", tag, text)
+  else
+    local me = MyName()
+    local nick = (db.showNick ~= false) and db.nicks[me] or nil
+    line = string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
+  end
   local ok, err = pcall(C_Club.SendMessage, id, stream, line:sub(1, 250))
   if ok then mirror.posted = mirror.posted + 1
   else mirror.failed = mirror.failed + 1; mirror.focused = false; Debug("mirror failed: %s", tostring(err)) end
@@ -752,43 +804,84 @@ FocusClubStream = function()
   if pcall(C_Club.FocusStream, id, stream) then mirror.focused = true end
 end
 
--- A message arrived in the club: show it in guild chat unless it is ours, our own guild's, muted, or a line
--- we already displayed from the relay channel (same id: Hash(tag .. author .. msg)).
-local function OnClubMessage(clubId, streamId, messageId)
+local function Plain(v) if v == nil or issecret(v) then return nil end return v end
+
+-- The character behind a community post: the message's author record, completed from the member list.
+-- WoW communities give the character name, guid and class; Battle.net communities give the account name.
+local function ClubAuthor(clubId, author)
+  local name, guid, classID = Plain(author.name), Plain(author.guid), Plain(author.classID)
+  local mid = Plain(author.memberId)
+  if mid and C_Club.GetMemberInfo then
+    local ok, m = pcall(C_Club.GetMemberInfo, clubId, mid)
+    if ok and type(m) == "table" then
+      name = Plain(m.name) or name
+      guid = Plain(m.guid) or guid
+      classID = classID or Plain(m.classID)
+    end
+  end
+  if name == "" then name = nil end
+  return name, guid, classID
+end
+
+local CLUB_LINE_FULL = "^%[([^%]]+)%] ([^:(]+)%s?%(?([^):]*)%)?: (.*)$"   -- [TAG] Name (nick): text
+local CLUB_LINE_TAG = "^%[([^%]]+)%] (.*)$"                                -- [TAG] text
+
+-- A message arrived in the club: show it in guild chat unless it is ours, our own guild's, muted, or already
+-- shown from the relay channel. Community text may be sealed (drawable, not readable): then the tag cannot be
+-- checked and the line is shown under the author's name, de-duplicated by author and time instead of by hash.
+-- The author record can lag the message by a moment, so an authorless message is retried a few times.
+local CLUB_RETRY = { 0.5, 1, 2 }
+local function OnClubMessage(clubId, streamId, messageId, attempt)
   if not db or db.mirrorRead == false or clubId ~= ResolveClubId() then return end
   if streamId ~= ClubStream() then return end
   if not C_Club or not C_Club.GetMessageInfo then return end
   local ok, info = pcall(C_Club.GetMessageInfo, clubId, streamId, messageId)
-  if not ok or type(info) ~= "table" or type(info.content) ~= "string" or info.destroyed then return end
+  if not ok or type(info) ~= "table" or info.content == nil or info.destroyed then return end
   local author = info.author or {}
-  if author.isSelf then return end
+  if author.isSelf == true then return end
+  local name, guid, classID = ClubAuthor(clubId, author)
+  if not name and not guid then
+    attempt = (attempt or 0) + 1
+    if CLUB_RETRY[attempt] then
+      C_Timer.After(CLUB_RETRY[attempt], function() OnClubMessage(clubId, streamId, messageId, attempt) end)
+      return
+    end
+  end
+  if (guid and myGUID and guid == myGUID) or (name and IsMe(name, guid)) then return end
+  if IsGuildmate(name, guid) then return end          -- our own guild: already in our guild chat
   local content = info.content
-  if issecret(content) then return end
-  local tag, name, nick, msg = content:match("^%[([^%]]+)%] ([^:(]+)%s?%(?([^):]*)%)?: (.*)$")
-  if tag and name and msg then
-    name = name:gsub("%s+$", "")
-    if tag == GetTag() then return end                       -- our guild: already in our guild chat
+  local tag, pname, nick, msg
+  if type(content) == "string" and not issecret(content) then
+    local okp, t, a, b, c = pcall(string.match, content, CLUB_LINE_FULL)
+    if okp and t then tag, pname, nick, msg = t, (a:gsub("%s+$", "")), b, c
+    else
+      okp, t, a = pcall(string.match, content, CLUB_LINE_TAG)
+      if okp and t then tag, msg = t, a end
+    end
+  end
+  local who = pname or name or "?"
+  local class = ""
+  if classID and GetClassInfo then
+    local okc, _, token = pcall(GetClassInfo, classID)
+    if okc and type(token) == "string" then class = token end
+  end
+  if class == "" then class = authorClass[who] or "" end
+  local label = (db.officer ~= false) and authorOfficer[who] or nil
+  nick = (nick and nick ~= "" and nick) or authorNick[who]
+  if tag then
+    if tag == GetTag() then return end
     if db.muted[tag:lower()] then return end
-    local id = Hash(tag .. name .. msg)
+    local id = Hash(tag .. who .. msg)
     if displayed[id] then return end                         -- already shown from the relay channel
     displayed[id] = GetTime(); seen[id] = GetTime()
     heard[tag] = GetTime(); NoteHeard(tag, "community", GetTime())
-    local class = ""
-    if author.classID and not issecret(author.classID) and GetClassInfo then
-      local okc, _, token = pcall(GetClassInfo, author.classID)
-      if okc and type(token) == "string" then class = token end
-    end
-    if class == "" then class = authorClass[name] or "" end
-    local label = (db.officer ~= false) and authorOfficer[name] or nil
+    CrossSeen(who, "club")
     mirror.shown = mirror.shown + 1
-    Display(tag, name, class, msg, label, (nick ~= "" and nick) or nil)
+    Display(tag, who, class, msg, label, nick)
   else
-    -- plain community chat from someone (addon or not): show it under the community's name
-    local who = (type(author.name) == "string" and not issecret(author.name)) and author.name or "?"
-    local clubName = "Community"
-    if C_Club.GetClubInfo then local okc, ci = pcall(C_Club.GetClubInfo, clubId); if okc and ci and ci.name then clubName = ci.name end end
+    if CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
     mirror.shown = mirror.shown + 1
-    Display(clubName, who, "", content, nil, nil)
+    Display(nil, who, class, content, label, nick)
   end
 end
 
@@ -1143,10 +1236,11 @@ SlashCmdList["CORELINK"] = function(input)
         return #out > 0 and table.concat(out, ",") or "none"
       end)(),
       string.format("tables seen=%d displayed=%d nicks=%d", nSeen, nDisp, nNick),
-      string.format("mirror post=%s read=%s club=%s id=%s member=%s stream=%s posted=%d failed=%d shown=%d hidden=%d focused=%s hooks=%s",
+      string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s posted=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
         (db.mirror ~= false) and "on" or "off", (db.mirrorRead ~= false) and "on" or "off", tostring(db.club),
-        tostring(ResolveClubId()), tostring(db.club and ClubMember()), tostring(db.club and ClubStream()), mirror.posted,
-        mirror.failed, mirror.shown, mirror.hidden, tostring(mirror.focused), mirror.hooks),
+        tostring(ResolveClubId()), (db.club and ClubIsCharacter()) and "wow" or tostring(mirror.clubType),
+        tostring(db.club and ClubMember()), tostring(db.club and ClubStream()), mirror.posted,
+        mirror.failed, mirror.shown, mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks),
       string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", (db.bridge ~= false) and "on" or "off",
         bridgeStats.forwarded, bridgeStats.resent, bridgeStats.skipped, tostring(HasGuildmatesElsewhere())),
       "debug " .. tostring(db.debug == true),

@@ -71,7 +71,7 @@ local savedTextForRestore = guildInfoText
 GetGuildInfoText = function() return guildInfoText end
 local roster = {
   { "Shockly-Beta", "Member", 3, "MAGE", "guid-me" },
-  { "Bob-Beta", "Officer", 1, "WARRIOR" },
+  { "Bob-Beta", "Officer", 1, "WARRIOR", "guid-bob" },
   { "Tanner-Beta", "Guild Master", 0, "PRIEST" },
 }
 GetNumGuildMembers = function() return #roster end
@@ -97,13 +97,24 @@ local clubMember, clubPosts = true, {}
 local clubMessages = {}
 local clubSendFails = false
 SendChatMessage = function() end
+issecretvalue = function(v) return type(v) == "table" and rawget(v, "__sealed") == true end
+local sealedMT = { __concat = function(a, b)
+  if type(a) == "table" then a = a.t end
+  if type(b) == "table" then b = b.t end
+  return a .. b
+end }
+local function sealed(text) return setmetatable({ __sealed = true, t = text }, sealedMT) end
+local clubs = {
+  { clubId = 22703281, clubType = 2, name = "CORE Forever" },
+  { clubId = 23112951, clubType = 0, name = "Core Test", shortName = "Guild" },
+  { clubId = 23149801, clubType = 1, name = "Core Test 2", shortName = "Guild" },
+}
+local clubMembers = {}   -- memberId -> record
 C_Club = {
-  GetClubInfo = function(id) if clubMember and id == 23112951 then return { clubId = id, name = "Core Test", shortName = "CoreTest" } end end,
-  GetSubscribedClubs = function()
-    if not clubMember then return {} end
-    return { { clubId = 22703281, clubType = 2, name = "CORE Forever" }, { clubId = 23112951, clubType = 0, name = "Core Test", shortName = "CoreTest" } }
-  end,
-  GetStreams = function(id) if id == 23112951 then return { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } } end return {} end,
+  GetClubInfo = function(id) if not clubMember then return nil end for _, c in ipairs(clubs) do if c.clubId == id then return c end end end,
+  GetSubscribedClubs = function() if not clubMember then return {} end return clubs end,
+  GetMemberInfo = function(id, mid) return clubMembers[mid] end,
+  GetStreams = function(id) if id == 23112951 or id == 23149801 then return { { streamId = 2, name = "Officers" }, { streamId = 1, name = "General" } } end return {} end,
   SendMessage = function(id, stream, text) if clubSendFails then error("Couldn't send message") end clubPosts[#clubPosts + 1] = { club = id, stream = stream, text = text } end,
   FocusStream = function() return true end,
   GetMessageInfo = function(id, stream, mid) return clubMessages[mid] end,
@@ -464,7 +475,7 @@ do
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
   check("mirror: /cl publish keeps the club token on the line", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=23112951", lastSetText)
   lastSetText = nil; slash("report")
-  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 id=23112951 member=true stream=1 posted=1 failed=0 shown=0 hidden=0 focused=true hooks=editbox+send", 1, true) ~= nil, lastSetText)
+  check("mirror: report shows club, membership, stream and counts", (lastSetText or ""):find("mirror post=on read=on club=23112951 id=23112951 type=0 member=true stream=1 posted=1 failed=0 shown=0 skipped=0 hidden=0 focused=true hooks=editbox+send", 1, true) ~= nil, lastSetText)
   -- SendChatMessage hook: "/g text" from another chat type, macros and other addons are mirrored too
   local sendHook = hooks["SendChatMessage"]
   check("mirror: SendChatMessage is hooked", type(sendHook) == "function" and type(hooks[C_ChatInfo] and hooks[C_ChatInfo].SendChatMessage) == "function")
@@ -528,7 +539,7 @@ do
   local last = chatLines[#chatLines]
   check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and last.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and last.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(last.r * 255 + 0.5) == 0xe8, last.text .. " r=" .. tostring(last.r))
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 104)
-  check("mirror read: plain community chat shows under the community name", #chatLines > n0 and chatLines[#chatLines].text:find("[Core Test]", 1, true) ~= nil and chatLines[#chatLines].text:find("just chatting", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  check("mirror read: plain community chat shows under the author's name only", #chatLines > n0 and chatLines[#chatLines].text:find("[Dana Reed]|h: just chatting", 1, true) ~= nil and chatLines[#chatLines].text:find("Core Test", 1, true) == nil, chatLines[#chatLines] and chatLines[#chatLines].text)
   slash("mirror read off"); n0 = #chatLines
   clubMessages[105] = { messageId = 105, content = "[ALT] Carol Smith: while read off", author = { name = "Carol Smith", isSelf = false } }
   H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 105)
@@ -560,7 +571,7 @@ do
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
   check("club name: /cl publish keeps the name token", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 club=coretest", lastSetText)
   lastSetText = nil; slash("report")
-  check("club name: report shows token and id", (lastSetText or ""):find("club=coretest id=23112951 member=true", 1, true) ~= nil, lastSetText)
+  check("club name: report shows token and id", (lastSetText or ""):find("club=coretest id=23112951 type=0 member=true", 1, true) ~= nil, lastSetText)
   clubMessages[120] = { messageId = 120, content = "[ALT] Hal Moss: named club", author = { name = "Hal Moss", isSelf = false } }
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 120)
   check("club name: inbound lines from the named community are shown", #chatLines > n0 and chatLines[#chatLines].text:find("named club", 1, true) ~= nil)
@@ -576,6 +587,73 @@ do
   local explained = false
   for i = n0 + 1, #chatLines do if chatLines[i].text:find("no community you belong to has that name", 1, true) then explained = true end end
   check("club name: unknown name posts nothing and the reminder says so", CORELinkDB.clubId == nil and #clubPosts == 0 and explained)
+  guildInfoText = savedTextForRestore
+end
+
+-- World of Warcraft (character) community: short name resolves to it, posts carry only the tag, sealed text
+-- is shown under the character's name with class colour, guildmates and own lines are skipped, and a line
+-- that also came over the relay is shown once.
+do
+  CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  check("wow club: a short name shared by two communities picks the WoW one", CORELinkDB.clubId == 23149801, CORELinkDB.clubId)
+  typeLine("short post")
+  check("wow club: posts carry only the tag, no character name", #clubPosts == 1 and clubPosts[1].club == 23149801 and clubPosts[1].text == "[MAIN] short post", clubPosts[1] and clubPosts[1].text)
+  lastSetText = nil; slash("report")
+  check("wow club: report shows type=wow", (lastSetText or ""):find("club=Guild id=23149801 type=wow member=true", 1, true) ~= nil, lastSetText)
+  clubMembers[7] = { memberId = 7, name = "Zag Mathris", guid = "guid-zag", classID = 8 }
+  clubMembers[8] = { memberId = 8, name = "Bob", guid = "guid-bob", classID = 1 }
+  clubMembers[9] = { memberId = 9, name = "Shockly Stormgale", guid = "guid-me", classID = 8 }
+  clubMessages[201] = { messageId = 201, content = sealed("[Trois] I'm here!"), author = { memberId = 7 } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 201)
+  local last = chatLines[#chatLines]
+  check("wow club: sealed text shows once per guild window under the class-coloured character name",
+    #chatLines == n0 + 2 and last.text:find("|cff40c7eb[Zag Mathris]|r|h: [Trois] I'm here!", 1, true) ~= nil and last.text:find("Core Test", 1, true) == nil, last and last.text)
+  clubMessages[202] = { messageId = 202, content = sealed("[MAIN] from bob"), author = { memberId = 8 } }
+  clubMessages[203] = { messageId = 203, content = sealed("[MAIN] from me"), author = { memberId = 9 } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 202); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 203)
+  check("wow club: guildmates' and own sealed lines are not shown (roster guid, own guid)", #chatLines == n0, #chatLines - n0)
+  -- author record lags the message: retried, then shown
+  clubMessages[204] = { messageId = 204, content = sealed("[Trois] late author"), author = { memberId = 11 } }
+  n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 204)
+  check("wow club: a message without an author yet is not shown immediately", #chatLines == n0)
+  clubMembers[11] = { memberId = 11, name = "Cosmo Vale", guid = "guid-cosmo", classID = 1 }
+  advance(2)
+  check("wow club: it is shown once the member record loads", #chatLines == n0 + 2 and chatLines[#chatLines].text:find("[Cosmo Vale]", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  -- relay first, community copy within 5 s: shown once
+  advance(10); n0 = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000cafe~Trois~Zag Mathris~MAGE~~Zaggy~both ways", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
+  clubMessages[205] = { messageId = 205, content = sealed("[Trois] both ways"), author = { memberId = 7 } }
+  advance(1); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 205)
+  check("wow club: a line heard on the relay is not shown again from the community", #chatLines == n0 + 2, #chatLines - n0)
+  lastSetText = nil; slash("report")
+  check("wow club: report counts the skipped copy", (lastSetText or ""):find("skipped=1", 1, true) ~= nil, lastSetText)
+  -- community first, relay copy within 5 s: shown once, with the nickname learned from the relay earlier
+  advance(10); n0 = #chatLines
+  clubMessages[206] = { messageId = 206, content = sealed("[Trois] club first"), author = { memberId = 7 } }
+  H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 206)
+  check("wow club: nickname from an earlier relay packet is shown on the sealed line", chatLines[#chatLines].text:find("(Zaggy) [Trois] club first", 1, true) ~= nil, chatLines[#chatLines].text)
+  advance(1)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~0000beef~Trois~Zag Mathris~MAGE~~Zaggy~club first", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
+  check("wow club: the relay copy of a line already shown from the community is dropped", #chatLines == n0 + 2, #chatLines - n0)
+  -- two quick lines from the same person on both paths are both shown once
+  advance(10); n0 = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000a01~Trois~Zag Mathris~MAGE~~Zaggy~one", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "CL4~00000a02~Trois~Zag Mathris~MAGE~~Zaggy~two", "CHANNEL", "Zag", nil, 0, 6, "CORELink7100")
+  clubMessages[207] = { messageId = 207, content = sealed("[Trois] one"), author = { memberId = 7 } }
+  clubMessages[208] = { messageId = 208, content = sealed("[Trois] two"), author = { memberId = 7 } }
+  H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 207); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 208)
+  check("wow club: two quick lines on both paths show exactly twice", #chatLines == n0 + 4, #chatLines - n0)
+  -- readable "[TAG] text" lines still honour the tag: own guild skipped, muted skipped
+  advance(10); n0 = #chatLines
+  clubMessages[209] = { messageId = 209, content = "[MAIN] readable own guild", author = { memberId = 7 } }
+  clubMessages[210] = { messageId = 210, content = "[QUIET] readable muted", author = { memberId = 7 } }
+  clubMessages[211] = { messageId = 211, content = "[Trois] readable other", author = { memberId = 7 } }
+  slash("mute QUIET"); n0 = #chatLines
+  H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 209); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 210); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 211)
+  check("wow club: readable [TAG] text lines keep tag filtering", #chatLines == n0 + 2 and chatLines[#chatLines].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil, chatLines[#chatLines] and chatLines[#chatLines].text)
+  slash("unmute QUIET")
   guildInfoText = savedTextForRestore
 end
 
