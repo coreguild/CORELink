@@ -3,7 +3,8 @@
 #
 #   scripts/release.sh rc    [--bump auto|patch|minor|major] [--notes "text"] [--dry-run]
 #   scripts/release.sh final [--notes "text"] [--no-rc [--bump ...]] [--dry-run]
-#   scripts/release.sh site  [--dry-run]
+#   scripts/release.sh site  [--dry-run]      re-renders the page; repairs rc/ and latest/ from the GitHub releases
+#                                             when a run died after tagging (works from any branch)
 #
 # Nobody edits a version number. The TOCs in git carry "@project-version@"; the version is computed from the
 # existing tags and stamped into the zip at build time (scripts/package.sh):
@@ -62,11 +63,12 @@ if [ -n "$LAST_RC" ]; then
   ver_gt "$RC_SERIES" "$LAST_FINAL" || { RC_SERIES=""; RC_N=0; }   # series already shipped
 fi
 
-# Which branch may run which channel: rc from release/* only, final and site from main. Checked on --dry-run too.
+# Which branch may run which channel: rc from release/* only, final from main, site from anywhere (it only renders
+# the page and repairs the channels from the GitHub releases). Checked on --dry-run too.
 check_branch() {
   case "$MODE" in
-    rc) [[ "$BRANCH" == release/* ]] || { echo "rc builds come from a release branch (release/<version> or release/<name>); you are on ${BRANCH:-a detached HEAD}. See skills/release/SKILL.md."; exit 2; } ;;
-    *)  [ "$BRANCH" = main ] || { echo "$MODE runs from main only (you are on ${BRANCH:-a detached HEAD})"; exit 2; } ;;
+    rc)    [[ "$BRANCH" == release/* ]] || { echo "rc builds come from a release branch (release/<version> or release/<name>); you are on ${BRANCH:-a detached HEAD}. See skills/release/SKILL.md."; exit 2; } ;;
+    final) [ "$BRANCH" = main ] || { echo "final runs from main only (you are on ${BRANCH:-a detached HEAD})"; exit 2; } ;;
   esac
 }
 preflight() {
@@ -77,6 +79,42 @@ preflight() {
   scripts/check-game-version.sh
   VERSION="$VER" scripts/package.sh
   [ -f "dist/CORELink-$VER.zip" ] || { echo "dist/CORELink-$VER.zip missing"; exit 2; }
+}
+
+# ---- repair a channel from the GitHub release (a local run that died after tagging, see #27) ----------
+# A channel is complete when notes/<tag>.md exists on gh-pages; otherwise the zip and notes are fetched from the
+# GitHub release of that tag and the changelog section is rebuilt from the commits, exactly as the rc/final run
+# would have written them.
+SYNCED=""
+sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previous tag for the changelog ("" none)
+  local channel="$1" tag="$2" prev="$3" ver; ver=${tag#v}; ver=${ver%-rc*}
+  [ -f "$wt/notes/${tag#v}.md" ] && return 0
+  local tmp; tmp=$(mktemp -d)
+  if ! gh release download "$tag" --pattern "CORELink-$ver.zip" --dir "$tmp" >/dev/null 2>&1; then
+    echo "site: $tag has no GitHub release with CORELink-$ver.zip; $channel left as is"; rm -rf "$tmp"; return 0
+  fi
+  echo "site: $channel <- $tag (recovered from the GitHub release)"
+  cp "$tmp/CORELink-$ver.zip" "$wt/$channel/CORELink.zip"
+  cp "$tmp/CORELink-$ver.zip" "$wt/v/CORELink-$ver.zip"
+  echo "$ver" > "$wt/$channel/VERSION"
+  git log -1 --format=%cs "$tag" > "$wt/$channel/DATE"
+  gh release view "$tag" --json body -q .body > "$wt/notes/${tag#v}.md"
+  cp "$wt/notes/${tag#v}.md" "$wt/$channel/NOTES.md"
+  prepend_changelog "$wt/CHANGELOG.md" "$(changelog_section "$tag" "$prev" "$tag")"
+  SYNCED="$SYNCED $tag"
+  rm -rf "$tmp"
+}
+sync_channels() {
+  if [ "$LAST_FINAL" != 0.0.0 ]; then
+    local prevf; prevf=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' | grep -vE -- '-rc[0-9]+$' | sort -V | grep -B1 -x "v$LAST_FINAL" | head -1)
+    [ "$prevf" = "v$LAST_FINAL" ] && prevf=""
+    sync_channel latest "v$LAST_FINAL" "$prevf"
+  fi
+  if [ -n "$RC_SERIES" ]; then
+    local p="v$RC_SERIES-rc$((RC_N - 1))"; [ "$RC_N" -gt 1 ] || p="v$LAST_FINAL"
+    git rev-parse -q --verify "refs/tags/$p" >/dev/null || p=""
+    sync_channel rc "v$LAST_RC" "$p"
+  fi
 }
 
 # ---- publish the download site from a gh-pages worktree -------------------------------------------
@@ -94,6 +132,7 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
   mkdir -p "$wt/latest" "$wt/rc" "$wt/v"
   touch "$wt/.nojekyll"
   mkdir -p "$wt/notes"
+  if [ "$channel" = none ]; then sync_channels; fi
   if [ "$channel" != none ]; then
     cp "$zip" "$wt/$channel/CORELink.zip"
     echo "$VER" > "$wt/$channel/VERSION"
@@ -103,36 +142,19 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
     printf '%s\n' "$RELEASE_NOTES" > "$wt/$channel/NOTES.md"
     prepend_changelog "$wt/CHANGELOG.md" "$CHANGELOG_SECTION"
   fi
-  local stable rc stable_date rc_date rc_block=""
-  stable=$(cat "$wt/latest/VERSION" 2>/dev/null || echo "none yet")
-  rc=$(cat "$wt/rc/VERSION" 2>/dev/null || echo "none")
-  stable_date=$(cat "$wt/latest/DATE" 2>/dev/null || echo "-")
-  rc_date=$(cat "$wt/rc/DATE" 2>/dev/null || echo "-")
-  if [ "$rc" != none ] && [ "$rc" != "$stable" ]; then rc_block="show"; fi
-  local stable_notes rc_notes
-  stable_notes=$(notes_html < "$wt/latest/NOTES.md" 2>/dev/null || true)
-  rc_notes=$(notes_html < "$wt/rc/NOTES.md" 2>/dev/null || true)
-  # Notes contain slashes and ampersands; use awk for a literal substitution of the two notes blocks.
-  sed -e "s|{{STABLE_VERSION}}|$stable|g" -e "s|{{STABLE_DATE}}|$stable_date|g" \
-      -e "s|{{RC_VERSION}}|$rc|g" -e "s|{{RC_DATE}}|$rc_date|g" -e "s|{{RC_CLASS}}|$rc_block|g" \
-      -e "s|{{PAGES_URL}}|$PAGES_URL|g" -e "s|{{UPDATED}}|$(date -u +'%Y-%m-%d %H:%M UTC')|g" \
-      site/index.template.html \
-    | awk -v s="$stable_notes" -v r="$rc_notes" '{ gsub(/\{\{STABLE_NOTES\}\}/, s); gsub(/\{\{RC_NOTES\}\}/, r); print }' \
-    > "$wt/index.html"
-  cp site/style.css "$wt/style.css"
-  printf '{"stable":"%s","rc":"%s","updated":"%s"}\n' "$stable" "$rc" "$(date -u +%FT%TZ)" > "$wt/channels.json"
-  (cd "$wt" && git add -A && git commit -q -m "site: $channel -> $VER" && git push -q origin HEAD:gh-pages)
+  scripts/render-site.sh "$wt" "$PAGES_URL"
+  (cd "$wt" && git add -A && { git diff --cached --quiet && echo "site: nothing to publish" || { git commit -q -m "site: $channel -> $VER${SYNCED:+ (recovered$SYNCED)}" && git push -q origin HEAD:gh-pages; }; })
+  echo "site published: $PAGES_URL  (stable $(cat "$wt/latest/VERSION" 2>/dev/null || echo none), rc $(cat "$wt/rc/VERSION" 2>/dev/null || echo none)${SYNCED:+; recovered$SYNCED})"
   git worktree remove --force "$wt"
-  echo "site published: $PAGES_URL  (stable $stable, rc $rc)"
 }
 
 # ---- changelog from commits (conventional-changelog style) ------------------------------------------
 # Commit subjects "type(scope)!: text" are grouped by type; everything else lands under "Other Changes".
-changelog_section() {  # $1 = new tag, $2 = previous tag ("" for none) ; prints a markdown section
-  local tag="$1" prev="$2" url="https://github.com/$REPO" today; today=$(date -u +%Y-%m-%d)
+changelog_section() {  # $1 = new tag, $2 = previous tag ("" for none), $3 = end ref (default HEAD) ; prints markdown
+  local tag="$1" prev="$2" end="${3:-HEAD}" url="https://github.com/$REPO" today; today=$(date -u +%Y-%m-%d)
   if [ -n "$prev" ]; then printf '## [%s](%s/compare/%s...%s) (%s)\n' "${tag#v}" "$url" "$prev" "$tag" "$today"
   else printf '## %s (%s)\n' "${tag#v}" "$today"; fi
-  git log --no-merges --reverse --pretty='%H%x1f%h%x1f%s' "${prev:+$prev..}HEAD" | awk -F'\037' -v url="$url" '
+  git log --no-merges --reverse --pretty='%H%x1f%h%x1f%s' "${prev:+$prev..}$end" | awk -F'\037' -v url="$url" '
     {
       full = $1; short = $2; subj = $3
       if (subj ~ /^(wip|fixup!|squash!|site:|Merge )/) next
@@ -165,19 +187,6 @@ build_notes() {  # $1 = new tag, $2 = previous tag, $3 = channel label, $4 = cha
   [ -n "$NOTES" ] && printf '%s\n\n' "$NOTES"
   changelog_section "$1" "$2"
   printf '\nDirect download (%s): %s/%s/CORELink.zip\n' "$3" "$PAGES_URL" "$4"
-}
-notes_html() {  # stdin markdown (changelog section) -> minimal HTML, escaped
-  sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
-      -E -e 's/\[([^]]+)\]\(([^)]+)\)/<a href="\2">\1<\/a>/g' -e 's/\*\*([^*]+)\*\*/<strong>\1<\/strong>/g' \
-  | awk '
-    function closelist() { if (inlist) { print "</ul>"; inlist = 0 } }
-    /^### / { closelist(); sub(/^### /, ""); print "<h3>" $0 "</h3>"; next }
-    /^## /  { closelist(); sub(/^## /, ""); print "<h3>" $0 "</h3>"; next }
-    /^[*-] / { if (!inlist) { print "<ul>"; inlist = 1 } sub(/^[*-] /, ""); print "<li>" $0 "</li>"; next }
-    /^Direct download/ { closelist(); next }
-    /^[[:space:]]*$/ { closelist(); next }
-    { closelist(); print "<p>" $0 "</p>" }
-    END { closelist() }'
 }
 prepend_changelog() {  # $1 = CHANGELOG.md path on gh-pages, $2 = section markdown
   local header body
