@@ -22,7 +22,7 @@ Needs a Lua interpreter and luacheck: macOS `brew install lua luacheck`; Windows
 ## In the game (humans)
 
 ```
-scripts/install-local.sh ["/path/to/World of Warcraft/_classic_beta_"]
+scripts/install-local.sh ["/path/to/World of Warcraft/_forever_"]
 ```
 
 Symlinks `CORELink/` into `Interface/AddOns/`, so every save is picked up by `/reload`. On Windows without
