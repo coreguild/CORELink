@@ -82,17 +82,17 @@ preflight() {
 }
 
 # ---- repair a channel from the GitHub release (a local run that died after tagging, see #27) ----------
-# A channel is complete when notes/<tag>.md exists on gh-pages; otherwise the zip and notes are fetched from the
-# GitHub release of that tag and the changelog section is rebuilt from the commits, exactly as the rc/final run
-# would have written them.
+# The GitHub release is the source of truth: when the channel's zip is not byte-for-byte the release's asset, the
+# zip, notes and changelog section are written exactly as the rc/final run would have written them. A channel
+# that already serves the release's zip is left alone (its notes may predate this script).
 SYNCED=""
 sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previous tag for the changelog ("" none)
   local channel="$1" tag="$2" prev="$3" ver; ver=${tag#v}; ver=${ver%-rc*}
-  [ -f "$wt/notes/${tag#v}.md" ] && return 0
   local tmp; tmp=$(mktemp -d)
   if ! gh release download "$tag" --pattern "CORELink-$ver.zip" --dir "$tmp" >/dev/null 2>&1; then
     echo "site: $tag has no GitHub release with CORELink-$ver.zip; $channel left as is"; rm -rf "$tmp"; return 0
   fi
+  if cmp -s "$tmp/CORELink-$ver.zip" "$wt/$channel/CORELink.zip"; then rm -rf "$tmp"; return 0; fi
   echo "site: $channel <- $tag (recovered from the GitHub release)"
   cp "$tmp/CORELink-$ver.zip" "$wt/$channel/CORELink.zip"
   cp "$tmp/CORELink-$ver.zip" "$wt/v/CORELink-$ver.zip"
@@ -100,7 +100,9 @@ sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previo
   git log -1 --format=%cs "$tag" > "$wt/$channel/DATE"
   gh release view "$tag" --json body -q .body > "$wt/notes/${tag#v}.md"
   cp "$wt/notes/${tag#v}.md" "$wt/$channel/NOTES.md"
-  prepend_changelog "$wt/CHANGELOG.md" "$(changelog_section "$tag" "$prev" "$tag")"
+  if ! grep -qE "^## (\[)?${tag#v}([]( ]|\$)" "$wt/CHANGELOG.md" 2>/dev/null; then
+    prepend_changelog "$wt/CHANGELOG.md" "$(changelog_section "$tag" "$prev" "$tag")"
+  fi
   SYNCED="$SYNCED $tag"
   rm -rf "$tmp"
 }
@@ -142,7 +144,7 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
     printf '%s\n' "$RELEASE_NOTES" > "$wt/$channel/NOTES.md"
     prepend_changelog "$wt/CHANGELOG.md" "$CHANGELOG_SECTION"
   fi
-  scripts/render-site.sh "$wt" "$PAGES_URL"
+  bash scripts/render-site.sh "$wt" "$PAGES_URL"
   (cd "$wt" && git add -A && { git diff --cached --quiet && echo "site: nothing to publish" || { git commit -q -m "site: $channel -> $VER${SYNCED:+ (recovered$SYNCED)}" && git push -q origin HEAD:gh-pages; }; })
   echo "site published: $PAGES_URL  (stable $(cat "$wt/latest/VERSION" 2>/dev/null || echo none), rc $(cat "$wt/rc/VERSION" 2>/dev/null || echo none)${SYNCED:+; recovered$SYNCED})"
   git worktree remove --force "$wt"
