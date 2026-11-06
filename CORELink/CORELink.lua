@@ -593,12 +593,15 @@ local function Hello(target, kind)
   QueueWhisper(target, (kind or "HELLO") .. SEP .. (GetTag() or "?") .. SEP .. MyRealm() .. SEP .. g:gsub(SEP, ""))
 end
 
--- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest.
+-- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest. Forever realm names are
+-- long (CAMWOWUS1Realm1PvE), so the realm is left empty when the name already ends in "-realm".
 local function Directory()
   local now, out, size = GetTime(), {}, 0
   for key, p in pairs(peers) do
     if now - p.seen <= PEER_ONLINE_SECS then
-      local e = key .. "@" .. (p.realm or "?") .. "@" .. p.tag .. "@" .. (p.guild or "")
+      local realm = p.realm or "?"
+      if key:sub(-#realm - 1) == "-" .. realm then realm = "" end
+      local e = key .. "@" .. realm .. "@" .. p.tag .. "@" .. (p.guild or "")
       if size + #e + 1 > 230 then break end
       out[#out + 1] = e; size = size + #e + 1
     end
@@ -707,6 +710,7 @@ local function OnWhisperAddon(text, sender)
     local greeted = 0
     for entry in rest:gmatch("[^;]+") do
       local key, realm, tag, guild = entry:match("^([^@]+)@([^@]*)@([^@]*)@(.*)$")
+      if key and realm == "" then realm = key:match("%-(.+)$") or "?" end
       if key and tag ~= "" and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
         peers[key] = { tag = tag, realm = realm, guild = guild, seen = 0 }   -- known, not yet confirmed
         if db then db.peers = peers end
@@ -1569,6 +1573,17 @@ SlashCmdList["CORELINK"] = function(input)
     if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.")
     elseif not IsCourier() then Print("a guildmate is the courier on " .. MyRealm() .. "; only the courier queries.")
     else ScheduleWho(); Print("asking who is online in " .. #db.guilds .. " guild(s).") end
+  elseif cmd == "hello" then
+    -- Greet one player by hand: seeds a peer when /who cannot see their realm, and is the smallest in-game
+    -- test of whisper addon messages crossing realms (they show up in /cl peers once they answer).
+    local target = arg:match("^%s*(.-)%s*$")
+    if target == "" then Print("usage: /cl hello <First Surname-Realm>  (an addon user in another guild; /cl peers once they answer)")
+    elseif not WhisperAvailable() then Print("whispers are not available right now (chat lockdown or missing API).")
+    else
+      helloAt[target] = nil
+      Hello(target)
+      Print("hello sent to " .. target .. "; run /cl peers in a few seconds.")
+    end
   elseif cmd == "peers" then
     local now, n = GetTime(), 0
     local keys = {}
