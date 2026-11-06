@@ -40,7 +40,7 @@ tests/run.sh                 # should end with "0 failed"
 
 ```
 scripts/install-local.sh     # Mac default path; on Windows pass your flavor folder, e.g.
-scripts/install-local.sh "/c/Program Files (x86)/World of Warcraft/_classic_beta_"
+scripts/install-local.sh "/c/Program Files (x86)/World of Warcraft/_forever_"
 ```
 This links the repo's `CORELink/` folder into `Interface/AddOns`. Your old copy is moved aside as a backup.
 From now on, save a file, type `/reload` in game, and the change is live.

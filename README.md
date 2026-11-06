@@ -27,7 +27,7 @@ Repository layout:
 ## Quick start (players)
 
 1. Download the stable zip above.
-2. Put the `CORELink` folder in `World of Warcraft/_classic_beta_/Interface/AddOns/`.
+2. Put the `CORELink` folder in `World of Warcraft/_forever_/Interface/AddOns/`.
 3. Log in. If your Guild Information contains a `CORELink:` line, you are done.
 
 ## Quick start (guild master, once per guild)
@@ -202,7 +202,7 @@ Permanent download URLs: `latest/CORELink.zip` (stable), `rc/CORELink.zip` (cand
 ## Development
 
 ```
-scripts/install-local.sh            # link CORELink/ into the beta client (macOS default path), then /reload in game
+scripts/install-local.sh            # link CORELink/ into the Forever client (macOS default path), then /reload in game
 tests/run.sh                        # syntax check + luacheck + mock harness (brew install lua luacheck)
 scripts/package.sh                  # tests + dist/CORELink-<version>.zip
 ```

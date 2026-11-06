@@ -2,13 +2,13 @@
 # Compare the addon's TOC "## Interface:" numbers with the live game client version from Blizzard's
 # public version server. Exit 0 when the live interface number is listed in every TOC, 1 when not, 2 on error.
 #
-#   scripts/check-game-version.sh            # product from tests/game-product.txt (default wow_classic_beta)
+#   scripts/check-game-version.sh            # product from tests/game-product.txt (default wowf, WoW: Forever)
 #   PRODUCT=wow_classic scripts/check-game-version.sh
 #
 # Interface number convention: major*10000 + minor*100 + patch, e.g. 1.60.1 -> 16001, 1.15.7 -> 11507.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-PRODUCT="${PRODUCT:-$(tr -d '[:space:]' < tests/game-product.txt 2>/dev/null || echo wow_classic_beta)}"
+PRODUCT="${PRODUCT:-$(tr -d '[:space:]' < tests/game-product.txt 2>/dev/null || echo wowf)}"
 REGION="${REGION:-us}"
 URL="https://${REGION}.version.battle.net/${PRODUCT}/versions"
 body=$(curl -fsS -m 20 "$URL") || { echo "ERROR: could not fetch $URL"; exit 2; }
