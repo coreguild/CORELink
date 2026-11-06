@@ -10,7 +10,7 @@ printf '%s\n' '## [1.2.3](https://x/compare/v1.2.2...v1.2.3) (2026-01-01)' '' '#
   'Direct download (stable): https://example.test/CORELink/latest/CORELink.zip' > "$T/latest/NOTES.md"
 echo 1.3.0 > "$T/rc/VERSION"; echo 2026-02-02 > "$T/rc/DATE"
 printf '%s\n' '## 1.3.0-rc1 (2026-02-02)' '' '### Features' '' '* line one' '* line "two" with $dollar and \backslash' > "$T/rc/NOTES.md"
-scripts/render-site.sh "$T" https://example.test/CORELink
+bash scripts/render-site.sh "$T" https://example.test/CORELink
 fail=0
 has()  { if grep -qF -- "$2" "$T/index.html"; then echo "PASS site: $1"; else echo "FAIL site: $1"; fail=1; fi; }
 lacks() { if grep -qF -- "$2" "$T/index.html"; then echo "FAIL site: $1"; fail=1; else echo "PASS site: $1"; fi; }

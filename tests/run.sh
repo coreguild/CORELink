@@ -14,4 +14,4 @@ else
   echo "note: luacheck not installed (brew install luacheck); CI will run it"
 fi
 "$LUA" tests/harness.lua
-tests/site-render.sh
+bash tests/site-render.sh
