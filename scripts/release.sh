@@ -7,16 +7,19 @@
 #
 # Nobody edits a version number. The TOCs in git carry "@project-version@"; the version is computed from the
 # existing tags and stamped into the zip at build time (scripts/package.sh):
-#   rc    : if an unreleased candidate series exists (v0.2.0-rc1 newer than the last final v0.1.1), the next rc of
-#           that series (v0.2.0-rc2); otherwise bump the last final (--bump, default patch) and start rc1.
-#           --bump minor/major on an existing series starts a new, higher series instead.
-#   final : the version of the rc tag that points at this commit (required unless --no-rc, which bumps the last final).
+#   rc    : runs on a release branch, never on main. release/<version> (release/0.2.0) pins the version and the
+#           next rc number of that series. Any other release/<name> computes it: the next rc of an open
+#           series (v0.2.0-rc2), else bump the last final (--bump, default patch) and start rc1.
+#   final : runs on main after the release branch was merged. Takes the newest unreleased rc tag merged into
+#           main whose addon files (CORELink/) are identical to main's, and refuses when the addon changed since
+#           that rc. --no-rc bumps the last final for a hotfix that had no rc.
 # Release notes are a CHANGELOG section in the conventional-changelog format (Features / Bug Fixes / ... with
 # commit links), built from the commits since the previous tag (rc: since rcN-1 or the last release; final: since
 # the last release). They go on the GitHub release, are prepended to CHANGELOG.md on gh-pages, and are shown on the
 # download page. --notes adds a paragraph on top.
 # Downloads are published to the gh-pages branch at permanent URLs (see site/index.template.html).
-# Normally run by the "release" GitHub Actions workflow (Run workflow button); works locally from a clean main.
+# Normally run by the "release" GitHub Actions workflow (Run workflow, pick the branch); works locally from a
+# clean, pushed branch.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MODE="${1:-}"; shift || true
@@ -39,6 +42,7 @@ GIT_NAME=$(git config user.name || true);  GIT_NAME=${GIT_NAME:-github-actions[b
 GIT_EMAIL=$(git config user.email || true); GIT_EMAIL=${GIT_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}
 export GIT_COMMITTER_NAME="$GIT_NAME" GIT_COMMITTER_EMAIL="$GIT_EMAIL" GIT_AUTHOR_NAME="$GIT_NAME" GIT_AUTHOR_EMAIL="$GIT_EMAIL"
 HEAD_SHA=$(git rev-parse HEAD)
+BRANCH=$(git branch --show-current)
 run() { if [ $DRY -eq 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 # ---- versions from tags ---------------------------------------------------------------------------
@@ -58,11 +62,18 @@ if [ -n "$LAST_RC" ]; then
   ver_gt "$RC_SERIES" "$LAST_FINAL" || { RC_SERIES=""; RC_N=0; }   # series already shipped
 fi
 
+# Which branch may run which channel: rc from release/* only, final and site from main. Checked on --dry-run too.
+check_branch() {
+  case "$MODE" in
+    rc) [[ "$BRANCH" == release/* ]] || { echo "rc builds come from a release branch (release/<version> or release/<name>); you are on ${BRANCH:-a detached HEAD}. See skills/release/SKILL.md."; exit 2; } ;;
+    *)  [ "$BRANCH" = main ] || { echo "$MODE runs from main only (you are on ${BRANCH:-a detached HEAD})"; exit 2; } ;;
+  esac
+}
 preflight() {
-  [ "$(git branch --show-current)" = main ] || { echo "release from main only (you are on $(git branch --show-current))"; exit 2; }
+  check_branch
   [ -z "$(git status --porcelain)" ] || { echo "working tree not clean"; exit 2; }
   git fetch -q origin
-  [ "$(git rev-parse origin/main)" = "$HEAD_SHA" ] || { echo "local main differs from origin/main; pull or push first"; exit 2; }
+  [ "$(git rev-parse "origin/$BRANCH" 2>/dev/null)" = "$HEAD_SHA" ] || { echo "local $BRANCH differs from origin/$BRANCH; pull or push first"; exit 2; }
   scripts/check-game-version.sh
   VERSION="$VER" scripts/package.sh
   [ -f "dist/CORELink-$VER.zip" ] || { echo "dist/CORELink-$VER.zip missing"; exit 2; }
@@ -178,14 +189,20 @@ prepend_changelog() {  # $1 = CHANGELOG.md path on gh-pages, $2 = section markdo
 
 case "$MODE" in
   rc)
-    if [ -n "$RC_SERIES" ] && { [ "$BUMP" = auto ] || [ "$BUMP" = patch ]; }; then
+    check_branch
+    PINNED=$(printf '%s' "$BRANCH" | sed -nE 's#^release/([0-9]+\.[0-9]+\.[0-9]+)$#\1#p')
+    if [ -n "$PINNED" ]; then
+      ver_gt "$PINNED" "$LAST_FINAL" || { echo "branch $BRANCH names version $PINNED but $LAST_FINAL is already released; name the branch after a higher version"; exit 2; }
+      VER="$PINNED"
+      LAST_N=$(git tag -l "v$VER-rc[0-9]*" | sed 's/.*-rc//' | sort -n | tail -1); N=$(( ${LAST_N:-0} + 1 ))
+    elif [ -n "$RC_SERIES" ] && { [ "$BUMP" = auto ] || [ "$BUMP" = patch ]; }; then
       VER="$RC_SERIES"; N=$((RC_N + 1))
     else
       VER=$(bump "$LAST_FINAL" "$([ "$BUMP" = auto ] && echo patch || echo "$BUMP")"); N=1
       if [ -n "$RC_SERIES" ] && ! ver_gt "$VER" "$RC_SERIES"; then VER="$RC_SERIES"; N=$((RC_N + 1)); fi
     fi
     TAG="v$VER-rc$N"
-    echo "last final: $LAST_FINAL | open rc series: ${RC_SERIES:-none} | this: $TAG"
+    echo "branch: $BRANCH | last final: $LAST_FINAL | open rc series: ${RC_SERIES:-none} | this: $TAG"
     PREV_TAG="v$VER-rc$((N-1))"; [ "$N" -gt 1 ] || PREV_TAG="v$LAST_FINAL"
     git rev-parse -q --verify "refs/tags/$PREV_TAG" >/dev/null || PREV_TAG=""
     CHANGELOG_SECTION=$(changelog_section "$TAG" "$PREV_TAG")
@@ -199,14 +216,24 @@ case "$MODE" in
     echo "RC published: $TAG"
     ;;
   final)
-    RC_HERE=$(git tag --points-at "$HEAD_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$' | sed 's/^v//' | sort -V | tail -1 || true)
+    check_branch
+    # The rc that was tested: the newest unreleased rc tag merged into main whose addon files equal main's.
+    RC_HERE=""; RC_STALE=""
+    for t in $(git tag -l 'v[0-9]*.[0-9]*.[0-9]*-rc[0-9]*' | sort -rV); do
+      s=${t#v}; s=${s%-rc*}
+      ver_gt "$s" "$LAST_FINAL" || continue
+      git merge-base --is-ancestor "$t" "$HEAD_SHA" 2>/dev/null || continue
+      if git diff --quiet "$t" "$HEAD_SHA" -- CORELink/; then RC_HERE=${t#v}; break; else RC_STALE=${RC_STALE:-$t}; fi
+    done
     if [ -n "$RC_HERE" ]; then
       VER=${RC_HERE%-rc*}
     elif [ $NO_RC -eq 1 ]; then
       VER=$(bump "$LAST_FINAL" "$([ "$BUMP" = auto ] && echo patch || echo "$BUMP")")
-      echo "no rc on this commit; --no-rc given, releasing $VER directly"
+      echo "no tested rc on main; --no-rc given, releasing $VER directly"
+    elif [ -n "$RC_STALE" ]; then
+      echo "the addon on main differs from $RC_STALE (CORELink/ changed since that rc was tested). Cut a new rc from the release branch, test it, merge it, then final."; exit 2
     else
-      echo "no v*-rc* tag points at this commit. Cut an RC first (scripts/release.sh rc) or pass --no-rc for a small hotfix."; exit 2
+      echo "no unreleased rc tag is merged into main. Cut an rc from a release branch, test it, merge the branch, then final (or --no-rc for a small hotfix)."; exit 2
     fi
     TAG="v$VER"
     git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && { echo "$TAG already exists; nothing to do"; exit 2; }
@@ -223,6 +250,7 @@ case "$MODE" in
     echo "Release published: $TAG"
     ;;
   site)
+    check_branch
     VER="$LAST_FINAL"; TAG="v$VER"; RELEASE_NOTES=""; CHANGELOG_SECTION=""
     publish_site none
     ;;

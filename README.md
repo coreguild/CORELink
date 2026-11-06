@@ -150,15 +150,16 @@ Protocols CL1-CL3 from earlier test builds are still accepted on receive.
 
 ## How a change gets to players
 
-Branch, pull request, CI, merge, then two buttons: release candidate, release. Nobody edits a version
-number or a changelog; the release button computes the version from the existing tags and builds the notes from
-the commits merged since the last release.
+Branch, pull request, CI, then a release branch and two buttons: release candidate from the release branch,
+release from `main` once the branch is merged. Nobody edits a version number or a changelog; the release button
+computes the version from the branch name or the existing tags and builds the notes from the commits since the
+last tag.
 
 ```
-feat/x ──PR──▶ main ──[release: rc]──▶ v0.2.0-rc1 (pre-release, rc/CORELink.zip)
-                 │                          │ testers run it for a day
-                 │                          ▼
-                 └──[release: final]──▶ v0.2.0 (latest, latest/CORELink.zip)
+feat/x ──┐
+feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.2.0-rc1 (pre-release, rc/CORELink.zip)
+                        │                                │ testers run it for a day; fixes merge in, rc again
+                        └──PR──▶ main ──[release: final]─┴──▶ v0.2.0 (latest, latest/CORELink.zip)
 ```
 
 1. **Branch.** `git switch -c feat/<name> main` (`fix/`, `docs/`, `chore/` for other kinds). One change per branch.
@@ -179,21 +180,26 @@ feat/x ──PR──▶ main ──[release: rc]──▶ v0.2.0-rc1 (pre-relea
 3. **Merge.** A person clicks the button; agents never merge. Merge commits are the only method enabled, so the
    branch's full history lands on `main`; the branch is deleted automatically.
 
-4. **Release candidate.** GitHub -> Actions -> **release** -> **Run workflow** -> `rc`. The job checks out `main`,
-   re-runs the checks, works out the version (`bump` = `auto`: continue an open candidate series as `rcN+1`,
-   otherwise patch-bump the last release and start `rc1`; choose `minor` or `major` to start a bigger version),
-   stamps it into the TOCs inside the zip, creates tag `v<ver>-rcN`, publishes a GitHub pre-release whose body is the
+4. **Release branch and candidate.** Create `release/<version>` from `main` (`git switch -c release/0.2.0
+   origin/main`) and merge in the feature branches that belong to that release, merged into `main` or not. Push it.
+   Then GitHub -> Actions -> **release** -> **Run workflow**, pick the release branch, `rc`. The job checks out that
+   branch, re-runs the checks, takes the version from the branch name (`release/0.2.0` -> `v0.2.0-rcN`, N counting
+   up; a branch named `release/<word>` instead computes it: continue an open candidate series or `bump` the last
+   release), stamps it into the TOCs inside the zip, creates tag `v<ver>-rcN`, publishes a GitHub pre-release whose body is the
    changelog section for that tag (commits since the previous rc or release, grouped by type), and pushes
    `rc/CORELink.zip`, `v/CORELink-<ver>.zip`, `notes/<tag>.md`, an updated `CHANGELOG.md` and the re-rendered
    page, which shows the same section under each channel, to the `gh-pages` branch. GitHub Pages serves that branch publicly at
    https://core-wow-community.github.io/CORELink/ even though the source is private. Testers run the RC for a day
    on two clients in two guilds, with one client left on the previous stable to prove the protocol still
-   interoperates. Fixes go through normal PRs; press `rc` again for `rcN+1`.
+   interoperates. Fixes go through normal PRs and are merged into the release branch too; press `rc` again for
+   `rcN+1`. `rc` is refused on `main`.
 
-5. **Release.** The same button with `final`. It refuses unless an rc tag points at the current `main` (the
-   `no_rc` box exists for a small hotfix that touches neither the relay path nor the protocol). It tags `v<ver>`,
-   publishes the GitHub release as latest with the same zip, and updates `latest/CORELink.zip` and the page.
-   Everyone in every linked guild should run the same version.
+5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
+   `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on `main`
+   are identical to that rc, so what ships is what was tested (the `no_rc` box exists for a small hotfix that
+   touches neither the relay path nor the protocol). It tags `v<ver>`, publishes the GitHub release as latest with
+   the same zip, and updates `latest/CORELink.zip` and the page. Everyone in every linked guild should run the
+   same version.
 
 Permanent download URLs: `latest/CORELink.zip` (stable), `rc/CORELink.zip` (candidate), `v/CORELink-<ver>.zip`
 (every build), `channels.json` (`{"stable","rc","updated"}` for bots). Only the release job writes to `gh-pages`.
