@@ -25,8 +25,13 @@ Read before changing anything in the relay, channel or chat code.
 8. **Secret values.** On Midnight-era clients chat payloads can be secret inside instances; guard with
    `issecretvalue` and pause relaying when `C_ChatInfo.InChatMessagingLockdown()` is true.
 9. **Factions.** Custom channels are faction-bound on Classic clients; cross-faction bridging is not possible.
-   **Realms.** Custom channels are per realm (`Classic Beta PvE` and `Classic Beta PvE 2` are separate on the
-   Forever beta). Guild addon messages cross realms, which is what the cross-realm bridge rides on.
+   **Realms.** Custom channels are per realm (`CAMWOW US1 Realm 5 PvE` and `CAMWOW US2 Realm 5 PvE` are
+   separate). Guild addon messages cross realms, which is what the cross-realm bridge rides on.
+   **Forever names are unique across realms** (tested 2026-11-06): a chat whisper to a plain `First Surname`
+   reaches a player on another realm, their reply shows no `-Realm` suffix, `/who` returns players from every
+   realm, and `C_FriendList.GetWhoInfo` gives `fullName` without a realm. Nothing in `/who` tells a player's
+   realm; only `GetNormalizedRealmName()` on their own client does. `/who g-"Name"` is a substring match
+   (`g-"CORE"` also returns `Molten Soft Core`); filter on `fullGuildName`. Results are capped at 50.
 11. **Communities (`C_Club`) exist on Forever but sends are hardware-gated.** `C_Club.SendMessage` from a
     `/run` (keypress) delivers; the same call from a `C_Timer` is accepted and silently dropped (tested
     2026-10-08). So a community can carry only lines typed by the player, never relays for others.
