@@ -72,7 +72,7 @@ they do not need the community in a chat tab.
 | `/cl whisper on/off` | all | Whether this client takes part in the whisper bridge (courier duty and relaying whispered lines). Default on. |
 | `/cl who` | all | Run the directory round now: ask who is online in each guild of `guilds=` and greet new names. Only the courier queries. |
 | `/cl peers` | all | List known peers (other guilds' addon users), their realm, guild, and whether they answered. |
-| `/cl hello <First Surname-Realm>` | all | Greet one addon user of another guild directly. Seeds a peer when `/who` cannot see their realm, and is the smallest test of whispers crossing realms: they appear in `/cl peers` once they answer. |
+| `/cl hello <First Surname>` | all | Greet one addon user of another guild directly, on any realm (Forever names are unique across realms and need no realm suffix). They appear in `/cl peers` once they answer. |
 | `/cl echo on/off` | all | Whether this client may be the one that re-posts other guilds' lines into real guild chat (needs `echo=on` on the Guild Info line). Default on. |
 | `/cl bridge on/off` | all | Whether this client forwards other guilds' lines to guildmates on other realms and re-sends forwards into its realm. Default on. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, queue, guilds heard, table sizes, and the last 20 debug events. Paste it when asking for help. |
@@ -121,15 +121,16 @@ they do not need the community in a chat tab.
 * **Whisper bridge (optional, per guild).** For guilds that share no realm with yours, so neither the relay
   channel nor the guild bridge can reach them. `guilds=Trois Royaume, Deux` on the Guild Info line names the
   collective. On each realm your guild's courier (the alphabetically first guildmate running the addon there; every
-  client computes the same answer) asks the server who is online in each listed guild, learns which realms they
-  are on, greets a few of them over whisper addon messages, and keeps the ones that answer as peers. A player
-  without the addon never answers and is skipped. Peers share their peer lists, so one good contact teaches the
-  rest, and peers are saved between sessions. When a line is heard on your realm, the courier whispers it to one
-  peer on every realm that nothing else reaches (no addon user of the origin guild there, no guildmate of yours
-  there); that peer drops it into its own realm's channel, where it shows like any relayed line, readable, with
-  colours, and eligible for the echo. Nothing needs a keypress. `/cl guilds` lists each guild's online members
-  per realm from the last round; `/cl peers` lists peers; `/cl who` runs a round now; `/cl hello <name>` greets one
-  player by hand when the directory cannot find them.
+  client computes the same answer) asks the server who is online in each listed guild (`/who` sees every realm on
+  Forever, but tells no one's realm), greets three of them per round over whisper addon messages, rotating
+  through the members over the rounds, and keeps the ones that answer as peers; the answer carries the peer's
+  realm, which is how every realm a guild lives on ends up with a peer. A player without the addon never answers
+  and is skipped. Peers share their peer lists, so one good contact teaches the rest, and peers are saved between
+  sessions. When a line is heard on your realm, the courier whispers it to one peer on every realm that nothing
+  else reaches (no addon user of the origin guild there, no guildmate of yours there); that peer drops it into its
+  own realm's channel, where it shows like any relayed line, readable, with colours, and eligible for the echo.
+  Nothing needs a keypress. `/cl guilds` lists each guild's online count from the last round; `/cl peers` lists
+  peers with their realms; `/cl who` runs a round now; `/cl hello <name>` greets one player by hand.
 * **Cross-realm bridge.** A client that hears another guild's line on its realm forwards it to its own guild over
   the guild addon channel (which crosses realms); a guildmate on another realm re-sends it into that realm's
   channel if it has not arrived there. Any guild with addon users on two realms therefore bridges every linked

@@ -28,6 +28,11 @@ Read before changing anything in the relay, channel or chat code.
    **Realms.** Custom channels are per realm (`CAMWOW US1 Realm 1 PvE` and `CAMWOW US2 Realm 1 PvE` are separate on
    Forever; normalized names drop the spaces: `CAMWOWUS1Realm1PvE`). Guild addon messages cross realms, which is
    what the cross-realm bridge rides on.
+   **Forever names are unique across realms** (tested 2026-11-06): a chat whisper to a plain `First Surname`
+   reaches a player on another realm, their reply shows no `-Realm` suffix, `/who` returns players from every
+   realm, and `C_FriendList.GetWhoInfo` gives `fullName` without a realm. Nothing in `/who` tells a player's
+   realm; only `GetNormalizedRealmName()` on their own client does. `/who g-"Name"` is a substring match
+   (`g-"CORE"` also returns `Molten Soft Core`); filter on `fullGuildName`. Results are capped at 50.
 11. **Communities (`C_Club`) exist on Forever but sends are hardware-gated.** `C_Club.SendMessage` from a
     `/run` (keypress) delivers; the same call from a `C_Timer` is accepted and silently dropped (tested
     2026-10-08). So a community can carry only lines typed by the player, never relays for others.

@@ -796,17 +796,33 @@ do
   advance(60); whoSent = {}                                       -- earlier logins' 45 s rounds have come and gone
   slash("who")
   check("whisper: a who round queries the first other guild of the collective", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
-  whoResults = { { fullName = "Zag Mathris-CAMWOWUS2Realm1PvE" }, { fullName = "Cosmo Vale-CAMWOWUS2Realm1PvE" }, { fullName = "Pip Vale" }, { fullName = "Shockly" } }
+  -- Forever: names come back without a realm, and the g- filter is a substring match (a "Molten Trois Royaume"
+  -- member rides along); only exact guild members count or get greeted
+  whoResults = { { fullName = "Zag Mathris", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
+                 { fullName = "Sgt Mayo", fullGuildName = "Molten Trois Royaume" }, { fullName = "Pip Vale", fullGuildName = "Trois Royaume" },
+                 { fullName = "Shockly", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
   H(nil, "WHO_LIST_UPDATE"); advance(4)
   check("whisper: the next guild is queried after the results arrive", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
   whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
   local hellos = {}
   for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
-  check("whisper: who results are greeted over whisper addon messages (not ourselves)", hellos["Zag Mathris-CAMWOWUS2Realm1PvE"] and hellos["Cosmo Vale-CAMWOWUS2Realm1PvE"] and hellos["Pip Vale"] and not hellos["Shockly"])
+  check("whisper: who results are greeted over whisper addon messages, three per guild, exact guild only, not ourselves",
+    hellos["Zag Mathris"] and hellos["Cosmo Vale"] and hellos["Pip Vale"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
   n0 = #chatLines; slash("guilds")
   local collectiveOut = {}
   for i = n0 + 1, #chatLines do collectiveOut[#collectiveOut + 1] = chatLines[i].text end
-  check("whisper: /cl guilds lists online members per realm for each guild of the collective", table.concat(collectiveOut, "\n"):find("Trois Royaume - CAMWOWUS2Realm1PvE: 2 online, PvE: 2 online", 1, true) ~= nil, table.concat(collectiveOut, "\n"))
+  check("whisper: /cl guilds counts the exact guild's online members from the last round", table.concat(collectiveOut, "\n"):find("Trois Royaume - 5 online (asked", 1, true) ~= nil, table.concat(collectiveOut, "\n"))
+  -- the next round moves on to names not greeted in the last 30 min, so every realm of the guild gets a peer eventually
+  advance(601); whoSent = {}
+  slash("who")
+  whoResults = { { fullName = "Zag Mathris", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
+                 { fullName = "Pip Vale", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
+  local nSent0 = #sentAddon
+  H(nil, "WHO_LIST_UPDATE"); advance(4)
+  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
+  local round2 = {}
+  for i = nSent0 + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find("^HELLO~") then round2[#round2 + 1] = sentAddon[i].target end end
+  check("whisper: the next round greets the names not tried yet, not the same three again", #round2 == 1 and round2[1] == "Ash Vale", table.concat(round2, ","))
   H(nil, "CHAT_MSG_ADDON", "CORELink", "HEARD~PvE~MAIN", "GUILD", "Aaron-Beta")
   lastSetText = nil; slash("report")
   check("whisper: the alphabetically first guildmate on our realm is the courier", (lastSetText or ""):find("courier=false", 1, true) ~= nil, lastSetText)
@@ -855,7 +871,7 @@ do
   for i = nSent + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find("from across", 1, true) then bounced = true end end
   check("whisper: a line that arrived by whisper is not whispered onward", not bounced)
   lastSetText = nil; slash("report")
-  check("whisper: report counts who, hellos, answers, sent and received", (lastSetText or ""):find("hello=3 answered=2 sent=1 recv=1", 1, true) ~= nil, lastSetText)
+  check("whisper: report counts who, hellos, answers, sent and received", (lastSetText or ""):find("hello=4 answered=2 sent=1 recv=1", 1, true) ~= nil, lastSetText)
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale-CAMWOWUS2Realm1PvE@@Deux@Deux", "WHISPER", "Zag Mathris-CAMWOWUS2Realm1PvE"); advance(2)

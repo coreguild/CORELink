@@ -53,8 +53,11 @@ local ADDON_USER_SECS = 900
 -- a player without the addon never answers). A line heard on this realm is whispered to one peer on every
 -- realm that would not otherwise get it; that peer drops it into its own realm's channel. Whispers need no
 -- keypress and are the only cross-realm path not tied to a guild or a community.
-local peers = {}             -- "Name-Realm" -> { tag=, realm=, guild=, seen= }  (saved in db.peers)
-local guildOnline = {}       -- guild name -> realm -> { n = online count, t = time }  (from /who)
+-- On Forever a "First Surname" is unique across realms: /who sees every realm but names carry no realm, and a
+-- plain name whispers across realms. So a peer's realm is learned only from its PEER answer, and the courier
+-- keeps greeting names it has not heard from, so that every realm a guild lives on ends up with a peer.
+local peers = {}             -- name (as the game gives it) -> { tag=, realm=, guild=, seen= }  (saved in db.peers)
+local guildOnline = {}       -- guild name -> { n = online count, t = time }  (from /who)
 local helloAt = {}           -- whisper target -> last hello time
 local courierSeen = {}       -- guildmate -> { realm=, t= } from their HEARD reports (courier election)
 local whisperQueue = {}      -- { target=, text= }
@@ -586,11 +589,12 @@ end
 
 local function Hello(target, kind)
   local now = GetTime()
-  if helloAt[target] and now - helloAt[target] < HELLO_EVERY then return end
+  if helloAt[target] and now - helloAt[target] < HELLO_EVERY then return false end
   helloAt[target] = now
   whisperStats.hello = whisperStats.hello + 1
   local g = GetGuildInfo("player") or ""
   QueueWhisper(target, (kind or "HELLO") .. SEP .. (GetTag() or "?") .. SEP .. MyRealm() .. SEP .. g:gsub(SEP, ""))
+  return true
 end
 
 -- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest. Forever realm names are
@@ -639,33 +643,31 @@ local function OnWhoList()
   local g = whoPending.guild
   whoPending = nil
   local n = C_FriendList.GetNumWhoResults() or 0
-  local mine, now = MyRealm(), GetTime()
-  local counts, candidates = {}, {}
+  local now = GetTime()
+  local online, candidates = 0, {}
   for i = 1, n do
     local okw, info = pcall(C_FriendList.GetWhoInfo, i)
     local full = okw and type(info) == "table" and info.fullName
-    if type(full) == "string" and not issecret(full) and full ~= "" then
-      local name, realm = full:match("^([^-]+)-(.+)$")
-      name, realm = name or full, realm or mine
-      counts[realm] = (counts[realm] or 0) + 1
-      if not IsMe(name) then candidates[#candidates + 1] = { key = full, realm = realm } end
+    local guild = okw and type(info) == "table" and info.fullGuildName
+    -- the server's g-"Name" filter is a substring match (g-"CORE" also returns Molten Soft Core): keep exact names
+    if type(full) == "string" and not issecret(full) and full ~= ""
+       and (type(guild) ~= "string" or issecret(guild) or guild == g) then
+      online = online + 1
+      if not IsMe(PeerName(full)) then candidates[#candidates + 1] = full end
     end
   end
-  guildOnline[g] = guildOnline[g] or {}
-  for realm, c in pairs(counts) do guildOnline[g][realm] = { n = c, t = now } end
-  Debug("who %s: %d online", g, n)
-  -- greet a few members on realms where we have no live peer of this guild yet
-  local greeted, perRealm = 0, {}
-  for _, c in ipairs(candidates) do
-    local havePeer = false
-    for key, p in pairs(peers) do
-      if p.guild == g and p.realm == c.realm and now - p.seen <= PEER_ONLINE_SECS and key ~= c.key then havePeer = true break end
-    end
-    perRealm[c.realm] = perRealm[c.realm] or 0
-    if not havePeer and perRealm[c.realm] < HELLO_PER_GUILD and greeted < HELLO_PER_GUILD * 2 then
-      perRealm[c.realm] = perRealm[c.realm] + 1; greeted = greeted + 1
-      Hello(c.key)
-    end
+  guildOnline[g] = { n = online, t = now }
+  Debug("who %s: %d in that guild of %d results", g, online, n)
+  -- Greet a few names we have not heard from, rotating through the list over the rounds (a name waits 30 min
+  -- between hellos): results carry no realm, so this is how every realm the guild lives on gets a peer.
+  -- Known peers are pinged by PeerUpkeep instead.
+  local greeted = 0
+  for _, key in ipairs(candidates) do
+    if greeted >= HELLO_PER_GUILD then break end
+    local p = peers[key]
+    local known = p and p.seen > 0
+    local rested = not helloAt[key] or now - helloAt[key] >= 3 * HELLO_EVERY
+    if not known and rested and Hello(key) then greeted = greeted + 1 end
   end
   C_Timer.After(3, RunWho)
 end
@@ -1577,7 +1579,7 @@ SlashCmdList["CORELINK"] = function(input)
     -- Greet one player by hand: seeds a peer when /who cannot see their realm, and is the smallest in-game
     -- test of whisper addon messages crossing realms (they show up in /cl peers once they answer).
     local target = arg:match("^%s*(.-)%s*$")
-    if target == "" then Print("usage: /cl hello <First Surname-Realm>  (an addon user in another guild; /cl peers once they answer)")
+    if target == "" then Print("usage: /cl hello <First Surname>  (an addon user in another guild, any realm; /cl peers once they answer)")
     elseif not WhisperAvailable() then Print("whispers are not available right now (chat lockdown or missing API).")
     else
       helloAt[target] = nil
@@ -1695,10 +1697,8 @@ SlashCmdList["CORELINK"] = function(input)
     for g in pairs(guildOnline) do names[#names + 1] = g end
     table.sort(names)
     for _, g in ipairs(names) do
-      local parts = {}
-      for realm, e in pairs(guildOnline[g]) do parts[#parts + 1] = string.format("%s: %d online", realm, e.n) end
-      table.sort(parts)
-      Print(string.format("%s - %s", g, table.concat(parts, ", ")))
+      local e = guildOnline[g]
+      Print(string.format("%s - %d online (asked %ds ago)", g, e.n, math.floor(now - e.t)))
     end
   elseif cmd == "window" then
     local n = tonumber(arg)
