@@ -1,18 +1,22 @@
 :root {
   --bg: #f6f3ea; --fg: #1e1b16; --muted: #6b645a; --card: #ffffff; --line: #e2dccf;
-  --accent: #1f6f5f; --accent-fg: #ffffff; --rc: #8a5a1b;
+  --accent: #1f6f5f; --accent-fg: #ffffff; --rc: #8a5a1b; --link: #1a6a9c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #15130f; --fg: #ece6da; --muted: #a39b8d; --card: #1f1c17; --line: #332e26;
-    --accent: #3fae95; --accent-fg: #0f1a17; --rc: #d7a04a;
+    --accent: #3fae95; --accent-fg: #0f1a17; --rc: #d7a04a; --link: #7cc4ff;
   }
 }
 :root[data-theme="dark"] {
   --bg: #15130f; --fg: #ece6da; --muted: #a39b8d; --card: #1f1c17; --line: #332e26;
-  --accent: #3fae95; --accent-fg: #0f1a17; --rc: #d7a04a;
+  --accent: #3fae95; --accent-fg: #0f1a17; --rc: #d7a04a; --link: #7cc4ff;
 }
 * { box-sizing: border-box; }
+/* Every text link, visited or not, uses the theme's link colour; the browser default blue is unreadable on the
+   dark cards (commit links in the notes had no rule at all). Buttons set their own colours below. */
+a, a:visited { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 50%, transparent); }
+a:hover { text-decoration-color: var(--link); }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 760px; margin: 0 auto; padding: 40px 16px 48px; }
 h1 { font-size: 2.2rem; margin: 0 0 4px; letter-spacing: -0.01em; }
@@ -33,7 +37,6 @@ h2 { font-size: 1.15rem; margin: 0 0 6px; }
 .install ol { padding-left: 20px; }
 code { background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 0.92em; }
 footer { margin-top: 28px; color: var(--muted); font-size: 0.9rem; word-break: break-all; }
-footer a { color: var(--accent); }
 .notes { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 0.92rem; }
 .notes summary { cursor: pointer; color: var(--muted); }
 .notes h3 { font-size: 0.95rem; margin: 10px 0 4px; }
