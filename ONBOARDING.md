@@ -50,7 +50,7 @@ From now on, save a file, type `/reload` in game, and the change is live.
 ```
 git switch main && git pull                      # start from the latest
 git switch -c feat/my-change                     # feat/ fix/ docs/ chore/
-# ...edit CORELink/CORELink.lua, /reload, test with two characters in two guilds...
+# ...edit the file in CORELink/ that owns the feature (docs/ARCHITECTURE.md), /reload, test with two characters...
 tests/run.sh                                     # add a check in tests/harness.lua for new behaviour
 git add -A && git commit -m "Add my change"
 git push -u origin feat/my-change
@@ -78,7 +78,10 @@ point it at `agents/wow-api-gotchas.md`. Those are the two mistakes that cost us
 
 | Need | Look at |
 |---|---|
-| How the addon works, all `/cl` commands | `README.md` |
+| How the addon works | `README.md`, then `docs/ARCHITECTURE.md` |
+| All `/cl` commands and the Guild Info line | `docs/COMMANDS.md` |
+| Something not working in game | `docs/TROUBLESHOOTING.md` |
+| Tests, scripts, how a change ships | `docs/DEVELOPMENT.md` |
 | Branch and release rules | `CONTRIBUTING.md` |
 | What the game lets addons do | `agents/wow-api-gotchas.md` |
 | How to turn an idea into a PR | `agents/feature-requests.md` |

@@ -74,3 +74,13 @@ If an AI agent wrote the change, say so in the commit body, e.g. `Co-Authored-By
 
 Two-space indent, Lua 5.1 compatible (the game's Lua), no globals except the addon's slash commands and
 `CORELinkDB`. Guard every API that may not exist on this client with `if X then`.
+
+The code is written to be read without an editor's help, and `tests/run.sh` enforces the measurable part:
+
+* A file is under 400 lines and owns one concern; `docs/ARCHITECTURE.md` lists them. A new file goes into both
+  TOCs in load order and starts with `local _, NS = ...`.
+* A function is under 40 lines, does one thing its name states, and is findable by grepping for what triggers
+  it: the packet name, the event, the `/cl` command.
+* A line is under 120 characters and holds one statement. No `if x then a; b end` on one line.
+* Shared state and functions live on `NS` with a comment saying what the key means; see the registries in
+  `docs/ARCHITECTURE.md` for adding a command, a packet handler or an event without touching the dispatcher.
