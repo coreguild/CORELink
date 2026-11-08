@@ -4,4 +4,18 @@
 ## Author: CORE
 ## Version: @project-version@
 ## SavedVariables: CORELinkDB
-CORELink.lua
+# Load order matters: each file receives the shared private table and may use what earlier files put on it.
+Core.lua
+Channel.lua
+GuildInfo.lua
+Roster.lua
+Display.lua
+Bridge.lua
+Echo.lua
+Whisper.lua
+Relay.lua
+Club.lua
+Mirror.lua
+Events.lua
+Report.lua
+Commands.lua

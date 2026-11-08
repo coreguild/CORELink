@@ -141,7 +141,12 @@ SlashCmdList = {}
 ColorPickerFrame = nil
 
 ---------------------------------------------------------------- load addon
-assert(loadfile("CORELink/CORELink.lua"))("CORELink")
+-- The files in TOC order, each given the same private table, exactly as the game does it.
+local NS = {}
+for line in io.lines("CORELink/CORELink.toc") do
+  local file = line:match("^([%w_]+%.lua)%s*$")
+  if file then assert(loadfile("CORELink/" .. file))("CORELink", NS) end
+end
 local H = events.handler
 local function slash(s) SlashCmdList["CORELINK"](s) end
 CORELinkDB = { debug = true }            -- left on by a previous session: must be off after login

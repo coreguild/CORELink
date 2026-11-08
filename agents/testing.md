@@ -7,8 +7,8 @@ tests/run.sh
 ```
 
 Runs `luac -p` on the addon, then `luacheck` (undefined globals, typos in API names, unused variables, accidental
-globals; configuration and the list of allowed WoW globals in `.luacheckrc`), then `tests/harness.lua`, a mock of the WoW API that loads the real addon file
-and drives it through login, Guild Info parsing, channel join, outgoing relay, incoming packets (all protocol
+globals; configuration and the list of allowed WoW globals in `.luacheckrc`), then `tests/size.sh` (file and function length limits), then `tests/harness.lua`, a mock of the WoW API that
+loads the real addon files in TOC order and drives them through login, Guild Info parsing, channel join, outgoing relay, incoming packets (all protocol
 versions), filters, nicknames, GM-only commands and UTF-8 trimming. Exit code is non-zero on any failure.
 
 When you add behaviour, add a `check(...)` to `tests/harness.lua`. Mock only what the addon calls; keep mocks

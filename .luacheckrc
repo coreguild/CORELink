@@ -1,6 +1,6 @@
 -- luacheck configuration for CORELink (WoW addon, game Lua is 5.1)
 std = "lua51"
-max_line_length = false            -- style only; we keep lines readable by review, not by tool
+max_line_length = 120              -- tests/size.sh caps files at 400 lines and functions at 40
 codes = true
 ignore = { "212", "581" }          -- WoW callbacks have fixed signatures; style-only rewrite hints
 -- Globals this addon legitimately creates
