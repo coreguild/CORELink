@@ -2,20 +2,17 @@
 -- Resolving the token to a club id, its channels (streams), keeping them subscribed, and reading a post's author.
 -- Community text reaches addons sealed (a Kstring token), so a guild's tag travels in the channel name: each guild
 -- posts into the channel named after its tag when the community has one, and readers take the tag from the
--- channel. Provides NS.mirror (state), NS.ResolveClubId, NS.ClubIsCharacter, NS.ClubMember, NS.ClubStreams,
+-- channel. Provides NS.club (state), NS.ResolveClubId, NS.ClubIsCharacter, NS.ClubMember, NS.ClubStreams,
 -- NS.ClubStream, NS.StreamTag, NS.StreamKey, NS.FocusClubStream, NS.ClubAuthor, NS.ClubChanged.
 local _, NS = ...
 local Debug, GetTag, Plain, issecret = NS.Debug, NS.GetTag, NS.Plain, NS.issecret
 
-NS.mirror = {
-  hooks = "not installed", streamId = nil, streams = nil, general = nil, clubType = nil, focused = false,
-  posted = 0, failed = 0, shown = 0, skipped = 0, hidden = 0, reminded = false, lastText = nil, lastAt = 0,
-}
-local mirror = NS.mirror
+NS.club = { streamId = nil, streams = nil, general = nil, clubType = nil, focused = false }
+local club = NS.club
 
 -- The club= token changed: resolve everything again when next needed.
 function NS.ClubChanged()
-  mirror.streamId, mirror.streams, mirror.focused, mirror.clubType = nil, nil, false, nil
+  club.streamId, club.streams, club.focused, club.clubType = nil, nil, false, nil
 end
 
 -- "club=" names the community by numeric id, short name or full name (spaces dropped: Core Test -> CoreTest).
@@ -55,14 +52,14 @@ local ResolveClubId = NS.ResolveClubId
 -- author, so posted lines carry only the tag. 0 = Battle.net community: it shows account names, so the
 -- character name goes into the text.
 function NS.ClubIsCharacter()
-  if mirror.clubType == nil then
+  if club.clubType == nil then
     local id = ResolveClubId()
     if id and C_Club and C_Club.GetClubInfo then
       local ok, info = pcall(C_Club.GetClubInfo, id)
-      if ok and type(info) == "table" and type(info.clubType) == "number" then mirror.clubType = info.clubType end
+      if ok and type(info) == "table" and type(info.clubType) == "number" then club.clubType = info.clubType end
     end
   end
-  return mirror.clubType == 1
+  return club.clubType == 1
 end
 
 function NS.ClubMember()
@@ -91,7 +88,7 @@ end
 -- The community's channels (streams) we use: id -> name. Guilds without a channel use General with the tag
 -- in the text.
 function NS.ClubStreams()
-  if mirror.streams then return mirror.streams end
+  if club.streams then return club.streams end
   local id = ResolveClubId()
   if not id or not C_Club or not C_Club.GetStreams then return nil end
   local ok, streams = pcall(C_Club.GetStreams, id)
@@ -109,40 +106,40 @@ function NS.ClubStreams()
   end
   if lowest then
     if not general then general = lowest; map[lowest] = map[lowest] or "General" end
-    mirror.streams = map
-    mirror.general = general
+    club.streams = map
+    club.general = general
   end
-  return mirror.streams
+  return club.streams
 end
 local ClubStreams = NS.ClubStreams
 
 -- The channel this guild posts into: the one named after our tag, else General.
 function NS.ClubStream()
-  if mirror.streamId then return mirror.streamId end
+  if club.streamId then return club.streamId end
   local streams = ClubStreams()
   if not streams then return nil end
   local tag = GetTag()
-  local best = mirror.general
+  local best = club.general
   if tag then
     local want = StreamKey(tag)
     for sid, name in pairs(streams) do
       if StreamKey(name) == want then best = sid break end
     end
   end
-  mirror.streamId = best
+  club.streamId = best
   return best
 end
 
 -- The guild tag a community channel stands for, or nil for General.
 function NS.StreamTag(streamId)
   local streams = ClubStreams()
-  if not streams or streamId == mirror.general then return nil end
+  if not streams or streamId == club.general then return nil end
   return streams[streamId]
 end
 
 -- Subscribe to the club streams so CLUB_MESSAGE_ADDED fires for them.
 function NS.FocusClubStream()
-  if mirror.focused or not C_Club or not C_Club.FocusStream then return end
+  if club.focused or not C_Club or not C_Club.FocusStream then return end
   local id = ResolveClubId()
   local streams = ClubStreams()
   if not id or not streams or not NS.ClubMember() then return end
@@ -151,7 +148,7 @@ function NS.FocusClubStream()
     if not pcall(C_Club.FocusStream, id, sid) then all = false end
   end
   if C_Club.FocusCommunityStreams then pcall(C_Club.FocusCommunityStreams) end
-  mirror.focused = all
+  club.focused = all
 end
 
 -- The character behind a community post: the message's author record, completed from the member list.
@@ -175,7 +172,7 @@ end
 ---------------------------------------------------------------- events
 local function OnStreamsChanged(clubId)
   if clubId == ResolveClubId() then
-    mirror.streams, mirror.streamId, mirror.focused = nil, nil, false
+    club.streams, club.streamId, club.focused = nil, nil, false
     NS.FocusClubStream()
   end
 end
@@ -185,5 +182,5 @@ NS.events.CLUB_STREAM_REMOVED = OnStreamsChanged
 
 NS.events.CLUB_ERROR = function(action, err)
   Debug("community error: action=%s error=%s", tostring(action), tostring(err))
-  mirror.focused = false            -- load the stream again before the next post
+  club.focused = false            -- load the stream again before the next post
 end

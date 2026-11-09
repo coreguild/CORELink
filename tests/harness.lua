@@ -51,9 +51,11 @@ local function widget()
     return function() end
   end })
 end
+local registered = {}                 -- events the addon registered with the game
 CreateFrame = function(kind, name, parent, template)
   local f = widget()
   rawset(f, "SetScript", function(_, ev, fn) if ev == "OnEvent" then events.handler = fn end end)
+  rawset(f, "RegisterEvent", function(_, ev) registered[ev] = true end)
   return f
 end
 UIParent = {}
@@ -147,9 +149,17 @@ for line in io.lines("CORELink/CORELink.toc") do
   local file = line:match("^([%w_]+%.lua)%s*$")
   if file then assert(loadfile("CORELink/" .. file))("CORELink", NS) end
 end
-local H = events.handler
+-- Fire a game event the way the game would: only if the addon registered it.
+local function H(_, event, ...)
+  assert(registered[event], "the addon never registered " .. tostring(event) .. " with the game")
+  return events.handler(nil, event, ...)
+end
+local nRegistered = 0
+for _ in pairs(registered) do nRegistered = nRegistered + 1 end
+check("events: every handler is registered with the game", nRegistered == 13, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
-CORELinkDB = { debug = true }            -- left on by a previous session: must be off after login
+CORELinkDB = { debug = true,             -- left on by a previous session: must be off after login
+  peers = { ["Old Friend"] = { tag = "OLD", realm = "CAMWOWUS2Realm3PvE", guild = "Old Guild", seen = 0 } } }
 H(nil, "ADDON_LOADED", "CORELink")
 check("debug echo is off at login even if saved on", CORELinkDB.debug == false)
 H(nil, "PLAYER_LOGIN")
@@ -157,6 +167,14 @@ H(nil, "GUILD_ROSTER_UPDATE")
 advance(8)                                   -- ReadGuildInfo (5s) then EnsureChannel (1.5s)
 
 check("config read from Guild Info line", CORELinkDB.channel == "CORELink7100" and CORELinkDB.password == "pw1" and CORELinkDB.tag == "MAIN")
+do
+  local n0 = #chatLines; slash("peers")
+  local out = {}
+  for i = n0 + 1, #chatLines do out[#out + 1] = chatLines[i].text end
+  check("peers saved by a previous session are listed after login", table.concat(out, "\n"):find("Old Friend - OLD on CAMWOWUS2Realm3PvE (Old Guild) not yet answered", 1, true) ~= nil, table.concat(out, "\n"))
+  lastSetText = nil; slash("report")
+  check("a saved peer that never answered is not counted as live, even minutes after the game started", (lastSetText or ""):find("peers=0", 1, true) ~= nil, lastSetText)
+end
 check("joined the link channel with the password", #joinCalls >= 1 and joinCalls[1][1] == "CORELink7100" and joinCalls[1][2] == "pw1")
 
 -- own guild message -> one CL4 addon message on the channel
@@ -913,6 +931,47 @@ do
   n0 = #chatLines; slash("hello")
   check("whisper: /cl hello without a name prints usage", chatLines[#chatLines].text:find("usage: /cl hello", 1, true) ~= nil, chatLines[#chatLines].text)
   guildInfoText = savedTextForRestore
+end
+
+-- Commands that only change this client's settings, and the guild master's configuration commands.
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "nothing here\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  local function last() return chatLines[#chatLines] and chatLines[#chatLines].text or "" end
+  local function lines(fn) local start = #chatLines; fn(); local out = {}; for i = start + 1, #chatLines do out[#out + 1] = chatLines[i].text end; return table.concat(out, "\n") end
+  local out = lines(function() slash("") end)
+  check("commands: plain /cl prints the status line and the member command list", out:find("NOT CONFIGURED", 1, true) and out:find("/cl reload | on | off", 1, true) and not out:find("| channel | password |", 1, true), out)
+  slash("setup chan pw TAG")
+  check("commands: /cl setup is refused for a member", last():find("only the guild master", 1, true) ~= nil, last())
+  myRank = 0
+  slash("setup chan pw TAG"); advance(2)
+  check("commands: /cl setup configures and joins", CORELinkDB.channel == "chan" and CORELinkDB.password == "pw" and CORELinkDB.tag == "TAG" and joined.chan == 6, tostring(joined.chan))
+  out = lines(function() slash("") end)
+  check("commands: plain /cl for the guild master lists the setup commands", out:find("/cl setup", 1, true) ~= nil, out)
+  out = lines(function() slash("channel") end)
+  check("commands: /cl channel without a name shows the status", out:find("tag: TAG", 1, true) ~= nil, out)
+  slash("channel other"); advance(2)
+  check("commands: /cl channel <name> moves to that channel", CORELinkDB.channel == "other" and joined.other == 6 and not joined.chan)
+  slash("password -")
+  check("commands: /cl password - clears the password", CORELinkDB.password == "")
+  slash("tag auto")
+  check("commands: /cl tag auto derives the tag from the guild name", CORELinkDB.tag == nil and last():find("guild tag: COREFo", 1, true) ~= nil, last())
+  slash("officer off"); check("commands: /cl officer off", CORELinkDB.officer == false and last():find("officer highlighting: off", 1, true) ~= nil)
+  slash("nicknames off"); check("commands: /cl nicknames off", CORELinkDB.showNick == false)
+  slash("classcolor off"); check("commands: /cl classcolor off", CORELinkDB.classColor == false)
+  slash("window 3"); check("commands: /cl window 3 pins the window", CORELinkDB.window == 3 and last():find("window 3", 1, true) ~= nil)
+  slash("window"); check("commands: /cl window alone unpins it", CORELinkDB.window == nil)
+  slash("officercolor e8c63e"); check("commands: /cl officercolor RRGGBB sets the colour", CORELinkDB.officerColorHex == "e8c63e")
+  slash("officercolor reset"); check("commands: /cl officercolor reset clears it", CORELinkDB.officerColorHex == nil)
+  slash("officercolor"); check("commands: /cl officercolor without a picker explains the fallback", last():find("couldn't open the colour picker", 1, true) ~= nil, last())
+  CORELinkDB.nicks[UnitName("player")] = "Shocky"; sentAddon = {}
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "NREQ", "GUILD", "Bob-Beta"); advance(8)
+  local resent = false
+  for _, m in ipairs(sentAddon) do if m.kind == "GUILD" and m.text == "NICK~Shocky" then resent = true end end
+  check("commands: an NREQ from a guildmate makes us re-send our nickname", resent)
+  slash("clear"); check("commands: /cl clear forgets the configuration", CORELinkDB.channel == nil and joined.other == nil)
+  myRank = 3
 end
 
 print(string.format("\n%d checks, %d failed", checks, failures))

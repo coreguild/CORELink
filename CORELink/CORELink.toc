@@ -7,14 +7,14 @@
 # Load order matters: each file receives the shared private table and may use what earlier files put on it.
 Core.lua
 Channel.lua
+Club.lua
 GuildInfo.lua
 Roster.lua
+Echo.lua
 Display.lua
 Bridge.lua
-Echo.lua
 Whisper.lua
 Relay.lua
-Club.lua
 Mirror.lua
 Events.lua
 Report.lua

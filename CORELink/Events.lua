@@ -107,6 +107,11 @@ end
 ---------------------------------------------------------------- the frame
 local f = CreateFrame("Frame")
 for event in pairs(NS.events) do f:RegisterEvent(event) end
+-- A handler set by a later file, or at runtime, is registered with the game the moment it is set.
+setmetatable(NS.events, { __newindex = function(t, event, handler)
+  rawset(t, event, handler)
+  f:RegisterEvent(event)
+end })
 f:SetScript("OnEvent", function(_, event, ...)
   local handler = NS.events[event]
   if handler then handler(...) end
@@ -119,6 +124,7 @@ local function Housekeeping()
   local now = GetTime()
   for k, v in pairs(NS.seen) do if now - v > 60 then NS.seen[k] = nil end end
   for k, v in pairs(NS.displayed) do if now - v > 60 then NS.displayed[k] = nil end end
+  for tag, t in pairs(NS.heard) do if now - t > 600 then NS.heard[tag] = nil end end
   for tag, realms in pairs(NS.heardRealms) do
     for realm, t in pairs(realms) do if now - t > 600 then realms[realm] = nil end end
     if next(realms) == nil then NS.heardRealms[tag] = nil end

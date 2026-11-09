@@ -2,10 +2,15 @@
 -- Out: the player's own typed guild lines are posted into the community from inside the chat send hooks, because
 -- community sends only work inside the player's keypress (never for relayed lines). In: a post by another guild's
 -- member is shown in guild chat like a relayed line, deduplicated against the relay channel.
--- Provides NS.InstallMirrorHooks, NS.RemindAboutClub.
+-- Provides NS.mirror (counters and hook state), NS.InstallMirrorHooks, NS.RemindAboutClub.
 local _, NS = ...
 local Print, Debug, Configured, IsMe, GetTag, MyName = NS.Print, NS.Debug, NS.Configured, NS.IsMe, NS.GetTag, NS.MyName
-local issecret, mirror = NS.issecret, NS.mirror
+local issecret, club = NS.issecret, NS.club
+NS.mirror = {
+  hooks = "not installed", posted = 0, failed = 0, shown = 0, skipped = 0, hidden = 0,
+  reminded = false, lastText = nil, lastAt = 0,
+}
+local mirror = NS.mirror
 local ResolveClubId, ClubStreams, StreamTag, StreamKey = NS.ResolveClubId, NS.ClubStreams, NS.StreamTag, NS.StreamKey
 
 ---------------------------------------------------------------- posting
@@ -37,7 +42,7 @@ local function MirrorTypedLine(text)
   local ok, err = pcall(C_Club.SendMessage, id, stream, ClubLine(text, stream):sub(1, 250))
   if ok then mirror.posted = mirror.posted + 1 return end
   mirror.failed = mirror.failed + 1
-  mirror.focused = false
+  club.focused = false
   Debug("mirror failed: %s", tostring(err))
 end
 
