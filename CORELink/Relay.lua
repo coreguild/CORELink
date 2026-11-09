@@ -12,6 +12,7 @@ local issecret, SEP, PROTO = NS.issecret, NS.SEP, NS.PROTO
 local seen, pending, displayed = NS.seen, NS.pending, NS.displayed
 
 NS.relayStats = { typed = 0, carried = 0, shown = 0 }
+local COURIER_WAIT = 1          -- seconds the courier gives the author's own client before carrying a line
 local stats = NS.relayStats
 
 local function Packet(id, tag, author, msg, class, flags, nick)
@@ -43,8 +44,10 @@ function NS.RelayTyped(text)
 end
 
 ---------------------------------------------------------------- out: the courier carries a guildmate's line
--- A line in our guild chat from a member without the addon: nobody's keypress can post it, so the courier
--- whispers it to the other guilds after a short wait, unless the author's own client relayed it meanwhile.
+-- A line in our guild chat by someone else: if the author runs the addon, their own keypress posts it into the
+-- channel and the copy arrives within a moment. The courier waits for that, and carries the line by whisper
+-- when no copy came, whoever the author is (no addon, addon switched off, addon broken). A late copy costs
+-- one redundant whisper; receivers drop the duplicate by id.
 function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local db = NS.db
   if not db.enabled or not Configured() or Locked() then return end
@@ -54,15 +57,15 @@ function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   author = Ambiguate(author, "none")
   if IsMe(author, guid) then return end           -- RelayTyped did it (and learned our chat-format name)
   if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours
-  if not NS.IsCourier() or NS.IsAddonUser(author) then return end
+  if not NS.IsCourier() then return end
   local id = LineId(tag, author, msg)
   if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
   pending[id] = true
   local rn = NS.OfficerRankName(author)
   local packet = Packet(id, tag, author, msg, NS.ClassOf(author, guid), rn and ("O" .. rn) or "", db.nicks[author])
-  C_Timer.After(NS.Backoff(), function()
+  C_Timer.After(COURIER_WAIT + math.random() * 1.5, function()
     pending[id] = nil
-    if seen[id] then return end                   -- their own client relayed it after all
+    if seen[id] then return end                   -- their own client relayed it
     seen[id] = GetTime()
     stats.carried = stats.carried + 1
     NS.WhisperOut(id, tag, packet)

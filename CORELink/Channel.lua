@@ -81,6 +81,7 @@ local function OnChannelNotice(notice, channelName, channelBaseName)
   conn.lastNotice, conn.lastNoticeAt = notice, (date and date("%H:%M:%S")) or ""
   Debug("channel notice for %s: %s", tostring(NS.db.channel), notice)
   if notice == "NOT_ALLOWED_IN_CHANNEL" then OnRefusal() return end
+  if notice == "YOU_CHANGED" or notice == "YOU_JOINED" then conn.blockedUntil, conn.blockedWhy = 0, nil return end
   local why = JOIN_FAILURE_TEXT[notice]
   if why then
     conn.blockedUntil = GetTime() + JOIN_BLOCK_SECS
