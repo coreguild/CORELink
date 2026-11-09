@@ -1,6 +1,6 @@
 -- luacheck configuration for CORELink (WoW addon, game Lua is 5.1)
 std = "lua51"
-max_line_length = false            -- style only; we keep lines readable by review, not by tool
+max_line_length = 120              -- tests/size.sh caps files at 400 lines and functions at 40
 codes = true
 ignore = { "212", "581" }          -- WoW callbacks have fixed signatures; style-only rewrite hints
 -- Globals this addon legitimately creates
@@ -20,10 +20,10 @@ read_globals = {
   "GetChatWindowMessages", "GetChatWindowChannels", "ChatFrame1EditBox", "ChatEdit_ParseText", "hooksecurefunc",
   -- chat / channels
   "SendChatMessage", "SendAddonMessage", "JoinChannelByName", "JoinTemporaryChannel", "LeaveChannelByName",
-  "GetChannelName", "GetChannelList", "C_ChatInfo",
+  "GetChannelName", "GetChannelList", "C_ChatInfo", "C_Club", "C_FriendList", "FriendsFrame",
   -- guild / player
   "GetGuildInfo", "GetGuildInfoText", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo", "GuildRoster",
-  "C_GuildInfo", "GetRealmName", "GetNormalizedRealmName", "UnitName", "UnitGUID", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
+  "C_GuildInfo", "GetClassInfo", "GetRealmName", "GetNormalizedRealmName", "UnitName", "UnitGUID", "UnitClass", "UnitFullName", "Ambiguate", "GetPlayerInfoByGUID",
   -- misc
   "C_Timer", "GetTime", "date", "wipe", "issecretvalue", "strsplit", "unpack",
 }
