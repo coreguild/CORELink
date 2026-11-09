@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 14, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -387,6 +387,17 @@ do
   joined["CORELink7100"] = nil; local jc = #joinCalls
   H(nil, "CHANNEL_UI_UPDATE")
   check("CHANNEL_UI_UPDATE triggers a rejoin when not in the channel", #joinCalls == jc + 1)
+  -- the client rejoined the remembered channel without its password and asks the player for it
+  local hidden = {}
+  StaticPopup_Hide = function(which) hidden[#hidden + 1] = which end
+  jc = #joinCalls
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a password request for the link channel is answered from the config",
+    #joinCalls == jc + 1 and joinCalls[#joinCalls][1] == "CORELink7100" and joinCalls[#joinCalls][2] == "pw1")
+  check("the password prompt is closed", hidden[1] == "CHAT_CHANNEL_PASSWORD")
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "SomeOtherChannel")
+  check("a password request for another channel is left alone", #joinCalls == jc + 1 and #hidden == 1)
+  StaticPopup_Hide = nil
   JoinChannelByName = savedJoin
 end
 
