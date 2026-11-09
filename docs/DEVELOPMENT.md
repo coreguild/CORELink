@@ -40,8 +40,8 @@ Linux `apt install lua5.4 lua-check`.
    variables and lines over 120 characters fail it. The harness is checked too, without the line limit.
 3. `tests/size.sh`: no file over 400 lines, no function over 40 lines.
 4. `tests/harness.lua`: a mock of the WoW API in plain Lua that loads the real addon files in TOC order and
-   drives them through login, Guild Info parsing, channel join, relay out and in (all protocol versions), the
-   community mirror, echo, the cross-realm bridge, the whisper bridge, filters, nicknames and commands. Every
+   drives them through login, Guild Info parsing, channel join, the text relay out and in, the courier path and
+   fan-out, the community mirror, echo, filters, nicknames and commands. Every
    check prints `PASS` or `FAIL` with a sentence saying what it claims, and the script exits non-zero on any
    failure.
 5. `tests/site-render.sh`: the download page renders with awkward release notes.

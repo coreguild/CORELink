@@ -3,31 +3,51 @@
 How the code is organised and how one line travels through it. Read this before changing anything in
 `CORELink/`.
 
+## What the game allows, and the design that follows
+
+Measured on live WoW: Forever on 2026-11-08:
+
+| The game | So CORELink |
+|---|---|
+| A custom chat channel is shared by every realm, and its text is readable by addons | uses one hidden channel as the broadcast path, with no realm bookkeeping |
+| Addon messages on a custom channel are refused by the server | never sends addon messages on the channel |
+| Chat text can be sent only from inside the player's own keypress | posts a player's own lines from the chat send hooks, and nothing else |
+| Guild addon messages reach guildmates on every realm | uses them for presence, nicknames, and fanning a carried line out to the guild |
+| Whisper addon messages reach any player by plain `First Surname`, from a timer | uses them for lines nobody's keypress can post: the courier carries them |
+| Community text reaches addons sealed | mirrors into the community for humans to read, and shows posts by channel name |
+
+Two transports, chosen by who typed the line:
+
+1. **An addon user's own line** goes into the hidden channel as packed text from the chat send hooks, inside
+   their keypress. Every addon user in every guild reads it.
+2. **A line from a member without the addon** is carried by the guild's courier: whispered to one peer in each
+   other guild, who shows it and fans it out to their guildmates over the guild addon channel.
+
 ## The files
 
 The game loads the files in the order the TOC lists them. Every file begins with `local _, NS = ...`: the game
-hands each file the same private table, and a file puts on it whatever later files need. A file may read from
-`NS` at load time only what earlier files defined; anything else it looks up when the game delivers the event.
+hands each file the same private table, and a file puts on it whatever later files need. A file copies off
+`NS` at load time only what earlier files defined (`tests/load-order.lua` checks it); anything else it reaches
+as `NS.Name()` when called.
 
 | File | What it owns |
 |---|---|
-| `Core.lua` | Constants, the shared tables (`seen`, `heard`, queues, registries), small helpers (`Print`, `Debug`, `Hash`, `Trim`, `IsMe`, `GetTag`). |
-| `Channel.lua` | The hidden chat channel: join, hide, notices, the one-per-second sender for both queues, the presence beacon. |
-| `GuildInfo.lua` | The `CORELink:` line in Guild Info: parse it, build it, the copy box. |
-| `Roster.lua` | Our guild's members: ranks, officers, nicknames, the guild addon channel dispatcher, HEARD reports. |
-| `Display.lua` | Drawing another guild's line in guild chat; the dedupe between relay and community copies; the officer colour filter. |
-| `Bridge.lua` | Cross-realm bridge through our own guild (BRIDGE packets). |
-| `Echo.lua` | Re-posting linked guilds' lines into plain guild chat for members without the addon (ECHO claims). |
-| `Whisper.lua` | The whisper bridge: courier election, who rounds, greetings, peers, routing (HELLO, PEER, DIR, WB). |
-| `Relay.lua` | Guild lines out to the channel, channel packets in to guild chat. |
+| `Core.lua` | Constants, the shared tables (`seen`, `heard`, the whisper queue, the registries), small helpers (`Print`, `Debug`, `Hash`, `Truncate`, `IsMe`, `GetTag`, `RankNickPrefix`). |
+| `Channel.lua` | The hidden chat channel: join, hide, notices and refusals, `SendChannelText`, the whisper queue drain. Owns `NS.conn`. |
 | `Club.lua` | The Blizzard Community: resolving the `club=` token, its channels, keeping them subscribed, post authors. Owns `NS.club`. |
+| `GuildInfo.lua` | The `CORELink:` line in Guild Info: parse it, build it, clear it when a guild has none, the copy box. |
+| `Roster.lua` | Our guild's members: ranks, our own full name, nicknames, presence, the guild addon channel dispatcher. Owns `NS.addonUsers`. |
+| `Echo.lua` | Re-posting linked guilds' lines into plain guild chat for members without the addon (ECHO claims). |
+| `Display.lua` | Drawing another guild's line in guild chat; the dedupe between relay and community copies; the officer colour filter. |
+| `Whisper.lua` | The courier election, peers, greetings, the optional who round, carrying lines (HELLO, PEER, DIR, WB). Owns `NS.peers`. |
+| `Relay.lua` | Our own typed line out as channel text, the courier's carry of a guildmate's line, every packet in (`ShowPacket`), the LINE fan-out. |
 | `Mirror.lua` | Posting typed guild lines into the community and showing its posts in guild chat. Owns `NS.mirror`. |
-| `Events.lua` | The event frame, saved variables, login, addon-message dispatch, the housekeeping ticker, `StatusLine`. |
+| `Hooks.lua` | The chat send hooks, the one place the addon runs inside the player's keypress. |
+| `Events.lua` | The event frame, saved variables, login, message dispatch, the housekeeping ticker, `StatusLine`. |
 | `Report.lua` | `/cl report`, `/cl guilds`, `/cl peers`. |
-| `Commands.lua` | Every other `/cl` command, one function each, and the dispatcher. |
+| `Commands.lua` | Every other `/cl` command, one function each, the dispatcher, the help line built from the command table. |
 
-Limits, enforced by `tests/run.sh`: a file is at most 400 lines, a function at most 40, a line at most 120,
-and a file copies off `NS` at load time only what an earlier file defined (`tests/load-order.lua`).
+Limits, enforced by `tests/run.sh`: a file is at most 400 lines, a function at most 40, a line at most 120.
 A function does one thing its name states and fits on a screen.
 
 ## Registries
@@ -37,9 +57,9 @@ Four tables on `NS` let a file add behaviour without the file that dispatches kn
 | Registry | Filled by | Read by |
 |---|---|---|
 | `NS.events[event]` | any file, before or after `Events.lua` loads | `Events.lua` registers each key with the game as it is set and calls the handler |
-| `NS.guildPackets[cmd]` | `Roster`, `Bridge`, `Echo` | `Roster.lua` when a GUILD addon message arrives |
+| `NS.guildPackets[cmd]` | `Roster`, `Echo`, `Relay` | `Roster.lua` when a GUILD addon message arrives |
 | `NS.whisperPackets[cmd]` | `Whisper` | `Whisper.lua` when a WHISPER addon message arrives |
-| `NS.commands[name]` | `Commands`, `Report` | the `/cl` dispatcher in `Commands.lua` |
+| `NS.commands[name]` | `Commands`, `Report` | the `/cl` dispatcher in `Commands.lua`; the help line is built from the keys |
 
 To add a `/cl` command, add `NS.commands.name = function(arg) ... end`. To handle a new packet on the guild
 addon channel, add `NS.guildPackets.NAME = function(rest, sender) ... end`. To listen for a game event, add
@@ -51,76 +71,74 @@ Defined in `Core.lua`, used everywhere:
 
 | Table | Key -> value | Why |
 |---|---|---|
-| `NS.db` | the saved variables (`CORELinkDB`) | settings, nicknames, mutes, saved peers; nil until ADDON_LOADED |
-| `NS.seen` | packet id -> time | a packet already on our realm's channel: do not relay or re-send it |
-| `NS.pending` | packet id -> true | a random back-off is deciding whether we relay it |
+| `NS.db` | the saved variables (`CORELinkDB`, per character) | settings, nicknames, mutes, saved peers; nil until ADDON_LOADED |
+| `NS.seen` | packet id -> time | a line already relayed, read, carried or fanned: do not do it again |
+| `NS.pending` | packet id -> true | the courier's back-off is deciding whether to carry it |
 | `NS.displayed` | packet id -> time | already shown in guild chat |
-| `NS.heard` | guild tag -> time | guilds heard in the last 10 minutes, on the relay channel or in the community; pruned by housekeeping |
-| `NS.heardRealms` | tag -> realm -> time | where each guild is heard, ours and what guildmates report |
-| `NS.guildRealms` | realm -> time | realms our own guild has addon users on |
-| `NS.sendQueue`, `NS.whisperQueue` | packets waiting | drained one per second by `Channel.lua` |
-| `NS.authorClass`, `authorOfficer`, `authorNick`, `authorSeen` | author -> what relay packets told us | community posts carry none of it |
+| `NS.heard` | guild tag -> time | guilds whose lines reached us in the last 10 minutes, by any path |
+| `NS.whisperQueue` | whispers waiting | drained a few per second by `Channel.lua` |
+| `NS.authorClass`, `authorOfficer`, `authorNick`, `authorSeen` | author -> what packets told us | community posts carry none of it |
 
 Each feature file owns its own state and exposes it for `/cl report`: `NS.conn` (channel diagnostics),
-`NS.club` (stream state), `NS.mirror` (mirror counters and hooks), `NS.peers`, `NS.bridgeStats`, `NS.echoStats`,
-`NS.whisperStats`, `NS.courierSeen` (guildmates' last HEARD report).
+`NS.club` (stream state), `NS.mirror` (mirror counters and hooks), `NS.peers`, `NS.addonUsers` (guildmates
+seen running the addon), `NS.relayStats`, `NS.whisperStats`, `NS.echoStats`.
 
 ## The life of a line
 
-A member of guild MAIN types "hello" in guild chat. On every MAIN client with the addon:
+A member of guild MAIN types "hello" in guild chat.
 
-1. **`Relay.lua`, `OnGuildMessage`** (event `CHAT_MSG_GUILD`). The line is hashed with the tag and author into
-   an id. The author's own client relays at once; every other client waits 0.3 to 1.5 seconds and relays only
-   if `NS.seen[id]` is still empty. Relaying means queueing `CL4~id~MAIN~Author~CLASS~flags~nick~hello` in
-   `NS.sendQueue`.
-2. **`Channel.lua`, the sender ticker.** One packet per second goes out as an addon message on the hidden
-   channel. Addon messages need no keypress.
-3. **`Events.lua`, `CHAT_MSG_ADDON`.** On every client in the channel, on that realm, the packet arrives and is
-   handed to `Relay.lua`, `OnLinkMessage`.
-4. **`OnLinkMessage`** notes the id in `NS.seen` and the tag in `NS.heard`, then:
-   * **`Bridge.lua`, `ForwardToGuild`**: unless the line is our own guild's, and if this client's guild has members
-     on other realms, forward the packet to them over the guild addon channel (BRIDGE). A guildmate there re-sends it into their realm's channel
-     after the same back-off, unless it already arrived (`OnBridgeReceived`).
-   * **`Whisper.lua`, `WhisperOut`**: if this client is its guild's courier, whisper the packet (WB) to one
-     known peer on every realm nothing else reaches. The peer re-sends it there, the same way.
-   * If the tag is our own guild, or muted, stop.
-   * **`Display.lua`, `Display`**: print `[MAIN] [Author]: (Rank Nick) hello` in every chat window with Guild
-     chat, class and officer coloured, unless the same author was just shown from the community
-     (`CrossSeen`).
-   * **`Echo.lua`, `MaybeEcho`**: with `echo=on`, one client claims the id over the guild addon channel (ECHO)
-     and re-posts the line as real guild chat for members without the addon. Addon users hide that copy.
-5. **`Mirror.lua`** runs separately, inside the author's keypress: the chat send hooks post the typed line into
-   the community named by `club=`. Other guilds' clients see community posts arrive (`CLUB_MESSAGE_ADDED`),
-   read the tag from the channel name, and `Display` them, deduplicated against step 4 by author and time.
+**If the author runs the addon:**
+
+1. **`Hooks.lua`** sees the send inside the author's keypress and calls `Relay.lua`, `RelayTyped`.
+2. **`RelayTyped`** hashes the tag, author and text into an id, packs `CL4~id~MAIN~Author~CLASS~flags~nick~hello`,
+   and `Channel.lua`, `SendChannelText` posts it into the hidden channel as text. One send, every realm.
+3. **`Events.lua`, `CHAT_MSG_CHANNEL`** on every addon user's client hands the text to `Relay.lua`,
+   `OnLinkMessage`, which calls `ShowPacket`. MAIN clients note the author as an addon user and show nothing,
+   since they saw the line natively. Other guilds' clients note the author as a live peer of MAIN and show
+   `[MAIN] [Author]: (Rank Nick) hello` in every chat window with Guild chat, class and officer coloured
+   (`Display.lua`), unless the same author was just shown from the community (`CrossSeen`).
+4. **`Echo.lua`, `MaybeEcho`**: with `echo=on`, one client in each receiving guild claims the id over the guild
+   addon channel (ECHO) and re-posts the line as real guild chat for members without the addon.
+5. **`Mirror.lua`** also posts the typed line into the community from the same keypress.
+
+**If the author does not run the addon:**
+
+1. Every MAIN client sees the line natively (`CHAT_MSG_GUILD`, `Relay.lua`, `OnGuildMessage`). Only the courier
+   acts: the alphabetically first MAIN member seen running the addon in the last six minutes (`Whisper.lua`,
+   `Courier`). It waits a short back-off, and if no copy of the line appeared on the channel meanwhile, packs it.
+2. **`Whisper.lua`, `WhisperOut`** whispers `WB~<packet>` to the freshest live peer of every other guild.
+3. **The peer** (`whisperPackets.WB`) accepts it if the sender is a known peer or the guild has been heard on
+   the channel, shows it with `ShowPacket`, and sends `LINE~<packet>` once to its own guild over the guild addon
+   channel. Every guildmate's client shows it (`guildPackets.LINE`). Nothing is carried onward.
 
 ## Packets
 
-All packets are addon messages with prefix `CORELink`, fields separated by `~`.
+Addon messages carry the prefix `CORELink`; fields are separated by `~`.
 
-| Channel | Packet | Meaning |
+| Where | Packet | Meaning |
 |---|---|---|
-| hidden channel | `CL4~id~tag~author~class~flags~nick~text` | a guild line (`flags` = `O<rank>` for officers; empty `text` = presence beacon) |
-| guild | `HEARD~realm~tag1,tag2` | which guilds this guildmate hears on its realm (also elects the courier) |
+| hidden channel, as text | `CL4~id~tag~author~class~flags~nick~text` | an addon user's own guild line (`flags` = `O<rank>` for officers) |
+| guild | `PRESENT~version` | I run the addon (elects the courier); every two minutes and at login |
 | guild | `NICK~name`, `NREQ` | nickname, request for nicknames |
-| guild | `BRIDGE~<CL4 packet>` | a foreign line for guildmates on other realms |
+| guild | `LINE~<CL4 packet>` | a carried line fanned out to guildmates |
 | guild | `ECHO~id` | this client is echoing that line |
 | whisper | `HELLO~tag~realm~guild`, `PEER~tag~realm~guild` | greeting and answer between addon users of different guilds |
 | whisper | `DIR~name@realm@tag@guild;...` | gossip: peers worth greeting |
-| whisper | `WB~<CL4 packet>` | a line for a realm nothing else reaches |
+| whisper | `WB~<CL4 packet>` | a carried line |
 
-Protocols CL1 to CL3 from earlier builds are still read. Changing the CL4 field order or separator is a
-protocol change: bump the version and keep old versions readable.
+Changing the CL4 field order or separator is a protocol change: bump the version and keep old versions
+readable.
 
-## Realms
+## Peers and the courier
 
-Custom channels are per realm; guild addon messages and whispers cross realms. On Forever a `First Surname` is
-unique across realms, `/who` returns every realm's players but no realm names, and only a client knows its own
-realm (`GetNormalizedRealmName`). So realms are learned from what clients say about themselves: HEARD reports
-from guildmates, PEER answers from other guilds' addon users. The only realm read off a name is in gossip
-entries that still carry an old `Name-Realm` key.
+A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line
+on the channel is one. A HELLO/PEER exchange adds one by hand (`/cl hello`), gossip (DIR) suggests more, and
+with `guilds=` on the Guild Info line the courier runs a silent `/who` per listed guild and greets a few members,
+for a guild nobody has heard from yet. Peers are saved between sessions; one that never answered is never
+whispered to. The courier pings its peers every ten minutes to keep them fresh.
 
 ## Things the game will not let us do
 
 Collected in `agents/wow-api-gotchas.md`. The ones that shape this design: addons cannot write Guild Info;
-chat on a custom channel needs a keypress but addon messages do not; community sends work only inside a
-keypress; community text reaches addons sealed; chat is paused in instanced lockdown.
+chat text needs a keypress and addon packets are refused on channels; community sends work only inside a
+keypress and community text arrives sealed; chat is paused in instanced lockdown.

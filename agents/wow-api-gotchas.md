@@ -25,9 +25,14 @@ Read before changing anything in the relay, channel or chat code.
 8. **Secret values.** On Midnight-era clients chat payloads can be secret inside instances; guard with
    `issecretvalue` and pause relaying when `C_ChatInfo.InChatMessagingLockdown()` is true.
 9. **Factions.** Custom channels are faction-bound on Classic clients; cross-faction bridging is not possible.
-   **Realms.** Custom channels are per realm (`CAMWOW US1 Realm 1 PvE` and `CAMWOW US2 Realm 1 PvE` are separate on
-   Forever; normalized names drop the spaces: `CAMWOWUS1Realm1PvE`). Guild addon messages cross realms, which is
-   what the cross-realm bridge rides on.
+   **Realms.** On live Forever realms are not chat boundaries: custom channels, guild addon messages and
+   whispers all cross them (normalized names drop the spaces: `CAMWOWUS1Realm1PvE`). The beta had per-realm
+   channels; that was a beta artefact.
+   **Custom channels on live Forever** (tested 2026-11-08): a custom chat channel is shared by every realm (text
+   typed on Realm 7 shows on Realm 5), its text arrives readable to addons with the author's full name, but
+   `SendAddonMessage(..., "CHANNEL", id)` is answered by the server with `NOT_ALLOWED_IN_CHANNEL` every time,
+   for every character and channel tried. Chat text can only be sent from inside the player's keypress. So:
+   relay as text from the send hooks, never as addon packets on a channel. The beta allowed the packets.
    **Forever names are unique across realms** (tested 2026-11-06): a chat whisper to a plain `First Surname`
    reaches a player on another realm, their reply shows no `-Realm` suffix, `/who` returns players from every
    realm, and `C_FriendList.GetWhoInfo` gives `fullName` without a realm. Nothing in `/who` tells a player's

@@ -27,18 +27,21 @@ channel and password and a different tag. Members pick the settings up within a 
 
 The line can carry three optional features, all explained in [docs/COMMANDS.md](docs/COMMANDS.md):
 `club=` mirrors chat into a Blizzard Community, `echo=on` re-posts linked guilds' lines into plain guild chat for
-members without the addon, and `guilds=` names the co-guilds so lines reach realms your guild is not on.
+members without the addon, and `guilds=` names the co-guilds so a guild nobody has heard from yet still gets
+found.
 
 ## How it works
 
-* Members' clients join a hidden custom channel and keep it out of every chat tab.
-* A guild line is packed as a small packet and sent on that channel. One client relays each line: the author's
-  own at once, anyone else after a short random wait if nobody did, so members without the addon are bridged too.
-* Receivers drop duplicates by the packet id, ignore their own guild, and print the line in every chat window
-  that has Guild chat enabled.
-* Custom channels are per realm. Lines reach other realms three ways: through a guildmate on that realm (guild
-  addon messages cross realms), through a whisper to a known addon user there, or through the community.
-* In chat lockdown (instanced content on Midnight-era clients) relaying pauses.
+* Members' clients join a hidden chat channel, shared by every realm, and keep it out of every chat tab.
+* When you type a guild line, your own client posts a packed copy into that channel in the same keypress.
+  Every addon user in every linked guild reads it, drops duplicates, ignores their own guild, and prints it in
+  the chat windows that show Guild chat.
+* A line from a guildmate who does not have the addon cannot be posted by anyone else's keypress, so your
+  guild's courier (one addon user, chosen the same way by every client) whispers it to one addon user in each
+  other guild, who passes it to their guildmates.
+* With `echo=on`, one addon user per guild re-posts linked guilds' lines as plain guild chat, so members
+  without the addon see them too. With `club=`, lines are also mirrored into a community everyone can read.
+* In chat lockdown (instanced content) relaying pauses.
 
 The full picture, file by file, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
