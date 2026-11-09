@@ -12,9 +12,14 @@ Nothing to configure for members: the guild master pastes one line into Guild In
 
 ## Players
 
-1. Download the stable zip.
-2. Put the `CORELink` folder in `World of Warcraft/_forever_/Interface/AddOns/`.
-3. Log in. If your Guild Information contains a `CORELink:` line, you are done. `/cl` shows the status.
+1. Download the stable zip and unzip it. You get a folder named `CORELink`.
+2. Move that folder into `World of Warcraft/_forever_/Interface/AddOns/`, replacing any older `CORELink` folder.
+3. Log in, or type `/reload` if you were already in game.
+4. Type `/cl report`. The first words are the version you are running; it should be 0.2.0 or later.
+5. If your Guild Information contains a `CORELink:` line, you are done. `/cl` shows the status.
+
+Versions before 0.2.0 send nothing on the live Forever servers and cannot see lines from 0.2.0 clients, so every
+character that uses the addon needs the update.
 
 ## Guild masters (once per guild)
 
@@ -50,7 +55,7 @@ The full picture, file by file, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.m
 | Command | Does |
 |---|---|
 | `/cl` | Status and the command list. |
-| `/cl guilds` | Which guilds are on the link, on which realms, and which ones do not reach yours. |
+| `/cl guilds` | Which guilds were heard on the link in the last 10 minutes, and who your guild's courier is. |
 | `/cl report` | One pasteable diagnostic line. Paste it when asking for help. |
 | `/cl nickname <name>` | Your nickname, shown to your guild and linked guilds. |
 | `/cl mute <tag>` / `unmute` | Silence a linked guild on this client. |
