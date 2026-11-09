@@ -419,13 +419,39 @@ do
   check("join retries pause after a wrong-password notice", #joinCalls == jc, #joinCalls - jc)
   H(nil, "CHAT_MSG_CHANNEL_NOTICE", "YOU_CHANGED", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
   check("a successful join clears the hold", report():find("joinHold no", 1, true) ~= nil, report())
+  H(nil, "CHANNEL_UI_UPDATE")                           -- our own attempt, answered with WRONG_PASSWORD
   H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
   rep = report()
   check("report shows guild info state, join attempts and the last notice",
     rep:find("guildInfo line ", 1, true) and rep:find("joinAttempts ", 1, true) and rep:find("lastNotice WRONG_PASSWORD at ", 1, true) and rep:find("joinHold WRONG_PASSWORD", 1, true), rep)
   check("debug log uses wall-clock timestamps", rep:match("log: %d%d:%d%d:%d%d ") ~= nil)
   slash("reload")                                   -- a member may reload (#23)
-  check("/cl reload clears the hold and retries the join", #joinCalls == jc + 1, #joinCalls - jc)
+  check("/cl reload clears the hold and retries the join", #joinCalls == jc + 2, #joinCalls - jc)
+end
+
+-- The client rejoins the remembered channel without its password at login, before the addon's first attempt;
+-- the server's WRONG_PASSWORD for that is not ours: join with the password instead of pausing for ten minutes.
+do
+  -- config saved by the previous session, so the addon is configured from the first frame
+  CORELinkDB = { channel = "CORELink7100", password = "pw1", tag = "MAIN", source = "Guild Info" }
+  joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
+  H(nil, "ADDON_LOADED", "CORELink")
+  H(nil, "PLAYER_LOGIN")
+  advance(80)                                          -- login sync joined at +5s; nothing tried since
+  local jc = #joinCalls
+  n0 = #chatLines
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  check("client's password-less rejoin: the addon joins with the password",
+    #joinCalls == jc + 1 and joinCalls[#joinCalls][2] == "pw1", #joinCalls - jc)
+  local quiet = #chatLines == n0                       -- before report(), which prints a line itself
+  check("client's password-less rejoin: no hold, no complaint",
+    quiet and report():find("joinHold no", 1, true) ~= nil, quiet and report() or chatLines[#chatLines].text)
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  check("a wrong password right after our own attempt still pauses the join",
+    report():find("joinHold WRONG_PASSWORD", 1, true) ~= nil and #joinCalls == jc + 1, report())
+  slash("reload")                                      -- clear the hold for the blocks that follow
 end
 
 -- Login gives up with a reason when Guild Info never has a line
