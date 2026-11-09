@@ -11,6 +11,7 @@ local issecret = NS.issecret
 NS.conn = {
   giState = "not read yet", lastNotice = nil, lastNoticeAt = nil, joinAttempts = 0,
   blockedUntil = 0, blockedWhy = nil, lastSendResult = nil, lastSendAt = -100, refusedAt = -1000,
+  lastJoinAt = -100,
 }
 local conn = NS.conn
 local JOIN_BLOCK_SECS = 600   -- after WRONG_PASSWORD / BANNED, stop retrying for this long (or until /cl reload)
@@ -31,6 +32,15 @@ function NS.ChannelId()
 end
 local ChannelId = NS.ChannelId
 
+local function JoinWithPassword()
+  local db = NS.db
+  conn.joinAttempts, conn.lastJoinAt = conn.joinAttempts + 1, GetTime()
+  Debug("joining channel %s (attempt %d, password %s)", db.channel, conn.joinAttempts,
+    db.password ~= "" and "set" or "none")
+  local ok, err = pcall(JoinChannelByName, db.channel, (db.password ~= "" and db.password) or nil)
+  if not ok then Debug("JoinChannelByName errored: %s", tostring(err)) end
+end
+
 function NS.EnsureChannel()
   local db = NS.db
   if not db.enabled or not Configured() or Locked() then return end
@@ -39,11 +49,7 @@ function NS.EnsureChannel()
       Debug("join of %s on hold (%s); /cl reload to retry now", db.channel, tostring(conn.blockedWhy))
       return
     end
-    conn.joinAttempts = conn.joinAttempts + 1
-    Debug("joining channel %s (attempt %d, password %s)", db.channel, conn.joinAttempts,
-      db.password ~= "" and "set" or "none")
-    local ok, err = pcall(JoinChannelByName, db.channel, (db.password ~= "" and db.password) or nil)
-    if not ok then Debug("JoinChannelByName errored: %s", tostring(err)) end
+    JoinWithPassword()
   end
   C_Timer.After(1, HideChannel)
 end
@@ -82,6 +88,12 @@ local function OnChannelNotice(notice, channelName, channelBaseName)
   Debug("channel notice for %s: %s", tostring(NS.db.channel), notice)
   if notice == "NOT_ALLOWED_IN_CHANNEL" then OnRefusal() return end
   if notice == "YOU_CHANGED" or notice == "YOU_JOINED" then conn.blockedUntil, conn.blockedWhy = 0, nil return end
+  if notice == "WRONG_PASSWORD" and GetTime() - conn.lastJoinAt > 5 and NS.db.password ~= "" then
+    -- not an answer to our join: the client rejoined the remembered channel without the password
+    Debug("the client rejoined %s without the password; joining with it", tostring(NS.db.channel))
+    JoinWithPassword()
+    return
+  end
   local why = JOIN_FAILURE_TEXT[notice]
   if why then
     conn.blockedUntil = GetTime() + JOIN_BLOCK_SECS
@@ -125,7 +137,7 @@ end
 NS.events.CHANNEL_PASSWORD_REQUEST = function(channelName)
   if not Configured() or NS.db.password == "" or not IsLinkChannel(channelName) then return end
   Debug("client asked for the %s password; answering from config", tostring(NS.db.channel))
-  pcall(JoinChannelByName, NS.db.channel, NS.db.password)
+  JoinWithPassword()
   if StaticPopup_Hide then pcall(StaticPopup_Hide, "CHAT_CHANNEL_PASSWORD") end
 end
 
