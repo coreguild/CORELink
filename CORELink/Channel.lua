@@ -120,6 +120,15 @@ NS.events.CHAT_MSG_CHANNEL_NOTICE = function(notice, _, _, channelName, _, _, _,
   OnChannelNotice(notice, channelName, channelBaseName)
 end
 
+-- The client remembers custom channels between logins and rejoins them without the password, then asks the
+-- player for it. Answer from the config instead and close the prompt.
+NS.events.CHANNEL_PASSWORD_REQUEST = function(channelName)
+  if not Configured() or NS.db.password == "" or not IsLinkChannel(channelName) then return end
+  Debug("client asked for the %s password; answering from config", tostring(NS.db.channel))
+  pcall(JoinChannelByName, NS.db.channel, NS.db.password)
+  if StaticPopup_Hide then pcall(StaticPopup_Hide, "CHAT_CHANNEL_PASSWORD") end
+end
+
 ---------------------------------------------------------------- chat filters
 -- The link channel carries packed lines: keep its raw text and join/leave notices out of chat windows.
 local function ChannelFilter(_, _, _, _, _, channelString)
