@@ -43,12 +43,12 @@ every user-visible change.
 * Release notes are a changelog section in the conventional-changelog format (Features, Bug Fixes, ... each line
   linking its commit), built from the commits since the previous tag. They go on the GitHub release, on the
   download page under "What's new", and are prepended to the published
-  [CHANGELOG.md](https://core-wow-community.github.io/CORELink/CHANGELOG.md). The copy of `CHANGELOG.md` in this repo
+  [CHANGELOG.md](https://coreguild.github.io/CORELink/CHANGELOG.md). The copy of `CHANGELOG.md` in this repo
   is frozen; the published one is the real changelog.
 * Public download links, no GitHub account needed:
-  * stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
-  * release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip
-  * landing page with both: https://core-wow-community.github.io/CORELink/
+  * stable: https://coreguild.github.io/CORELink/latest/CORELink.zip
+  * release candidate: https://coreguild.github.io/CORELink/rc/CORELink.zip
+  * landing page with both: https://coreguild.github.io/CORELink/
   Served from the `gh-pages` branch, which only the release job writes to. Older builds stay at `v/CORELink-<version>.zip`.
 
 ## Commit messages

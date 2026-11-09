@@ -6,7 +6,7 @@ Written for Tanner; works for anyone joining the CORELink repo.
 
 1. Go to https://github.com/signup and create an account. Use the username you want to be known by in commits.
 2. Turn on two-factor authentication when prompted (GitHub requires it for contributors).
-3. Send your username to Jacob. He will invite you to the `core-wow-community` organization. Accept the
+3. Send your username to Jacob. He will invite you to the `coreguild` organization. Accept the
    invitation from the email or from https://github.com/notifications.
 
 ## 2. Tools (10 minutes)
@@ -31,7 +31,7 @@ gh auth login --web --git-protocol https
 ## 3. Get the code (2 minutes)
 
 ```
-git clone https://github.com/core-wow-community/CORELink.git
+git clone https://github.com/coreguild/CORELink.git
 cd CORELink
 tests/run.sh                 # should end with "0 failed"
 ```

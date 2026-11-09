@@ -22,7 +22,7 @@ What an agent does:
    is the version the button will produce. The dry run refuses on `main` or any non-release branch.
 3. If the user asked for an RC, an agent may run `scripts/release.sh rc` locally on the pushed release branch, or
    tell the user to press the button with that branch selected and `rc`. Tell them the RC link
-   (https://core-wow-community.github.io/CORELink/rc/CORELink.zip) and the soak test: a day on two clients in two
+   (https://coreguild.github.io/CORELink/rc/CORELink.zip) and the soak test: a day on two clients in two
    different guilds, one `/reload`, one fresh login, one client still on the previous stable to prove protocol
    compatibility.
 4. If the RC had problems: fix via normal PRs into `main`, merge the fix branch (or `main`) into the release branch,
@@ -30,7 +30,7 @@ What an agent does:
 5. When the RC is good: open a PR from the release branch into `main` (`gh pr create --base main`), say it is ready,
    and stop. A human merges it. Never run `final`. Then tell them to press the button on `main` with `final` (or
    run `scripts/release.sh final` themselves) and give them the stable link
-   (https://core-wow-community.github.io/CORELink/latest/CORELink.zip).
+   (https://coreguild.github.io/CORELink/latest/CORELink.zip).
 6. If `final` fails with "the addon on main differs from v<ver>-rcN", something touching `CORELink/` was merged
    after the RC: merge `main` into the release branch, cut a new RC, test, merge, then `final`. Do not use `no_rc`
    to get around it.

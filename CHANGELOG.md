@@ -1,7 +1,7 @@
 # Changelog
 
 This copy is frozen at 0.1.1. The maintained changelog is generated at release time from the commit history and
-published at https://core-wow-community.github.io/CORELink/CHANGELOG.md (also on each GitHub release).
+published at https://coreguild.github.io/CORELink/CHANGELOG.md (also on each GitHub release).
 
 ## 0.1.1 - 2026-10-05
 

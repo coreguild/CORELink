@@ -64,7 +64,7 @@ jobs:
         run: |
           {
             echo "### Release: ${{ inputs.channel }}"
-            echo "- Page: https://core-wow-community.github.io/CORELink/"
-            echo "- Stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip"
-            echo "- RC: https://core-wow-community.github.io/CORELink/rc/CORELink.zip"
+            echo "- Page: https://coreguild.github.io/CORELink/"
+            echo "- Stable: https://coreguild.github.io/CORELink/latest/CORELink.zip"
+            echo "- RC: https://coreguild.github.io/CORELink/rc/CORELink.zip"
           } >> "$GITHUB_STEP_SUMMARY"

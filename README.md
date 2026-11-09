@@ -6,9 +6,9 @@ Nothing to configure for members: the guild master pastes one line into Guild In
 
 ## Download
 
-* Stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip
-* Release candidate: https://core-wow-community.github.io/CORELink/rc/CORELink.zip
-* Both, with install steps and release notes: https://core-wow-community.github.io/CORELink/
+* Stable: https://coreguild.github.io/CORELink/latest/CORELink.zip
+* Release candidate: https://coreguild.github.io/CORELink/rc/CORELink.zip
+* Both, with install steps and release notes: https://coreguild.github.io/CORELink/
 
 ## Players
 
