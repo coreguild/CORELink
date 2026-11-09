@@ -3,7 +3,7 @@
 ## Notes: Bridges guild chat between co-guilds (Greenwall-style).
 ## Author: CORE
 ## Version: @project-version@
-## SavedVariables: CORELinkDB
+## SavedVariablesPerCharacter: CORELinkDB
 # Load order matters: each file receives the shared private table and may use what earlier files put on it.
 Core.lua
 Channel.lua
@@ -12,10 +12,10 @@ GuildInfo.lua
 Roster.lua
 Echo.lua
 Display.lua
-Bridge.lua
 Whisper.lua
 Relay.lua
 Mirror.lua
+Hooks.lua
 Events.lua
 Report.lua
 Commands.lua

@@ -1,24 +1,50 @@
--- CORELink/Relay.lua: guild lines out to the link channel, and link packets in to guild chat.
--- Out: a guild line is hashed, one client relays it (the author's own client at once, anyone else after a random
--- back-off, unless a copy was already seen). In: a packet from another guild is deduplicated, bridged and
--- whispered onward, then displayed and maybe echoed.
--- Packet: CL4~id~tag~author~class~flags~nick~text (flags "O<rank>" for officers). CL1-CL3 are still read.
--- Provides NS.OnGuildMessage, NS.OnLinkMessage.
+-- CORELink/Relay.lua: guild lines out to other guilds, and other guilds' lines in to guild chat.
+-- Out, two ways: an addon user's own typed line goes into the hidden channel as text from the chat send hooks
+-- (RelayTyped), which every addon user in every guild reads. A line from a member without the addon is carried
+-- by the guild's courier: whispered to one peer per other guild (Whisper.lua), who fans it out to their
+-- guildmates over the guild addon channel (LINE). In: whatever path a packet arrives by, ShowPacket displays
+-- it once.
+-- Packet: CL4~id~tag~author~class~flags~nick~text (flags "O<rank>" for officers).
+-- Provides NS.RelayTyped, NS.OnGuildMessage, NS.OnLinkMessage, NS.ShowPacket, NS.relayStats.
 local _, NS = ...
 local Debug, Configured, Locked, IsMe, GetTag = NS.Debug, NS.Configured, NS.Locked, NS.IsMe, NS.GetTag
-local issecret, SEP, PROTO, PREFIX = NS.issecret, NS.SEP, NS.PROTO, NS.PREFIX
+local issecret, SEP, PROTO = NS.issecret, NS.SEP, NS.PROTO
 local seen, pending, displayed = NS.seen, NS.pending, NS.displayed
 
----------------------------------------------------------------- relay out
-local function Relay(id, tag, author, msg, class, flags, nick)
-  pending[id] = nil
-  seen[id] = GetTime()
+NS.relayStats = { typed = 0, carried = 0, shown = 0 }
+local stats = NS.relayStats
+
+local function Packet(id, tag, author, msg, class, flags, nick)
   local head = table.concat({ PROTO, id, tag, author, class or "", flags or "", nick or "" }, SEP) .. SEP
-  table.insert(NS.sendQueue, head .. NS.Trim(msg, 245 - #PREFIX - #head))
-  Debug("queued relay %s from %s (%d bytes, queue %d)", id, author, #head + #msg, #NS.sendQueue)
+  return head .. NS.Truncate(msg, 250 - #head)
 end
 
--- A line in our own guild chat (CHAT_MSG_GUILD): relay it unless another client already did.
+local function LineId(tag, author, msg) return NS.Hash(tag .. author .. msg) end
+
+---------------------------------------------------------------- out: our own typed line
+-- From the chat send hooks, inside the keypress that sent the guild line: post it into the channel as text.
+function NS.RelayTyped(text)
+  local db = NS.db
+  if not db or not db.enabled or not Configured() or Locked() then return end
+  local tag = GetTag()
+  if not tag then return end
+  local author = NS.MyName()
+  local id = LineId(tag, author, text)
+  local now = GetTime()
+  if seen[id] and now - seen[id] < NS.DEDUPE_SECS then return end   -- two hooks fire for one line
+  seen[id] = now
+  local rn = NS.OfficerRankName(author)
+  local class = NS.ClassOf(author, NS.me.guid)
+  local packet = Packet(id, tag, author, text, class, rn and ("O" .. rn) or "", db.nicks[author])
+  if NS.SendChannelText(packet) then
+    stats.typed = stats.typed + 1
+    Debug("relayed own line %s into %s (%d bytes)", id, db.channel, #packet)
+  end
+end
+
+---------------------------------------------------------------- out: the courier carries a guildmate's line
+-- A line in our guild chat from a member without the addon: nobody's keypress can post it, so the courier
+-- whispers it to the other guilds after a short wait, unless the author's own client relayed it meanwhile.
 function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local db = NS.db
   if not db.enabled or not Configured() or Locked() then return end
@@ -26,50 +52,32 @@ function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local tag = GetTag()
   if not tag then return end
   author = Ambiguate(author, "none")
-  local mine = IsMe(author, guid)      -- also learns our chat-format name from our own messages
-  if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours to relay
-  local class = NS.ClassOf(author, guid)
-  local rn = NS.OfficerRank(author)
-  local flags = rn and ("O" .. rn) or ""
-  local nick = db.nicks[author]
-  local id = NS.Hash(tag .. author .. msg)
-  local now = GetTime()
-  if (seen[id] and now - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
+  if IsMe(author, guid) then return end           -- RelayTyped did it (and learned our chat-format name)
+  if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours
+  if not NS.IsCourier() or NS.IsAddonUser(author) then return end
+  local id = LineId(tag, author, msg)
+  if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
   pending[id] = true
-  if mine then
-    Relay(id, tag, author, msg, class, flags, nick)
-    return
-  end
-  -- random back-off: normally only one member's client relays
-  C_Timer.After(0.3 + math.random() * 1.2, function()
-    if pending[id] and not (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) then
-      Relay(id, tag, author, msg, class, flags, nick)
-    end
+  local rn = NS.OfficerRankName(author)
+  local packet = Packet(id, tag, author, msg, NS.ClassOf(author, guid), rn and ("O" .. rn) or "", db.nicks[author])
+  C_Timer.After(NS.Backoff(), function()
     pending[id] = nil
+    if seen[id] then return end                   -- their own client relayed it after all
+    seen[id] = GetTime()
+    stats.carried = stats.carried + 1
+    NS.WhisperOut(id, tag, packet)
   end)
 end
 NS.events.CHAT_MSG_GUILD = function(...) NS.OnGuildMessage(...) end
 
----------------------------------------------------------------- relay in
-local F = "([^" .. SEP .. "]*)" .. SEP     -- one packet field
-
--- proto, id, tag, author, class, flags, nick, msg from a packet of any protocol version we read; nil if not ours.
+---------------------------------------------------------------- in
+-- id, tag, author, class, flags, nick, msg from a CL4 packet; nil when the text is not one.
 local function ParsePacket(text)
   local proto, rest = text:match("^(%w+)" .. SEP .. "(.*)$")
-  local id, tag, author, class, flags, nick, msg
-  if proto == "CL4" then
-    id, tag, author, class, flags, nick, msg = NS.Split(rest, 7)
-    if id and not id:match("^%x+$") then id = nil end
-  elseif proto == "CL3" then
-    id, tag, author, class, flags, msg = rest:match("^(%x+)" .. SEP .. F .. F .. F .. F .. "(.*)$")
-  elseif proto == "CL2" then
-    id, tag, author, class, msg = rest:match("^(%x+)" .. SEP .. F .. F .. F .. "(.*)$")
-  elseif proto == "CL1" then
-    id, tag, author, msg = rest:match("^(%x+)" .. SEP .. F .. F .. "(.*)$")
-  else
-    return nil
-  end
-  return proto, id, tag, author, class, flags, nick, msg
+  if proto ~= PROTO or not rest then return nil end
+  local id, tag, author, class, flags, nick, msg = NS.Split(rest, 7)
+  if not id or not id:match("^%x+$") or not tag or tag == "" or not author or author == "" then return nil end
+  return id, tag, author, class, flags, nick, msg
 end
 
 -- "O<rank name>" in the flags field -> the officer label to show, or nil.
@@ -87,29 +95,38 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
--- A packet on the link channel: note it, pass it on to realms that lack it, show it once.
-function NS.OnLinkMessage(text)
-  if issecret(text) or not text then return end
-  local proto, id, tag, author, class, flags, nick, msg = ParsePacket(text)
-  if not proto or not id then return end
+-- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
+function NS.ShowPacket(text, via)
+  if issecret(text) or type(text) ~= "string" then return nil end
+  local id, tag, author, class, flags, nick, msg = ParsePacket(text)
+  if not id then return nil end
   local now = GetTime()
   seen[id] = now
   NS.heard[tag] = now
-  NS.NoteHeard(tag, NS.MyRealm(), now)
-  pending[id] = nil                  -- another client already relayed it
-  if msg == "" then return end       -- presence beacon, nothing to display
-  local bridged = NS.bridged
-  if tag ~= GetTag() and not bridged[id] then NS.ForwardToGuild(id, text) end
-  if not bridged[id] and not displayed[id] then NS.WhisperOut(id, tag, text) end
-  if displayed[id] then return end
+  if displayed[id] then return tag end
   displayed[id] = now
-  if tag == GetTag() then Debug("ignored %s packet %s: own guild tag", proto, id) return end
-  if NS.db.muted[tag:lower()] then Debug("ignored %s packet %s: tag %s muted", proto, id, tag) return end
-  Debug("showing %s packet %s from %s <%s>", proto, id, author, tag)
+  if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag end
+  if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag end
+  Debug("showing packet %s via %s from %s <%s>", id, via, author, tag)
   local label = OfficerLabel(flags)
   nick = NS.CleanNick(nick)
   NoteAuthor(author, class, label, nick)
-  if NS.CrossSeen(author, "relay") then Debug("skipped %s packet %s: shown from the community", proto, id) return end
+  if NS.CrossSeen(author, "relay") then Debug("skipped packet %s: shown from the community", id) return tag end
+  stats.shown = stats.shown + 1
   NS.Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
   NS.MaybeEcho(id, tag, author, msg, label, nick ~= "" and nick or nil)
+  return tag
 end
+
+-- Text on the link channel (CHAT_MSG_CHANNEL): an addon user's own line. Its author is, by definition, an
+-- addon user of that guild: a guildmate's line tells us they relay their own, another guild's gives us a peer.
+function NS.OnLinkMessage(text, author)
+  if issecret(text) or issecret(author) or type(text) ~= "string" or type(author) ~= "string" then return end
+  local tag = NS.ShowPacket(text, "channel")
+  if not tag then return end
+  author = Ambiguate(author, "none")
+  if tag == GetTag() then NS.addonUsers[author] = GetTime() else NS.NotePeer(author, tag) end
+end
+
+-- LINE~<packet>: a guildmate fans out a line it received by whisper from another guild's courier.
+NS.guildPackets.LINE = function(rest) NS.ShowPacket(rest, "guild") end

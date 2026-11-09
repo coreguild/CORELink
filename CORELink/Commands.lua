@@ -18,19 +18,20 @@ local function IsGM()
   return rankIndex == 0
 end
 
-local GM_HELP = "/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer"
-  .. " | officercolor | officerrank | window | bridge on|off | mirror on|off|read off|post off | reload | clear"
-  .. " | on | off | mute | unmute | report | debug on|off"
-local MEMBER_HELP = "/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off"
-  .. " | classcolor on|off | officercolor | officer on|off | guilds | window | bridge on|off"
-  .. " | mirror on|off|read off|post off | report | debug on|off"
+-- "/cl a | b | c" built from the command table, so it cannot drift from the commands that exist.
+local function HelpLine(gm)
+  local names = {}
+  for name in pairs(commands) do if gm or not GM_ONLY[name] then names[#names + 1] = name end end
+  table.sort(names)
+  return "/cl " .. table.concat(names, " | ")
+end
 
 -- Plain /cl, or a command that needs an argument it did not get.
 local function ShowStatus()
   Print(NS.StatusLine())
   local lastSend = NS.conn.lastSendResult
   if Configured() and lastSend then Print("last send result: " .. lastSend .. " (0 = success)") end
-  Print(IsGM() and GM_HELP or MEMBER_HELP)
+  Print(HelpLine(IsGM()))
 end
 
 local function OnOff(flag) return flag and "on" or "off" end
@@ -160,12 +161,6 @@ commands.mirror = function(arg)
     OnOff(db.mirrorRead ~= false), OnOff(db.hideClub ~= false),
     db.club and (" (community " .. db.club .. ")") or " (no club= token in Guild Info)"))
   NS.FocusClubStream()
-end
-
-commands.bridge = function(arg)
-  NS.db.bridge = not IsOff(arg)
-  Print("cross-realm bridging: " .. OnOff(NS.db.bridge)
-    .. " (forward other guilds' lines to your guildmates on other realms)")
 end
 
 commands.whisper = function(arg)

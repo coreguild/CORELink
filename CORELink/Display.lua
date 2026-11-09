@@ -2,7 +2,7 @@
 -- a line can arrive by (relay channel and community). Also the guild chat filter that colours officers.
 -- Provides NS.Display, NS.CrossSeen, NS.GuildFrames.
 local _, NS = ...
-local BuildTag, HexToRGB = NS.BuildTag, NS.HexToRGB
+local RankNickPrefix, HexToRGB = NS.RankNickPrefix, NS.HexToRGB
 local issecret = NS.issecret
 
 -- A line can reach us twice: on the relay channel (readable) and in the community (text sealed, so it cannot
@@ -67,7 +67,7 @@ end
 function NS.Display(tag, author, class, msg, officerLabel, nick, textHasPrefix)
   local db = NS.db
   local c = ChatTypeInfo["GUILD"] or { r = .25, g = 1, b = .25 }
-  local prefix = textHasPrefix and "" or BuildTag(officerLabel, (db.showNick ~= false) and nick or nil)
+  local prefix = textHasPrefix and "" or RankNickPrefix(officerLabel, (db.showNick ~= false) and nick or nil)
   if officerLabel then
     local r, g, b = HexToRGB(db.officerColorHex)
     c = { r = r, g = g, b = b }
@@ -90,8 +90,8 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_GUILD", function(_, _, msg, author, ..
   local who = Ambiguate(author, "none")
   if NS.IsEchoLine(msg, who) then NS.echoStats.hidden = NS.echoStats.hidden + 1 return true end
   local nick = (db.showNick ~= false) and db.nicks[who] or nil
-  local rn = NS.OfficerRank(who)
-  local tagText = BuildTag(rn, nick)
+  local rn = NS.OfficerRankName(who)
+  local tagText = RankNickPrefix(rn, nick)
   if rn then
     return false, "|cff" .. (db.officerColorHex or NS.DEFAULT_OFFICER_COLOR) .. tagText .. msg .. "|r", author, ...
   end

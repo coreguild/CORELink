@@ -1,17 +1,18 @@
 -- CORELink/Mirror.lua: guild chat to and from the Blizzard Community.
--- Out: the player's own typed guild lines are posted into the community from inside the chat send hooks, because
--- community sends only work inside the player's keypress (never for relayed lines). In: a post by another guild's
--- member is shown in guild chat like a relayed line, deduplicated against the relay channel.
--- Provides NS.mirror (counters and hook state), NS.InstallMirrorHooks, NS.RemindAboutClub.
+-- Out: the player's own typed guild lines are posted into the community from inside the keypress (Hooks.lua
+-- calls MirrorTypedLine), because community sends only work there. In: a post by another guild's member is
+-- shown in guild chat like a relayed line, deduplicated against the relay channel.
+-- Provides NS.mirror (counters and hook state), NS.MirrorTypedLine, NS.RemindAboutClub.
 local _, NS = ...
 local Print, Debug, Configured, IsMe, GetTag, MyName = NS.Print, NS.Debug, NS.Configured, NS.IsMe, NS.GetTag, NS.MyName
 local issecret, club = NS.issecret, NS.club
+local ResolveClubId, ClubStreams, StreamTag, StreamKey = NS.ResolveClubId, NS.ClubStreams, NS.StreamTag, NS.StreamKey
+
 NS.mirror = {
   hooks = "not installed", posted = 0, failed = 0, shown = 0, skipped = 0, hidden = 0,
   reminded = false, lastText = nil, lastAt = 0,
 }
 local mirror = NS.mirror
-local ResolveClubId, ClubStreams, StreamTag, StreamKey = NS.ResolveClubId, NS.ClubStreams, NS.StreamTag, NS.StreamKey
 
 ---------------------------------------------------------------- posting
 local function ClubLine(text, stream)
@@ -22,14 +23,14 @@ local function ClubLine(text, stream)
   local tagChannel = StreamTag(stream) ~= nil      -- our own channel: the tag is the channel name
   if NS.ClubIsCharacter() then
     -- the rank and nickname travel in the text: readers cannot inspect community text, but they can draw it
-    return (tagChannel and "" or ("[" .. tag .. "] ")) .. NS.BuildTag(NS.OfficerRank(me), nick) .. text
+    return (tagChannel and "" or ("[" .. tag .. "] ")) .. NS.RankNickPrefix(NS.OfficerRankName(me), nick) .. text
   end
   return string.format("[%s] %s%s: %s", tag, me, nick and (" (" .. nick .. ")") or "", text)
 end
 
 -- Called from the chat hooks, i.e. inside the keypress that sent the guild line. Two hooks can fire for
 -- one line (edit box and SendChatMessage), so the same text within a second is posted once.
-local function MirrorTypedLine(text)
+function NS.MirrorTypedLine(text)
   local db = NS.db
   if not db or db.mirror == false or not Configured() then return end
   if text == mirror.lastText and GetTime() - mirror.lastAt < 1 then return end
@@ -44,42 +45,6 @@ local function MirrorTypedLine(text)
   mirror.failed = mirror.failed + 1
   club.focused = false
   Debug("mirror failed: %s", tostring(err))
-end
-
--- Typed in a chat box whose type is already Guild.
-local function OnEditBoxParseText(editBox, send)
-  if send ~= 1 or not editBox or not editBox.GetAttribute then return end
-  if editBox:GetAttribute("chatType") ~= "GUILD" then return end
-  local text = editBox:GetText()
-  if type(text) ~= "string" or not text:match("%S") or text:sub(1, 1) == "/" then return end
-  MirrorTypedLine(text)
-end
-
--- Any guild send: "/g text" typed in another chat type, macros, other addons.
-local function OnSendChatMessage(msg, chatType)
-  if NS.echoStats.active then return end
-  if type(chatType) ~= "string" or issecret(chatType) or chatType:upper() ~= "GUILD" then return end
-  if type(msg) ~= "string" or issecret(msg) or not msg:match("%S") then return end
-  MirrorTypedLine(msg)
-end
-
-function NS.InstallMirrorHooks()
-  if mirror.hooks ~= "not installed" then return end
-  local got = {}
-  if ChatFrame1EditBox and ChatFrame1EditBox.ParseText then
-    for i = 1, (NUM_CHAT_WINDOWS or 10) do
-      local eb = _G["ChatFrame" .. i .. "EditBox"]
-      if eb and eb.ParseText then hooksecurefunc(eb, "ParseText", OnEditBoxParseText); got.editbox = true end
-    end
-  elseif ChatEdit_ParseText then
-    hooksecurefunc("ChatEdit_ParseText", OnEditBoxParseText); got.editbox = true
-  end
-  if SendChatMessage then hooksecurefunc("SendChatMessage", OnSendChatMessage); got.send = true end
-  if C_ChatInfo and C_ChatInfo.SendChatMessage then
-    hooksecurefunc(C_ChatInfo, "SendChatMessage", OnSendChatMessage); got.send = true
-  end
-  mirror.hooks = (got.editbox and got.send and "editbox+send") or (got.editbox and "editbox") or (got.send and "send")
-    or "FAILED (no chat hooks)"
 end
 
 function NS.RemindAboutClub()
@@ -97,7 +62,7 @@ end
 
 ---------------------------------------------------------------- reading
 -- Officer colour for a community author. The relay packet is authoritative when we have heard one from this
--- character; otherwise (other realm, community only) a community role of Owner, Leader or Moderator counts.
+-- character; otherwise (community only) a community role of Owner, Leader or Moderator counts.
 local function ClubOfficerLabel(who, role)
   if not NS.db or NS.db.officer == false then return nil end
   if NS.authorSeen[who] then return NS.authorOfficer[who] end
@@ -133,30 +98,33 @@ local function ClassToken(classID)
   return nil
 end
 
--- Show a post in guild chat, deduplicated against the relay channel: by hash when the text is readable, by
--- author and time when it is not.
-local function ShowClubLine(tag, channelTag, who, class, content, msg, label, nick, pname)
+-- A post in a guild's own community channel: the channel names the guild, the text stays as posted.
+local function ShowChannelPost(line)
   local now = GetTime()
-  if channelTag then
-    -- "[TAG] [Name]: (Rank Nick) text", the same shape as a relayed line; the text itself stays unreadable
-    NS.heard[tag] = now; NS.NoteHeard(tag, "community", now)
-    if NS.CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
+  NS.heard[line.tag] = now
+  if NS.CrossSeen(line.who, "club") then mirror.skipped = mirror.skipped + 1 return end
+  mirror.shown = mirror.shown + 1
+  NS.Display(line.tag, line.who, line.class, line.content, line.label, line.nick, true)
+end
+
+-- A readable "[TAG] ..." post in General: deduplicated against the relay by hash. A post with no tag at all
+-- shows under the author's name only.
+local function ShowGeneralPost(line)
+  local now = GetTime()
+  if not line.tag then
+    if NS.CrossSeen(line.who, "club") then mirror.skipped = mirror.skipped + 1 return end
     mirror.shown = mirror.shown + 1
-    NS.Display(tag, who, class, content, label, nick, true)
-  elseif tag then
-    local id = NS.Hash(tag .. who .. msg)
-    if NS.displayed[id] then return end                         -- already shown from the relay channel
-    NS.displayed[id] = now; NS.seen[id] = now
-    NS.heard[tag] = now; NS.NoteHeard(tag, "community", now)
-    NS.CrossSeen(who, "club")
-    mirror.shown = mirror.shown + 1
-    -- "[TAG] text" lines (WoW community) already carry "(Rank Nick)" in the text; the full format does not
-    NS.Display(tag, who, class, msg, label, nick, pname == nil)
-  else
-    if NS.CrossSeen(who, "club") then mirror.skipped = mirror.skipped + 1 return end
-    mirror.shown = mirror.shown + 1
-    NS.Display(nil, who, class, content, label, nick, true)
+    NS.Display(nil, line.who, line.class, line.content, line.label, line.nick, true)
+    return
   end
+  local id = NS.Hash(line.tag .. line.who .. line.msg)
+  if NS.displayed[id] then return end                         -- already shown from the relay channel
+  NS.displayed[id] = now; NS.seen[id] = now
+  NS.heard[line.tag] = now
+  NS.CrossSeen(line.who, "club")
+  mirror.shown = mirror.shown + 1
+  -- "[TAG] text" lines (WoW community) already carry "(Rank Nick)" in the text; the full format does not
+  NS.Display(line.tag, line.who, line.class, line.msg, line.label, line.nick, line.pname == nil)
 end
 
 -- The post's record, or nil when it is not one we read (wrong club or channel, deleted, our own).
@@ -190,12 +158,15 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if NS.IsGuildmate(name, guid) then return end          -- our own guild: already in our guild chat
   local tag, pname, nick, msg, channelTag = ParseClubLine(info.content, streamId)
   local who = pname or name or "?"
-  local class = ClassToken(classID) or NS.authorClass[who] or ""
-  local label = ClubOfficerLabel(who, role)
-  nick = (nick and nick ~= "" and nick) or NS.authorNick[who]
+  local line = {
+    tag = tag, who = who, content = info.content, msg = msg, pname = pname,
+    class = ClassToken(classID) or NS.authorClass[who] or "",
+    label = ClubOfficerLabel(who, role),
+    nick = (nick and nick ~= "" and nick) or NS.authorNick[who],
+  }
   local myTag = GetTag()
   if tag and ((myTag and StreamKey(tag) == StreamKey(myTag)) or NS.db.muted[tag:lower()]) then return end
-  ShowClubLine(tag, channelTag, who, class, info.content, msg, label, nick, pname)
+  if channelTag then ShowChannelPost(line) else ShowGeneralPost(line) end
 end
 NS.events.CLUB_MESSAGE_ADDED = function(clubId, streamId, messageId) OnClubMessage(clubId, streamId, messageId) end
 

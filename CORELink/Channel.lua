@@ -1,6 +1,8 @@
--- CORELink/Channel.lua: the hidden custom chat channel that carries relay packets on this realm.
--- Joining and hiding it, the game's notices about it, the one-per-second sender for both queues, and the
--- presence beacon. Provides NS.conn (connection diagnostics), NS.ChannelId, NS.EnsureChannel, NS.SetConfig.
+-- CORELink/Channel.lua: the hidden custom chat channel that carries addon users' own lines, as text.
+-- Joining and hiding it, the game's notices about it (including a refusal), the text send that the chat hooks
+-- call from inside a keypress, and the drain of the whisper queue.
+-- Provides NS.conn (connection diagnostics), NS.ChannelId, NS.EnsureChannel, NS.LeaveLink, NS.IsLinkChannel,
+-- NS.SetConfig, NS.SendChannelText.
 local _, NS = ...
 local Print, Debug, Configured, Locked = NS.Print, NS.Debug, NS.Configured, NS.Locked
 local issecret = NS.issecret
@@ -8,11 +10,11 @@ local issecret = NS.issecret
 -- Connection diagnostics: what the game told us about the link channel, and whether joining is on hold.
 NS.conn = {
   giState = "not read yet", lastNotice = nil, lastNoticeAt = nil, joinAttempts = 0,
-  blockedUntil = 0, blockedWhy = nil, lastSendResult = nil,
+  blockedUntil = 0, blockedWhy = nil, lastSendResult = nil, lastSendAt = -100, refusedAt = -1000,
 }
 local conn = NS.conn
 local JOIN_BLOCK_SECS = 600   -- after WRONG_PASSWORD / BANNED, stop retrying for this long (or until /cl reload)
-local lastFailNotice = 0
+local WHISPERS_PER_SECOND = 4
 
 local function HideChannel()
   if not Configured() then return end
@@ -62,12 +64,23 @@ local JOIN_FAILURE_TEXT = {
   TOO_MANY_CHANNELS = "you are in too many chat channels; leave one",
 }
 
--- Notices the game sends about channels: joined, left, wrong password, banned, too many channels ...
+-- The server refused something we sent on the channel a moment ago: say so, at most every 10 minutes.
+local function OnRefusal()
+  if GetTime() - conn.lastSendAt > 3 then return end
+  conn.lastSendResult = "refused"
+  if GetTime() - conn.refusedAt < 600 then return end
+  conn.refusedAt = GetTime()
+  Print("the server refused your line on " .. tostring(NS.db.channel) .. " (NOT_ALLOWED_IN_CHANNEL)."
+    .. " Linked guilds did not get it. Run /cl report and share it.")
+end
+
+-- Notices the game sends about channels: joined, left, wrong password, banned, refused ...
 local function OnChannelNotice(notice, channelName, channelBaseName)
   if issecret(notice) or type(notice) ~= "string" then return end
   if not (IsLinkChannel(channelName) or IsLinkChannel(channelBaseName)) then return end
   conn.lastNotice, conn.lastNoticeAt = notice, (date and date("%H:%M:%S")) or ""
   Debug("channel notice for %s: %s", tostring(NS.db.channel), notice)
+  if notice == "NOT_ALLOWED_IN_CHANNEL" then OnRefusal() return end
   local why = JOIN_FAILURE_TEXT[notice]
   if why then
     conn.blockedUntil = GetTime() + JOIN_BLOCK_SECS
@@ -84,6 +97,18 @@ function NS.SetConfig(channel, password, tag, source)
   C_Timer.After(1.5, NS.EnsureChannel)
 end
 
+-- Text into the channel. Only works from inside the player's own keypress (the chat send hooks); from a
+-- timer or an event handler the game drops it. True when the client accepted it.
+function NS.SendChannelText(text)
+  local id = ChannelId()
+  if not id or Locked() or not SendChatMessage then return false end
+  local ok, err = pcall(SendChatMessage, text, "CHANNEL", nil, id)
+  conn.lastSendAt = GetTime()
+  conn.lastSendResult = ok and "ok" or "error"
+  if not ok then Debug("channel send errored: %s", tostring(err)) end
+  return ok
+end
+
 ---------------------------------------------------------------- events
 NS.events.CHANNEL_UI_UPDATE = function()
   -- the channel system just became ready (or changed); make sure we are in the link channel
@@ -95,7 +120,7 @@ NS.events.CHAT_MSG_CHANNEL_NOTICE = function(notice, _, _, channelName, _, _, _,
 end
 
 ---------------------------------------------------------------- chat filters
--- The link channel is for addon packets only: keep its raw lines and join/leave notices out of chat windows.
+-- The link channel carries packed lines: keep its raw text and join/leave notices out of chat windows.
 local function ChannelFilter(_, _, _, _, _, channelString)
   if IsLinkChannel(channelString) then return true end
 end
@@ -104,50 +129,13 @@ for _, ev in ipairs({ "CHAT_MSG_CHANNEL", "CHAT_MSG_CHANNEL_NOTICE",
   ChatFrame_AddMessageEventFilter(ev, ChannelFilter)
 end
 
----------------------------------------------------------------- senders
-local function SendOneWhisper()
-  local w = table.remove(NS.whisperQueue, 1)
-  if w and not Locked() and C_ChatInfo and C_ChatInfo.SendAddonMessage then
+---------------------------------------------------------------- whisper sender
+-- A few whispers per second, so one line for seven guilds goes out in two ticks.
+C_Timer.NewTicker(1, function()
+  if not NS.db or Locked() or not C_ChatInfo or not C_ChatInfo.SendAddonMessage then return end
+  for _ = 1, WHISPERS_PER_SECOND do
+    local w = table.remove(NS.whisperQueue, 1)
+    if not w then return end
     pcall(C_ChatInfo.SendAddonMessage, NS.PREFIX, w.text, "WHISPER", w.target)
   end
-end
-
-local function SendOnePacket()
-  local text = table.remove(NS.sendQueue, 1)
-  if not text then return end
-  if Locked() then wipe(NS.sendQueue) return end   -- cannot send during lockdown
-  local id = ChannelId()
-  if not id or not C_ChatInfo or not C_ChatInfo.SendAddonMessage then return end
-  local ok, res = pcall(C_ChatInfo.SendAddonMessage, NS.PREFIX, text, "CHANNEL", tostring(id))
-  local result = ok and tostring(res) or "error"
-  conn.lastSendResult = result
-  Debug("sent on channel %d -> result %s", id, result)
-  local failed = result ~= "0" and result ~= "true" and result ~= "nil"
-  if failed and GetTime() - lastFailNotice > 60 then        -- at most one notice a minute, never per packet
-    lastFailNotice = GetTime()
-    Print("relay send failed (result " .. result .. "). Run /cl report and share it.")
-  end
-end
-
--- One whisper and one channel packet per second.
-C_Timer.NewTicker(1, function()
-  if not NS.db then return end
-  SendOneWhisper()
-  SendOnePacket()
 end)
-
--- Presence beacon: lets /cl guilds show which guilds are on the link even when nobody is chatting.
--- Skipped if a member of our own guild beaconed recently.
-local function Beacon()
-  local db = NS.db
-  if not db or not db.enabled or not Configured() or Locked() or not ChannelId() then return end
-  local tag = NS.GetTag()
-  if not tag then return end
-  local now = GetTime()
-  if NS.heard[tag] and now - NS.heard[tag] < 120 then return end
-  if math.random() > 0.34 then return end
-  local id = NS.Hash(tag .. now)
-  NS.seen[id] = now
-  table.insert(NS.sendQueue, table.concat({ NS.PROTO, id, tag, "", "", "", "", "" }, NS.SEP))
-end
-C_Timer.NewTicker(30, Beacon)

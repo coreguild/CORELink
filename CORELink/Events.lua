@@ -1,6 +1,6 @@
 -- CORELink/Events.lua: the event frame, login, and housekeeping.
 -- Every file registers its handlers in NS.events; this file creates the one frame that listens for them and
--- adds the handlers that belong to no single feature: loading saved variables, login, addon-message dispatch.
+-- adds the handlers that belong to no single feature: loading saved variables, login, message dispatch.
 -- Provides NS.StatusLine.
 local _, NS = ...
 local Print, Debug, Configured = NS.Print, NS.Debug, NS.Configured
@@ -31,6 +31,7 @@ local function LoginSync()
   if not NS.db then return end
   loginAttempts = loginAttempts + 1
   NS.db.lastGI = nil                  -- nothing is "unchanged" at login: always re-read Guild Info
+  NS.RefreshRoster()
   NS.ReadGuildInfo()
   NS.EnsureChannel()
   Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured() and true or false),
@@ -71,11 +72,12 @@ local warned = false
 NS.events.PLAYER_LOGIN = function()
   NS.me.guid = UnitGUID and UnitGUID("player") or nil
   NS.mirror.reminded = false
-  NS.InstallMirrorHooks()
+  NS.InstallHooks()
   if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster()
   elseif GuildRoster then GuildRoster() end
   C_Timer.After(5, LoginSync)
   C_Timer.After(25, function()
+    NS.SendPresence()
     if NS.db.nicks[NS.MyName()] then NS.BroadcastNick() end
     NS.SendGuildAddon("NREQ")
   end)
@@ -88,19 +90,21 @@ NS.events.PLAYER_LOGIN = function()
   end)
 end
 
----------------------------------------------------------------- addon messages
--- CORELink packets arrive on three addon channels: GUILD (crosses realms, our guildmates), WHISPER (peers in
--- other guilds), CHANNEL (the link channel on this realm).
-NS.events.CHAT_MSG_ADDON = function(prefix, text, chatType, sender, _, _, localId, chanName)
+---------------------------------------------------------------- messages
+-- CORELink packets arrive on two addon channels, GUILD (our guildmates, every realm) and WHISPER (peers in
+-- other guilds), and as text on the link channel (addon users' own lines).
+NS.events.CHAT_MSG_ADDON = function(prefix, text, chatType, sender)
   if prefix ~= NS.PREFIX then return end
   if chatType == "GUILD" then
     NS.OnGuildAddon(text, sender)
   elseif chatType == "WHISPER" then
     NS.OnWhisperAddon(text, sender)
-  elseif chatType == "CHANNEL" then
-    if NS.IsLinkChannel(chanName) or (localId and localId == NS.ChannelId()) then
-      NS.OnLinkMessage(text)
-    end
+  end
+end
+
+NS.events.CHAT_MSG_CHANNEL = function(text, author, _, channelString, _, _, _, _, channelBaseName)
+  if NS.IsLinkChannel(channelString) or NS.IsLinkChannel(channelBaseName) then
+    NS.OnLinkMessage(text, author)
   end
 end
 
@@ -122,16 +126,9 @@ end)
 local function Housekeeping()
   if not NS.db then return end
   local now = GetTime()
-  for k, v in pairs(NS.seen) do if now - v > 60 then NS.seen[k] = nil end end
-  for k, v in pairs(NS.displayed) do if now - v > 60 then NS.displayed[k] = nil end end
-  for tag, t in pairs(NS.heard) do if now - t > 600 then NS.heard[tag] = nil end end
-  for tag, realms in pairs(NS.heardRealms) do
-    for realm, t in pairs(realms) do if now - t > 600 then realms[realm] = nil end end
-    if next(realms) == nil then NS.heardRealms[tag] = nil end
-  end
-  for realm, t in pairs(NS.guildRealms) do if now - t > 600 then NS.guildRealms[realm] = nil end end
-  NS.BridgeHousekeeping(now)
-  NS.BroadcastHeard()
+  for k, v in pairs(NS.seen) do if now - v > NS.FORGET_SECS then NS.seen[k] = nil end end
+  for k, v in pairs(NS.displayed) do if now - v > NS.FORGET_SECS then NS.displayed[k] = nil end end
+  for tag, t in pairs(NS.heard) do if now - t > NS.HEARD_SECS then NS.heard[tag] = nil end end
   NS.ReadGuildInfo()
   NS.EnsureChannel()
   NS.FocusClubStream()

@@ -31,7 +31,16 @@ local function FindLine()
   if not ok or type(text) ~= "string" or issecret(text) then GIState("not readable") return nil end
   if text == "" then GIState("empty (not received yet, or nothing written)") return nil end
   local i = text:lower():find("corelink:", 1, true)
-  if not i then GIState("no CORELink: line") return nil end
+  if not i then
+    GIState("no CORELink: line")
+    -- A character that changed guild would otherwise keep the old guild's channel and tag.
+    if NS.db.source == "Guild Info" and Configured() then
+      NS.LeaveLink()
+      NS.db.channel, NS.db.password, NS.db.tag, NS.db.source, NS.db.lastGI = nil, nil, nil, nil, nil
+      Print("this guild's Guild Info has no CORELink line; the settings from the previous guild were cleared.")
+    end
+    return nil
+  end
   return (text:sub(i):match("^[^\r\n]*") or ""):gsub("%s+$", "")
 end
 

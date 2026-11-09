@@ -1,6 +1,5 @@
---[[ CORELink - bridge guild chat between multiple co-guilds (retail 12.x API).
-     Guild messages are relayed into a hidden custom channel; clients in other
-     guilds show them in guild colours as "[GuildTag] [Author]: message".
+--[[ CORELink - bridge guild chat between co-guilds on World of Warcraft: Forever.
+     Members of linked guilds see each other's guild chat as "[GuildTag] [Author]: message".
 
      Configuration is done in game:
          /cl setup <channel> <password> [tag]     (use - for no password)
@@ -8,43 +7,46 @@
      shows it too) into Guild Info; every member's client then picks the
      settings up automatically. (Addons cannot write Guild Info themselves.)
 
-     Midnight/Forever restriction: in M+, PvP and encounters chat arrives as
-     secret values and addons cannot send chat; CORELink pauses there.
+     Transport, as live Forever allows it (measured 2026-11-08): a custom chat channel is shared by every
+     realm and its text is readable by addons, but addon messages on it are refused, and chat text can only be
+     sent from inside the player's own keypress. So an addon user's own guild line is posted into the hidden
+     channel as text from the chat send hooks, where every other addon user reads it. A line from a member
+     without the addon is whispered by the guild's courier to one addon user in every other guild (whisper
+     addon messages need no keypress), who hands it to their guildmates over the guild addon channel.
+
+     Midnight/Forever restriction: in M+, PvP and encounters chat arrives as secret values and addons cannot
+     send chat; CORELink pauses there.
 
      The addon is split into files, loaded in the order the TOC lists them. Every file receives the same
-     private table (NS, from the game's "..." vararg) and puts what later files need on it. A file only reads
-     from NS what earlier files defined, except through NS.events, NS.guildPackets and NS.whisperPackets,
-     which are filled in by any file and read when the game delivers the event. docs/ARCHITECTURE.md walks
-     a line through the files. ]]
+     private table (NS, from the game's "..." vararg) and puts what later files need on it. A file copies
+     off NS at load time only what earlier files defined (tests/load-order.lua checks it); anything else is
+     reached as NS.Name() when called. NS.events, NS.guildPackets, NS.whisperPackets and NS.commands are
+     registries any file fills in. docs/ARCHITECTURE.md walks a line through the files. ]]
 
 local _, NS = ...
 
 ---------------------------------------------------------------- constants
 NS.ADDON, NS.PROTO, NS.SEP = "CORELink", "CL4", "~"
-NS.PREFIX = "CORELink"                 -- addon message prefix on every channel
+NS.PREFIX = "CORELink"                 -- addon message prefix on the guild and whisper channels
 NS.MAX_MSG, NS.DEDUPE_SECS = 200, 10
+NS.HEARD_SECS = 600                    -- a guild or a player counts as present this long after it was last heard
+NS.FORGET_SECS = 60                    -- packet ids are remembered this long
 NS.DEFAULT_OFFICER_COLOR = "e8c63e"
 
 ---------------------------------------------------------------- shared state
--- NS.db is the saved-variables table (CORELinkDB), set at ADDON_LOADED; nil before that.
+-- NS.db is the saved-variables table (CORELinkDB, per character), set at ADDON_LOADED; nil before that.
 NS.db = nil
-NS.seen = {}        -- packet id -> time it was seen on our realm's channel (relayed, bridged or beaconed)
-NS.pending = {}     -- packet id -> true while a random back-off decides whether we relay it
+NS.seen = {}        -- packet id -> time it was seen (relayed by us, read from the channel, whispered, fanned out)
+NS.pending = {}     -- packet id -> true while a back-off decides whether the courier carries it
 NS.displayed = {}   -- packet id -> time it was shown in guild chat
-NS.sendQueue = {}   -- packets waiting for the channel (one per second)
-NS.whisperQueue = {}   -- { target=, text= } waiting for the whisper addon channel (one per second)
-NS.heard = {}       -- guild tag -> last time seen on the link channel (on OUR realm)
--- Custom channels are per realm: a guild's lines reach a realm only if that guild has an addon user on it.
--- Guildmates on other realms tell us what they hear (HEARD messages on the guild addon channel), so
--- /cl guilds can show which realms each linked guild is actually reaching.
-NS.heardRealms = {}   -- tag -> realm -> last time heard there (ours or a guildmate's realm)
-NS.guildRealms = {}   -- realm -> last time one of our own guildmates reported from it
+NS.heard = {}       -- guild tag -> last time one of its lines reached us by any path
+NS.whisperQueue = {}   -- { target=, text= } waiting for the whisper addon channel
 -- What we know about authors from relay packets: class token and officer label, keyed by chat name.
 -- Community lines carry neither, so this is how they get class and officer colours.
 NS.authorClass, NS.authorOfficer, NS.authorNick, NS.authorSeen = {}, {}, {}, {}
 -- Registries later files fill in; the events file and the packet dispatchers read them.
 NS.events = {}          -- game event -> handler(...)
-NS.guildPackets = {}    -- "HEARD", "NICK", ... -> handler(rest, sender) for the guild addon channel
+NS.guildPackets = {}    -- "PRESENT", "NICK", "LINE", ... -> handler(rest, sender) for the guild addon channel
 NS.whisperPackets = {}  -- "HELLO", "WB", ...  -> handler(rest, sender) for whisper addon messages
 NS.commands = {}        -- "/cl <name>" -> handler(arg)
 
@@ -93,6 +95,9 @@ function NS.Hash(s)
   return string.format("%08x", h)
 end
 
+-- The short random wait before a client acts on something another client may act on first.
+function NS.Backoff() return 0.3 + math.random() * 1.2 end
+
 function NS.Configured() return NS.db and NS.db.channel and NS.db.channel ~= "" end
 
 function NS.MyRealm()
@@ -100,15 +105,9 @@ function NS.MyRealm()
   return (type(r) == "string" and not issecret(r)) and r:gsub("[%s~|,]", "") or ""
 end
 
-function NS.NoteHeard(tag, realm, when)
-  if not tag or tag == "" or not realm or realm == "" then return end
-  NS.heardRealms[tag] = NS.heardRealms[tag] or {}
-  NS.heardRealms[tag][realm] = when
-end
-
 -- Who am I, in the format chat events and the roster use. On WoW: Forever that is "First Surname", while
 -- UnitName("player") may return only the first name, so identify ourselves by GUID and learn the name from
--- the roster or from our own guild messages. Nicknames are keyed by this name.
+-- the roster (Roster.lua looks it up on demand) or from our own guild messages. Nicknames are keyed by it.
 NS.me = { guid = nil, name = nil }
 
 function NS.LearnMyName(name)
@@ -122,7 +121,10 @@ function NS.LearnMyName(name)
   end
 end
 
-function NS.MyName() return NS.me.name or UnitName("player") end
+function NS.MyName()
+  if not NS.me.name and NS.LearnMyNameFromRoster then NS.LearnMyNameFromRoster() end
+  return NS.me.name or UnitName("player")
+end
 
 function NS.IsMe(author, guid)
   if guid and NS.me.guid and not issecret(guid) and guid == NS.me.guid then
@@ -139,8 +141,8 @@ function NS.GetTag()
   return (g:gsub("[%s~|]", "")):sub(1, 6)
 end
 
--- Trim to a byte limit without breaking links, colour codes or UTF-8 sequences.
-function NS.Trim(msg, limit)
+-- Cut to a byte limit without breaking links, colour codes or UTF-8 sequences; "..." marks the cut.
+function NS.Truncate(msg, limit)
   limit = math.max(20, math.min(limit or NS.MAX_MSG, NS.MAX_MSG))
   if #msg <= limit then return msg end
   msg = msg:sub(1, limit - 3)
@@ -184,9 +186,9 @@ function NS.CleanNick(str)
   return str:sub(1, 20)
 end
 
--- (Rank Nickname) for officers with a nickname, (Rank) for officers without,
--- (Nickname) for everyone else, nothing if neither applies.
-function NS.BuildTag(rank, nick)
+-- "(Rank Nickname) " for officers with a nickname, "(Rank) " for officers without, "(Nickname) " for everyone
+-- else, "" if neither applies. The prefix shown before a line's text.
+function NS.RankNickPrefix(rank, nick)
   if nick and nick ~= "" then
     if rank then return "(" .. rank .. " " .. nick .. ") " end
     return "(" .. nick .. ") "

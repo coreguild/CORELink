@@ -28,10 +28,10 @@ local function SendEcho(id, tag, author, msg, label, nick)
   echoed[id] = now
   for k, t in pairs(echoed) do if now - t > 600 then echoed[k] = nil end end
   NS.SendGuildAddon("ECHO" .. SEP .. id)
-  local who = NS.BuildTag(label, (db.showNick ~= false) and nick or nil)
+  local who = NS.RankNickPrefix(label, (db.showNick ~= false) and nick or nil)
   who = author .. (who ~= "" and (" " .. who:sub(1, -2)) or "")
   stats.active = true
-  local ok = pcall(SendChatMessage, NS.Trim("[" .. tag .. "] " .. who .. ": " .. msg, 250), "GUILD")
+  local ok = pcall(SendChatMessage, NS.Truncate("[" .. tag .. "] " .. who .. ": " .. msg, 250), "GUILD")
   stats.active = false
   if ok then stats.sent = stats.sent + 1; Debug("echoed %s into guild chat", id) end
 end

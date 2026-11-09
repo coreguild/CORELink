@@ -1,17 +1,14 @@
--- CORELink/Whisper.lua: the whisper bridge, for guilds that share no realm with ours.
--- "guilds=Name One, Name Two" on the Guild Info line names the collective. Each guild's courier on a realm
--- (alphabetically first guildmate running the addon there) asks the server who is online in each guild
--- (silent /who), greets a few of them over whisper addon messages, and remembers who answered (peers; a player
--- without the addon never answers). A line heard on this realm is whispered to one peer on every realm that
--- would not otherwise get it; that peer drops it into its own realm's channel. Whispers need no keypress and
--- are the only cross-realm path not tied to a guild or a community.
--- On Forever a "First Surname" is unique across realms: /who sees every realm but names carry no realm, and a
--- plain name whispers across realms. So a peer's realm is learned only from its PEER answer, and the courier
--- keeps greeting names it has not heard from, so that every realm a guild lives on ends up with a peer.
+-- CORELink/Whisper.lua: the courier, its peers, and the whisper path between guilds.
+-- The courier is the alphabetically first guildmate running the addon (us included), on any realm; every client
+-- computes the same answer from the PRESENT reports. It carries lines from members without the addon: one
+-- whisper per other guild, to that guild's freshest peer. A peer is an addon user of another guild, learned
+-- from their own lines on the channel, from a HELLO/PEER exchange, or from gossip. Whisper addon messages need
+-- no keypress and cross realms by plain "First Surname".
 -- Packets (whisper addon channel): HELLO~tag~realm~guild, PEER~tag~realm~guild (the answer),
--- DIR~name@realm@tag@guild;... (gossip), WB~<relay packet> (a bridged line).
--- Provides NS.peers, NS.LoadPeers, NS.IsCourier, NS.Hello, NS.ForgetHello, NS.WhisperAvailable, NS.ScheduleWho,
--- NS.ResetWhoTimer, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName, NS.whisperStats, NS.guildOnline.
+-- DIR~name@realm@tag@guild;... (gossip), WB~<packet> (a carried line).
+-- Provides NS.peers, NS.LoadPeers, NS.LivePeer, NS.NotePeer, NS.IsCourier, NS.Courier, NS.Hello, NS.ForgetHello,
+-- NS.WhisperAvailable, NS.ScheduleWho, NS.ResetWhoTimer, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName,
+-- NS.whisperStats, NS.guildOnline, NS.PEER_ONLINE_SECS.
 local _, NS = ...
 local Debug, Locked, IsMe, MyName, MyRealm, GetTag = NS.Debug, NS.Locked, NS.IsMe, NS.MyName, NS.MyRealm, NS.GetTag
 local issecret, SEP = NS.issecret, NS.SEP
@@ -20,10 +17,12 @@ local peers = {}             -- name (as the game gives it) -> { tag=, realm=, g
 NS.peers = peers
 NS.guildOnline = {}          -- guild name -> { n = online count, t = time }  (from /who)
 local helloAt = {}           -- whisper target -> last hello time
-NS.whisperStats = { who = 0, hello = 0, answered = 0, sent = 0, recv = 0 }
+local fanned = {}            -- packet id -> time we fanned it out to our guild
+NS.whisperStats = { who = 0, hello = 0, answered = 0, sent = 0, recv = 0, fanned = 0 }
 local stats = NS.whisperStats
 local whoQueue, whoPending, whoNext = {}, nil, 0
 local WHO_EVERY, HELLO_EVERY, HELLO_PER_GUILD = 600, 600, 3
+local COURIER_SECS = 360      -- a guildmate silent this long is not a courier candidate
 NS.PEER_ONLINE_SECS = 1200    -- a peer silent this long is not whispered to
 local PEER_ONLINE_SECS, PEER_KEEP_SECS = NS.PEER_ONLINE_SECS, 7 * 86400
 
@@ -36,22 +35,25 @@ end
 
 local function SavePeers() if NS.db then NS.db.peers = peers end end
 
--- Answered us in the last 20 minutes. A peer that never answered has seen == 0 and is never live.
+-- Heard from in the last 20 minutes. A peer that never answered has seen == 0 and is never live.
 local function Live(p, now) return p.seen > 0 and now - p.seen <= PEER_ONLINE_SECS end
 NS.LivePeer = Live
 
--- Our guild's courier on this realm: the alphabetically first guildmate (us included) seen running the addon
--- here in the last 6 minutes. Every client computes the same answer.
-function NS.IsCourier()
-  local me, now, mine = MyName(), GetTime(), MyRealm()
-  local first = me
-  for name, c in pairs(NS.courierSeen) do
-    if c.realm == mine and now - c.t <= 360 and name < first then first = name end
+---------------------------------------------------------------- courier election
+-- Our guild's courier: the alphabetically first of ourselves and the guildmates whose PRESENT (or any addon
+-- message) we saw in the last 6 minutes.
+function NS.Courier()
+  local first, now = MyName(), GetTime()
+  for name, t in pairs(NS.addonUsers) do
+    if now - t <= COURIER_SECS and name < first then first = name end
   end
-  return first == me
+  return first
 end
+
+function NS.IsCourier() return NS.Courier() == MyName() end
 local IsCourier = NS.IsCourier
 
+---------------------------------------------------------------- peers
 function NS.WhisperAvailable() return C_ChatInfo and C_ChatInfo.SendAddonMessage and not Locked() end
 
 local function QueueWhisper(target, text)
@@ -66,12 +68,15 @@ local function RememberPeer(key, tag, realm, guild)
   if not key or key == "" or not tag or tag == "" then return end
   local p = peers[key] or {}
   p.tag, p.seen = tag, GetTime()
-  p.realm = (realm ~= "" and realm) or p.realm or "?"
-  p.guild = (guild ~= "" and guild) or p.guild
+  p.realm = (realm and realm ~= "" and realm) or p.realm or "?"
+  p.guild = (guild and guild ~= "" and guild) or p.guild
   peers[key] = p
   SavePeers()
-  NS.NoteHeard(tag, p.realm, GetTime())
+  NS.heard[tag] = GetTime()
 end
+
+-- Another guild's addon user just relayed their own line: that is a live peer with no exchange needed.
+function NS.NotePeer(author, tag) RememberPeer(author, tag, nil, nil) end
 
 local function MyCard(kind)
   local g = GetGuildInfo("player") or ""
@@ -91,15 +96,12 @@ local Hello = NS.Hello
 
 function NS.ForgetHello(target) helloAt[target] = nil end
 
--- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest. Forever realm names are
--- long (CAMWOWUS1Realm1PvE), so the realm is left empty when the name already ends in "-realm".
+-- Up to ~240 bytes of "name@realm@tag@guild;" so one good contact teaches the rest.
 local function Directory()
   local now, out, size = GetTime(), {}, 0
   for key, p in pairs(peers) do
     if Live(p, now) then
-      local realm = p.realm or "?"
-      if key:sub(-#realm - 1) == "-" .. realm then realm = "" end
-      local e = key .. "@" .. realm .. "@" .. p.tag .. "@" .. (p.guild or "")
+      local e = key .. "@" .. (p.realm or "?") .. "@" .. p.tag .. "@" .. (p.guild or "")
       if size + #e + 1 > 230 then break end
       out[#out + 1] = e; size = size + #e + 1
     end
@@ -107,8 +109,10 @@ local function Directory()
   return table.concat(out, ";")
 end
 
----------------------------------------------------------------- who rounds
--- Silent /who per guild of the collective, one at a time, never while the player's Who window is open.
+---------------------------------------------------------------- who rounds (optional bootstrap)
+-- With guilds= on the Guild Info line, the courier asks who is online in each listed guild and greets a few,
+-- so a guild nobody has heard from yet still gets a peer. Silent, one guild at a time, never while the
+-- player's Who window is open.
 local function WhoAvailable()
   return C_FriendList and C_FriendList.SendWho and C_FriendList.GetNumWhoResults and C_FriendList.GetWhoInfo
 end
@@ -158,8 +162,7 @@ local function WhoResults(g)
 end
 
 -- Greet a few names we have not heard from, rotating through the list over the rounds (a name waits 30 min
--- between hellos): results carry no realm, so this is how every realm the guild lives on gets a peer.
--- Known peers are pinged by PeerUpkeep instead.
+-- between hellos). Known peers are pinged by PeerUpkeep instead.
 local function GreetSome(names)
   local now, greeted = GetTime(), 0
   for _, key in ipairs(names) do
@@ -182,27 +185,20 @@ local function OnWhoList()
 end
 NS.events.WHO_LIST_UPDATE = OnWhoList
 
----------------------------------------------------------------- routing
--- A line heard natively on our realm: whisper it to one peer on every realm that would not otherwise get it
--- (no addon user of the origin guild there, no guildmate of ours there to bridge it).
+---------------------------------------------------------------- carrying a line
+-- The courier carries a guildmate's line: one whisper to the freshest live peer of every other guild.
 function NS.WhisperOut(id, tag, text)
   local db = NS.db
-  if not db or db.whisper == false or not IsCourier() or not NS.WhisperAvailable() then return end
-  local now, mine = GetTime(), MyRealm()
-  local heardThere, guildThere = NS.heardRealms[tag], NS.guildRealms
-  local best = {}
+  if not db or db.whisper == false or not NS.WhisperAvailable() then return end
+  local now, best = GetTime(), {}
   for key, p in pairs(peers) do
-    local realm = p.realm
-    local covered = (heardThere and heardThere[realm] and now - heardThere[realm] <= 600)
-      or (guildThere[realm] and now - guildThere[realm] <= 600)
-    if realm and realm ~= mine and Live(p, now) and not covered then
-      if not best[realm] or p.seen > peers[best[realm]].seen then best[realm] = key end
-    end
+    local fresher = not best[p.tag] or p.seen > peers[best[p.tag]].seen
+    if p.tag ~= tag and Live(p, now) and fresher then best[p.tag] = key end
   end
-  for realm, key in pairs(best) do
+  for peerTag, key in pairs(best) do
     QueueWhisper(key, "WB" .. SEP .. text)
     stats.sent = stats.sent + 1
-    Debug("whispered %s to %s (%s on %s)", id, PeerName(key), peers[key].tag, realm)
+    Debug("carried %s to %s <%s>", id, PeerName(key), peerTag)
   end
 end
 
@@ -227,9 +223,8 @@ NS.whisperPackets.DIR = function(rest)
   local greeted = 0
   for entry in rest:gmatch("[^;]+") do
     local key, realm, tag, guild = entry:match("^([^@]+)@([^@]*)@([^@]*)@(.*)$")
-    if key and realm == "" then realm = key:match("%-(.+)$") or "?" end
     if key and tag ~= "" and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
-      peers[key] = { tag = tag, realm = realm, guild = guild, seen = 0 }   -- known, not yet confirmed
+      peers[key] = { tag = tag, realm = realm ~= "" and realm or "?", guild = guild, seen = 0 }   -- not yet confirmed
       SavePeers()
       greeted = greeted + 1
       Hello(key)
@@ -237,12 +232,25 @@ NS.whisperPackets.DIR = function(rest)
   end
 end
 
--- WB: a peer on another realm whispered us a line its realm heard; drop it into ours like a bridged line.
+-- WB: another guild's courier carried a line to us. Show it and fan it out to our guild once. Accepted from a
+-- known peer, or for a guild we have heard on the channel; a stranger's whisper is dropped.
 NS.whisperPackets.WB = function(rest, sender)
   if not NS.db or NS.db.whisper == false then return end
+  local tag = rest:match("^CL%d+" .. SEP .. "%x+" .. SEP .. "([^" .. SEP .. "]+)")
+  local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
+  if not known then
+    Debug("dropped a carried line from %s: not a peer, tag %s not heard", sender, tostring(tag))
+    return
+  end
   stats.recv = stats.recv + 1
   if peers[sender] then peers[sender].seen = GetTime() end
-  NS.OnBridgeReceived(rest, sender)
+  local id = rest:match("^CL%d+" .. SEP .. "(%x+)" .. SEP)
+  NS.ShowPacket(rest, "whisper")
+  if id and not fanned[id] then
+    fanned[id] = GetTime()
+    stats.fanned = stats.fanned + 1
+    NS.SendGuildAddon("LINE" .. SEP .. rest)
+  end
 end
 
 function NS.OnWhisperAddon(text, sender)
@@ -252,8 +260,8 @@ function NS.OnWhisperAddon(text, sender)
   if handler then handler(rest, sender) end
 end
 
--- Keep live peers fresh: couriers ping known peers every 10 minutes; anyone answers. Forget peers silent for
--- a week. Then run the who round if it is due.
+-- Keep live peers fresh: the courier pings known peers every 10 minutes; anyone answers. Forget peers silent
+-- for a week and fanned ids after a minute. Then run the who round if it is due.
 local function PeerUpkeep()
   if not NS.db then return end
   local now = GetTime()
@@ -261,6 +269,7 @@ local function PeerUpkeep()
     if now - p.seen > PEER_KEEP_SECS then peers[key] = nil
     elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY then Hello(key, "HELLO") end
   end
+  for id, t in pairs(fanned) do if now - t > NS.FORGET_SECS then fanned[id] = nil end end
   SavePeers()
   NS.ScheduleWho()
 end

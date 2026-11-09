@@ -10,31 +10,22 @@ local function CountKeys(t)
   return n
 end
 
-local function LivePeers()
-  local n, now = 0, GetTime()
-  for _, p in pairs(NS.peers) do if NS.LivePeer(p, now) then n = n + 1 end end
-  return n
-end
-
 local function OnOff(flag) return flag and "on" or "off" end
 
 local function RecentTags()
-  local tags = {}
-  for tag, t in pairs(NS.heard) do if GetTime() - t <= 600 then tags[#tags + 1] = tag end end
+  local tags, now = {}, GetTime()
+  for tag, t in pairs(NS.heard) do if now - t <= NS.HEARD_SECS then tags[#tags + 1] = tag end end
+  table.sort(tags)
   return #tags > 0 and table.concat(tags, ",") or "none"
 end
 
--- "TAG@realm1+realm2,..." : which realms each guild was heard on in the last 10 minutes.
-local function ReachSummary()
-  local out, now = {}, GetTime()
-  for tag, realms in pairs(NS.heardRealms) do
-    local rs = {}
-    for realm, t in pairs(realms) do if now - t <= 600 then rs[#rs + 1] = realm end end
-    table.sort(rs)
-    if #rs > 0 then out[#out + 1] = tag .. "@" .. table.concat(rs, "+") end
+-- live peers in total, and per guild tag
+local function LivePeers()
+  local n, perTag, now = 0, {}, GetTime()
+  for _, p in pairs(NS.peers) do
+    if NS.LivePeer(p, now) then n = n + 1; perTag[p.tag] = (perTag[p.tag] or 0) + 1 end
   end
-  table.sort(out)
-  return #out > 0 and table.concat(out, ",") or "none"
+  return n, perTag
 end
 
 local function StreamSummary()
@@ -53,17 +44,16 @@ local function MirrorSummary()
     mirror.skipped, mirror.hidden, tostring(club.focused), mirror.hooks)
 end
 
-local function WhisperSummary()
-  local db, s = NS.db, NS.whisperStats
-  return string.format("whisper %s courier=%s guilds=%d peers=%d who=%d hello=%d answered=%d sent=%d recv=%d",
-    OnOff(db.whisper ~= false), tostring(NS.IsCourier()), db.guilds and #db.guilds or 0, LivePeers(),
-    s.who, s.hello, s.answered, s.sent, s.recv)
+local function RelaySummary()
+  local s = NS.relayStats
+  return string.format("relay typed=%d carried=%d shown=%d", s.typed, s.carried, s.shown)
 end
 
-local function BridgeSummary()
-  local s = NS.bridgeStats
-  return string.format("bridge %s fwd=%d resent=%d skipped=%d elsewhere=%s", OnOff(NS.db.bridge ~= false),
-    s.forwarded, s.resent, s.skipped, tostring(NS.HasGuildmatesElsewhere()))
+local function WhisperSummary()
+  local db, s = NS.db, NS.whisperStats
+  return string.format("whisper %s courier=%s guilds=%d peers=%d who=%d hello=%d answered=%d sent=%d recv=%d fanned=%d",
+    OnOff(db.whisper ~= false), NS.IsCourier() and "me" or NS.Courier(), db.guilds and #db.guilds or 0, (LivePeers()),
+    s.who, s.hello, s.answered, s.sent, s.recv, s.fanned)
 end
 
 local function EchoSummary()
@@ -89,15 +79,14 @@ local function BuildReport()
     "joinHold " .. (GetTime() < conn.blockedUntil and tostring(conn.blockedWhy) or "no"),
     "lockdown " .. tostring(NS.Locked()),
     "lastSend " .. tostring(conn.lastSendResult),
-    "queue " .. #NS.sendQueue,
     "realm " .. MyRealm(),
+    "me " .. tostring(NS.me.name or ("short: " .. tostring(UnitName("player")))),
     "heard " .. RecentTags(),
-    "reach " .. ReachSummary(),
-    string.format("tables seen=%d displayed=%d nicks=%d",
-      CountKeys(NS.seen), CountKeys(NS.displayed), CountKeys(db.nicks)),
+    string.format("tables seen=%d displayed=%d nicks=%d addonUsers=%d",
+      CountKeys(NS.seen), CountKeys(NS.displayed), CountKeys(db.nicks), CountKeys(NS.addonUsers)),
     MirrorSummary(),
+    RelaySummary(),
     WhisperSummary(),
-    BridgeSummary(),
     EchoSummary(),
     "debug " .. tostring(db.debug == true),
     "log: " .. (#NS.debugLog > 0 and table.concat(NS.debugLog, " / ") or "empty"),
@@ -112,37 +101,23 @@ NS.commands.report = function()
 end
 
 ---------------------------------------------------------------- /cl guilds
--- "TAG - realm (12s ago), realm2 (40s ago) | NOT reaching <ours>" for each guild heard in the last 10 minutes.
-local function PrintHeardGuilds(now, mine)
-  local n, tags = 0, {}
-  for tag in pairs(NS.heardRealms) do tags[#tags + 1] = tag end
+-- "TAG - heard 12s ago, 2 peers" for each guild heard in the last 10 minutes, then the courier and the
+-- counts from the last who round.
+NS.commands.guilds = function()
+  local now, n = GetTime(), 0
+  local _, perTag = LivePeers()
+  local tags = {}
+  for tag, t in pairs(NS.heard) do if now - t <= NS.HEARD_SECS then tags[#tags + 1] = tag end end
   table.sort(tags)
   for _, tag in ipairs(tags) do
-    local parts = {}
-    for realm, t in pairs(NS.heardRealms[tag]) do
-      if now - t <= 600 then parts[#parts + 1] = string.format("%s (%ds ago)", realm, math.floor(now - t)) end
-    end
-    if #parts > 0 then
-      n = n + 1
-      table.sort(parts)
-      local reachesUs = NS.heard[tag] and now - NS.heard[tag] <= 600
-      local note = (not reachesUs and tag ~= GetTag()) and (" | NOT reaching " .. mine) or ""
-      local ours = tag == GetTag() and " (your guild)" or ""
-      Print(string.format("%s%s - %s%s", tag, ours, table.concat(parts, ", "), note))
-    end
+    n = n + 1
+    local ours = tag == GetTag() and " (your guild)" or ""
+    local peersText = tag == GetTag() and "" or string.format(", %d peer(s) to whisper to", perTag[tag] or 0)
+    Print(string.format("%s%s - heard %ds ago%s", tag, ours, math.floor(now - NS.heard[tag]), peersText))
   end
   if n == 0 then Print("no guilds heard on the link in the last 10 minutes.") end
-end
-
-local function PrintOurRealms(mine)
-  local realms = {}
-  for realm in pairs(NS.guildRealms) do realms[#realms + 1] = realm end
-  if not NS.guildRealms[mine] then realms[#realms + 1] = mine end
-  table.sort(realms)
-  Print("your realm: " .. mine .. " | your guild runs CORELink on: " .. table.concat(realms, ", "))
-end
-
-local function PrintWhoCounts(now)
+  Print("courier for your guild: " .. (NS.IsCourier() and "you" or NS.Courier())
+    .. " (" .. CountKeys(NS.addonUsers) .. " guildmate(s) seen running the addon)")
   local names = {}
   for g in pairs(NS.guildOnline) do names[#names + 1] = g end
   table.sort(names)
@@ -152,17 +127,10 @@ local function PrintWhoCounts(now)
   end
 end
 
-NS.commands.guilds = function()
-  local now, mine = GetTime(), MyRealm()
-  PrintHeardGuilds(now, mine)
-  PrintOurRealms(mine)
-  PrintWhoCounts(now)
-end
-
 ---------------------------------------------------------------- /cl peers
 local function PeerState(p, now)
   if p.seen == 0 then return "not yet answered" end
-  if now - p.seen <= NS.PEER_ONLINE_SECS then return "seen " .. math.floor(now - p.seen) .. "s ago" end
+  if NS.LivePeer(p, now) then return "seen " .. math.floor(now - p.seen) .. "s ago" end
   return "offline"
 end
 
@@ -172,11 +140,10 @@ NS.commands.peers = function()
   table.sort(keys)
   for _, key in ipairs(keys) do
     local p = NS.peers[key]
-    Print(string.format("%s - %s on %s (%s) %s", NS.PeerName(key), p.tag, tostring(p.realm), p.guild or "?",
-      PeerState(p, now)))
+    Print(string.format("%s - %s (%s) %s", NS.PeerName(key), p.tag, p.guild or "?", PeerState(p, now)))
   end
   if #keys == 0 then
-    Print("no peers yet. Guild leaders: add guilds=<name>, <name> to the CORELink line in Guild Info.")
+    Print("no peers yet. They appear as soon as another guild's addon user says something in guild chat.")
   end
-  Print("courier on " .. MyRealm() .. ": " .. (NS.IsCourier() and "you" or "a guildmate"))
+  Print("courier for your guild: " .. (NS.IsCourier() and "you" or NS.Courier()))
 end
