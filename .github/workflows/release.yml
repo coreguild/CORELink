@@ -1,9 +1,10 @@
 name: release
-# Manual button in the Actions tab: Actions -> release -> Run workflow.
+# Manual button in the Actions tab: Actions -> release -> Run workflow -> pick the branch.
 # Version numbers are automatic: computed from existing tags (see scripts/release.sh header).
-# channel=rc    next candidate: v0.2.0-rc2 if a 0.2.0 series is open, else bump the last release and start rc1
-# channel=final promotes the rc on main to v<ver>; latest release; updates latest/CORELink.zip
-# channel=site  only re-renders the download page
+# channel=rc    on a release/* branch only: release/0.2.0 -> v0.2.0-rcN; release/<name> -> next rc of the open
+#               series, else bump the last release and start rc1. Refused on main.
+# channel=final on main only: promotes the rc merged into main (addon files must match) to v<ver>; latest release
+# channel=site  on main: only re-renders the download page
 on:
   workflow_dispatch:
     inputs:
@@ -32,12 +33,12 @@ jobs:
   release:
     name: ${{ inputs.channel }}
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')
     concurrency: release
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
           fetch-depth: 0
       - name: Install Lua and luacheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4 lua-check
@@ -63,7 +64,7 @@ jobs:
         run: |
           {
             echo "### Release: ${{ inputs.channel }}"
-            echo "- Page: https://core-wow-community.github.io/CORELink/"
-            echo "- Stable: https://core-wow-community.github.io/CORELink/latest/CORELink.zip"
-            echo "- RC: https://core-wow-community.github.io/CORELink/rc/CORELink.zip"
+            echo "- Page: https://coreguild.github.io/CORELink/"
+            echo "- Stable: https://coreguild.github.io/CORELink/latest/CORELink.zip"
+            echo "- RC: https://coreguild.github.io/CORELink/rc/CORELink.zip"
           } >> "$GITHUB_STEP_SUMMARY"

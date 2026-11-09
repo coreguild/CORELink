@@ -6,7 +6,7 @@ Written for Tanner; works for anyone joining the CORELink repo.
 
 1. Go to https://github.com/signup and create an account. Use the username you want to be known by in commits.
 2. Turn on two-factor authentication when prompted (GitHub requires it for contributors).
-3. Send your username to Jacob. He will invite you to the `core-wow-community` organization. Accept the
+3. Send your username to Jacob. He will invite you to the `coreguild` organization. Accept the
    invitation from the email or from https://github.com/notifications.
 
 ## 2. Tools (10 minutes)
@@ -31,7 +31,7 @@ gh auth login --web --git-protocol https
 ## 3. Get the code (2 minutes)
 
 ```
-git clone https://github.com/core-wow-community/CORELink.git
+git clone https://github.com/coreguild/CORELink.git
 cd CORELink
 tests/run.sh                 # should end with "0 failed"
 ```
@@ -40,7 +40,7 @@ tests/run.sh                 # should end with "0 failed"
 
 ```
 scripts/install-local.sh     # Mac default path; on Windows pass your flavor folder, e.g.
-scripts/install-local.sh "/c/Program Files (x86)/World of Warcraft/_classic_beta_"
+scripts/install-local.sh "/c/Program Files (x86)/World of Warcraft/_forever_"
 ```
 This links the repo's `CORELink/` folder into `Interface/AddOns`. Your old copy is moved aside as a backup.
 From now on, save a file, type `/reload` in game, and the change is live.
@@ -50,7 +50,7 @@ From now on, save a file, type `/reload` in game, and the change is live.
 ```
 git switch main && git pull                      # start from the latest
 git switch -c feat/my-change                     # feat/ fix/ docs/ chore/
-# ...edit CORELink/CORELink.lua, /reload, test with two characters in two guilds...
+# ...edit the file in CORELink/ that owns the feature (docs/ARCHITECTURE.md), /reload, test with two characters...
 tests/run.sh                                     # add a check in tests/harness.lua for new behaviour
 git add -A && git commit -m "Add my change"
 git push -u origin feat/my-change
@@ -78,7 +78,10 @@ point it at `agents/wow-api-gotchas.md`. Those are the two mistakes that cost us
 
 | Need | Look at |
 |---|---|
-| How the addon works, all `/cl` commands | `README.md` |
+| How the addon works | `README.md`, then `docs/ARCHITECTURE.md` |
+| All `/cl` commands and the Guild Info line | `docs/COMMANDS.md` |
+| Something not working in game | `docs/TROUBLESHOOTING.md` |
+| Tests, scripts, how a change ships | `docs/DEVELOPMENT.md` |
 | Branch and release rules | `CONTRIBUTING.md` |
 | What the game lets addons do | `agents/wow-api-gotchas.md` |
 | How to turn an idea into a PR | `agents/feature-requests.md` |

@@ -25,10 +25,29 @@ Read before changing anything in the relay, channel or chat code.
 8. **Secret values.** On Midnight-era clients chat payloads can be secret inside instances; guard with
    `issecretvalue` and pause relaying when `C_ChatInfo.InChatMessagingLockdown()` is true.
 9. **Factions.** Custom channels are faction-bound on Classic clients; cross-faction bridging is not possible.
-   **Realms.** Custom channels are per realm (`Classic Beta PvE` and `Classic Beta PvE 2` are separate on the
-   Forever beta). Guild addon messages cross realms, which is what the cross-realm bridge rides on.
+   **Realms.** On live Forever realms are not chat boundaries: custom channels, guild addon messages and
+   whispers all cross them (normalized names drop the spaces: `CAMWOWUS1Realm1PvE`). The beta had per-realm
+   channels; that was a beta artefact.
+   **Custom channels on live Forever** (tested 2026-11-08): a custom chat channel is shared by every realm (text
+   typed on Realm 7 shows on Realm 5), its text arrives readable to addons with the author's full name, but
+   `SendAddonMessage(..., "CHANNEL", id)` is answered by the server with `NOT_ALLOWED_IN_CHANNEL` every time,
+   for every character and channel tried. Chat text can only be sent from inside the player's keypress. So:
+   relay as text from the send hooks, never as addon packets on a channel. The beta allowed the packets.
+   **Forever names are unique across realms** (tested 2026-11-06): a chat whisper to a plain `First Surname`
+   reaches a player on another realm, their reply shows no `-Realm` suffix, `/who` returns players from every
+   realm, and `C_FriendList.GetWhoInfo` gives `fullName` without a realm. Nothing in `/who` tells a player's
+   realm; only `GetNormalizedRealmName()` on their own client does. `/who g-"Name"` is a substring match
+   (`g-"CORE"` also returns `Molten Soft Core`); filter on `fullGuildName`. Results are capped at 50.
 11. **Communities (`C_Club`) exist on Forever but sends are hardware-gated.** `C_Club.SendMessage` from a
     `/run` (keypress) delivers; the same call from a `C_Timer` is accepted and silently dropped (tested
     2026-10-08). So a community can carry only lines typed by the player, never relays for others.
 10. **Interface numbers.** Forever = `16001`. Do not put dotted versions like `12.3.1` in `## Interface:`; use the
     numeric form only.
+
+12. **Community message text is a Kstring placeholder.** `C_Club.GetMessageInfo(...).content` on Forever is a token
+    such as `|Kw158|k` (8 bytes). `issecretvalue` says false, string functions run on it, but it carries no text:
+    the chat frame renders it, the addon cannot match it, and on another client it draws as "Unknown", so it
+    cannot be relayed or forwarded. Author name, guid and class come from `info.author` and
+    `C_Club.GetMemberInfo`; our own and guildmates' posts are recognised by guid against the roster. Put anything
+    readers must see (tag, rank, nickname) in the posted text itself. Measured 2026-10-13 with the probe
+    `print(#i.content, i.content:byte(1, 12))`.

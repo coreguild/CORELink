@@ -24,7 +24,9 @@ Hard rules:
    Never edit `## Version:` in the TOCs; it is `@project-version@` and the release job stamps the real number.
 3. You cannot run the game. Say "not verified in game" for anything the mock harness does not cover.
 4. Do not change the wire protocol (`PROTO`, field order, separator) without bumping the version and keeping old versions readable.
-5. Do not add dependencies or build steps. The addon is one Lua file plus two TOC files.
+5. Do not add dependencies or build steps. The addon is the Lua files in `CORELink/` plus two TOC files that
+   list them in load order; a new file goes into both TOCs. `docs/ARCHITECTURE.md` says what goes where.
+   `tests/size.sh` enforces: a file under 400 lines, a function under 40; luacheck caps lines at 120.
 6. Keep the addon Lua 5.1 compatible and guard any API that may be missing on this client.
 7. Before anything is merged, run the `review-pr` skill (or walk `agents/review-checklist.md`) and post the result
    on the PR. CI also fails the PR when the TOC interface number no longer matches the live game client.
