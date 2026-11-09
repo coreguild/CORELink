@@ -36,6 +36,10 @@ end
 
 local function SavePeers() if NS.db then NS.db.peers = peers end end
 
+-- Answered us in the last 20 minutes. A peer that never answered has seen == 0 and is never live.
+local function Live(p, now) return p.seen > 0 and now - p.seen <= PEER_ONLINE_SECS end
+NS.LivePeer = Live
+
 -- Our guild's courier on this realm: the alphabetically first guildmate (us included) seen running the addon
 -- here in the last 6 minutes. Every client computes the same answer.
 function NS.IsCourier()
@@ -92,7 +96,7 @@ function NS.ForgetHello(target) helloAt[target] = nil end
 local function Directory()
   local now, out, size = GetTime(), {}, 0
   for key, p in pairs(peers) do
-    if now - p.seen <= PEER_ONLINE_SECS then
+    if Live(p, now) then
       local realm = p.realm or "?"
       if key:sub(-#realm - 1) == "-" .. realm then realm = "" end
       local e = key .. "@" .. realm .. "@" .. p.tag .. "@" .. (p.guild or "")
@@ -191,7 +195,7 @@ function NS.WhisperOut(id, tag, text)
     local realm = p.realm
     local covered = (heardThere and heardThere[realm] and now - heardThere[realm] <= 600)
       or (guildThere[realm] and now - guildThere[realm] <= 600)
-    if realm and realm ~= mine and now - p.seen <= PEER_ONLINE_SECS and not covered then
+    if realm and realm ~= mine and Live(p, now) and not covered then
       if not best[realm] or p.seen > peers[best[realm]].seen then best[realm] = key end
     end
   end

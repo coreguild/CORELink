@@ -2,7 +2,7 @@
 -- Everything here only reads state and prints it.
 local _, NS = ...
 local Print, Configured, GetTag, MyRealm = NS.Print, NS.Configured, NS.GetTag, NS.MyRealm
-local conn, mirror = NS.conn, NS.mirror
+local conn, mirror, club = NS.conn, NS.mirror, NS.club
 
 local function CountKeys(t)
   local n = 0
@@ -12,7 +12,7 @@ end
 
 local function LivePeers()
   local n, now = 0, GetTime()
-  for _, p in pairs(NS.peers) do if now - p.seen <= NS.PEER_ONLINE_SECS then n = n + 1 end end
+  for _, p in pairs(NS.peers) do if NS.LivePeer(p, now) then n = n + 1 end end
   return n
 end
 
@@ -48,9 +48,9 @@ local function MirrorSummary()
   return string.format("mirror post=%s read=%s club=%s id=%s type=%s member=%s stream=%s channels=%d"
     .. " posted=%d failed=%d shown=%d skipped=%d hidden=%d focused=%s hooks=%s",
     OnOff(db.mirror ~= false), OnOff(db.mirrorRead ~= false), tostring(db.club), tostring(NS.ResolveClubId()),
-    (db.club and NS.ClubIsCharacter()) and "wow" or tostring(mirror.clubType), tostring(db.club and NS.ClubMember()),
+    (db.club and NS.ClubIsCharacter()) and "wow" or tostring(club.clubType), tostring(db.club and NS.ClubMember()),
     StreamSummary(), CountKeys(NS.ClubStreams() or {}), mirror.posted, mirror.failed, mirror.shown,
-    mirror.skipped, mirror.hidden, tostring(mirror.focused), mirror.hooks)
+    mirror.skipped, mirror.hidden, tostring(club.focused), mirror.hooks)
 end
 
 local function WhisperSummary()
@@ -154,7 +154,6 @@ end
 
 NS.commands.guilds = function()
   local now, mine = GetTime(), MyRealm()
-  for tag, t in pairs(NS.heard) do if now - t > 600 then NS.heard[tag] = nil end end
   PrintHeardGuilds(now, mine)
   PrintOurRealms(mine)
   PrintWhoCounts(now)
