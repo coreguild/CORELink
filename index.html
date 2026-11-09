@@ -33,79 +33,11 @@
       <p class="meta">For guild leads testing the next version. Published 2026-11-09. Report problems with <code>/cl report</code>.</p>
       <details class="notes">
         <summary>What's new in 0.2.0</summary>
-        <p>Transport rebuilt for live WoW: Forever, where addon messages on custom channels are refused: your own guild lines are posted into the hidden channel as text from your keypress and reach every guild on every realm at once; lines from members without the addon are carried by your guild's courier by whisper. Realms no longer matter. Settings are now per character: Guild Info restores the channel and tag, nicknames must be set again. 0.1.x clients do not interoperate.</p>
-<h3><a href="https://github.com/core-wow-community/CORELink/compare/v0.1.0...v0.2.0-rc1">0.2.0-rc1</a> (2026-11-09)</h3>
-<h3>⚠ BREAKING CHANGES</h3>
-<ul>
-<li><strong>relay:</strong> relay as channel text from the keypress; the courier whispers lines from members without the addon (<a href="https://github.com/core-wow-community/CORELink/commit/090d7f5a64dff616e359dc7398a0d71a1e6656b9">090d7f5</a>)</li>
-</ul>
-<h3>Features</h3>
-<ul>
-<li>two-channel release flow (rc/final) with a public download page on gh-pages (#5) (<a href="https://github.com/core-wow-community/CORELink/commit/e6df59cce6fbfc9367fe5f0cac3658c6061bd25c">e6df59c</a>)</li>
-<li>Release workflow (manual button) wrapping scripts/release.sh; publish dates fixed (<a href="https://github.com/core-wow-community/CORELink/commit/c5d06f2c2f5ec47b6ee7ed36eeb67f65d837980e">c5d06f2</a>)</li>
-<li>automatic version numbers; release notes generated from PR titles (<a href="https://github.com/core-wow-community/CORELink/commit/c11ad72848a599c81e61d017e00127f9a1f04a74">c11ad72</a>)</li>
-<li>release notes built from commits since the last release, shown on the download page (<a href="https://github.com/core-wow-community/CORELink/commit/4894b1d800d34dbbfb6a0fa96bb8653b1f53f152">4894b1d</a>)</li>
-<li><strong>release:</strong> conventional-changelog sections with commit links, published CHANGELOG.md (<a href="https://github.com/core-wow-community/CORELink/commit/8fb0b561984a903ace02a2cd66fc819ccbf45c26">8fb0b56</a>)</li>
-<li><strong>officer:</strong> drop the dash in the officer tag, (Firelord Tanner) instead of (Firelord - Tanner) (<a href="https://github.com/core-wow-community/CORELink/commit/bf936ca1c6059483ca19759737d7ac0992bd8caf">bf936ca</a>)</li>
-<li><strong>guilds:</strong> show which realms each linked guild reaches; warn when one has no relay on ours (<a href="https://github.com/core-wow-community/CORELink/commit/4da6ab3fe65dc332dd4827b1862a9f3675dffea5">4da6ab3</a>)</li>
-<li><strong>bridge:</strong> carry other guilds' lines across realms through a cross-realm guild (<a href="https://github.com/core-wow-community/CORELink/commit/42c62c65432071d5ab99c730957235775666f032">42c62c6</a>)</li>
-<li><strong>mirror:</strong> post typed guild lines into a Blizzard Community named by club= in Guild Info (<a href="https://github.com/core-wow-community/CORELink/commit/6f60a3946862306ec5bb8a9dc84222816b642a0c">6f60a39</a>)</li>
-<li><strong>mirror:</strong> show community lines from other guilds in guild chat, de-duplicated against the relay (<a href="https://github.com/core-wow-community/CORELink/commit/1950d4eaa96084dfaf295b0a081da8acb364bde2">1950d4e</a>)</li>
-<li><strong>mirror:</strong> class and officer colours on community lines (<a href="https://github.com/core-wow-community/CORELink/commit/c8c2d58155e1d1964f5f8d2276eb3c61b27eb743">c8c2d58</a>)</li>
-<li><strong>mirror:</strong> hook guild sends, focus before posting, hide raw lines, name the club (<a href="https://github.com/core-wow-community/CORELink/commit/a8f882b06637d83c056f8d9d22ed74cbe38079bb">a8f882b</a>)</li>
-<li><strong>mirror:</strong> WoW communities, sealed text, class colours from the member record (<a href="https://github.com/core-wow-community/CORELink/commit/a3f1fdf31d2051fb3410b198f1e58d33007a3482">a3f1fdf</a>)</li>
-<li><strong>mirror:</strong> officer rank and nickname on community posts, officer colour from roles (<a href="https://github.com/core-wow-community/CORELink/commit/2f2d66426aa584ef06e345ab0571140543b73d0f">2f2d664</a>)</li>
-<li><strong>mirror:</strong> carry guild lines from members without the addon into the community (<a href="https://github.com/core-wow-community/CORELink/commit/7dd553b38b7c733f0c1489156dac8f13d06ddc5c">7dd553b</a>)</li>
-<li><strong>mirror:</strong> one community channel per guild carries the tag (<a href="https://github.com/core-wow-community/CORELink/commit/8a2faa6f17cf1cdcd1308b1499c45974233ba6be">8a2faa6</a>)</li>
-<li><strong>echo:</strong> re-post other guilds' lines into real guild chat for members without the addon (<a href="https://github.com/core-wow-community/CORELink/commit/2e8d2f6a65b0a4228b17881fdbcde0913d7a4c9b">2e8d2f6</a>)</li>
-<li><strong>whisper:</strong> courier whisper bridge for guilds that share no realm (<a href="https://github.com/core-wow-community/CORELink/commit/ae197768810596b78a3fe5e999d85d928a53149f">ae19776</a>)</li>
-<li><strong>whisper:</strong> /cl hello greets one player by hand; realm omitted from directory entries that carry it (<a href="https://github.com/core-wow-community/CORELink/commit/f10850ee74f9bb2fee5ec81fe65f16bf3eb3670a">f10850e</a>)</li>
-<li><strong>relay:</strong> relay as channel text from the keypress; the courier whispers lines from members without the addon (<a href="https://github.com/core-wow-community/CORELink/commit/090d7f5a64dff616e359dc7398a0d71a1e6656b9">090d7f5</a>)</li>
-</ul>
+        <p>Fix from the rc1 test: a line from a guildmate whose addon is off, broken or absent is now carried by the courier after a short wait, with no fifteen-minute blind spot.</p>
+<h3><a href="https://github.com/core-wow-community/CORELink/compare/v0.2.0-rc1...v0.2.0-rc2">0.2.0-rc2</a> (2026-11-09)</h3>
 <h3>Bug Fixes</h3>
 <ul>
-<li>debug echo is always off at login; /cl debug on lasts for the session only (<a href="https://github.com/core-wow-community/CORELink/commit/482678bf533410bc2a4aa30e2531e1c79f0c880c">482678b</a>)</li>
-<li>configure and join automatically at login; retry until connected, then print status once (<a href="https://github.com/core-wow-community/CORELink/commit/11750ed834eb4d588a59cf15611ad558dd4271c5">11750ed</a>)</li>
-<li><strong>setup:</strong> /cl publish always writes the officer rank, including the default 1 (<a href="https://github.com/core-wow-community/CORELink/commit/3a5badc5f24b60d82149fd5b3de70382aae2970a">3a5badc</a>)</li>
-<li><strong>connect:</strong> record why joining fails and tell the player; wrong password pauses retries (<a href="https://github.com/core-wow-community/CORELink/commit/121e7cbcaa4f7e26cff9ac199f9f20da4856bc26">121e7cb</a>)</li>
-<li><strong>nicknames:</strong> identify the player by GUID so nicknames and self checks work with Forever surnames (<a href="https://github.com/core-wow-community/CORELink/commit/aa9a021678795b60a0570959cdbec89e06129fd3">aa9a021</a>)</li>
-<li><strong>connect:</strong> one message for an unconfigured login, naming what Guild Info held (<a href="https://github.com/core-wow-community/CORELink/commit/9c6c8a58f8cf1d9423576f1da46fa5b123e0c719">9c6c8a5</a>)</li>
-<li><strong>commands:</strong> members can run /cl reload, on, off, mute and unmute (<a href="https://github.com/core-wow-community/CORELink/commit/39cb9c6cd0dc243ff8bce55214a1093c29bcdc8b">39cb9c6</a>)</li>
-<li><strong>mirror:</strong> subscribe to the community stream as soon as login connects, retry each minute (<a href="https://github.com/core-wow-community/CORELink/commit/d39e61ce06d2e313151a2e6e242db559ef573e8e">d39e61c</a>)</li>
-<li><strong>mirror:</strong> carry guildmates' lines for five minutes, not two (<a href="https://github.com/core-wow-community/CORELink/commit/32c8b2bd6acda758f1b3dd038facf2fd972be562">32c8b2b</a>)</li>
-<li><strong>release:</strong> render the download page by literal substitution; site repairs channels from the GitHub release (<a href="https://github.com/core-wow-community/CORELink/commit/83cb49014c0a7eed372b9aaa3b36e8cc7964d072">83cb490</a>)</li>
-<li><strong>release:</strong> run the renderer through bash, repair a channel only when its zip differs from the release (<a href="https://github.com/core-wow-community/CORELink/commit/cbb14346187f125f19db670dc80cad018f6107ae">cbb1434</a>)</li>
-<li><strong>site:</strong> readable link colour on the download page, brighter in dark mode (<a href="https://github.com/core-wow-community/CORELink/commit/a8a4234df3cda08858c772ae1f4cef599c053b9d">a8a4234</a>)</li>
-<li><strong>whisper:</strong> learn realms from PEER answers, not /who; exact guild match; rotate greetings (<a href="https://github.com/core-wow-community/CORELink/commit/2acc3283197519725d1b3c258f8f26b5d03b44f3">2acc328</a>)</li>
-<li><strong>whisper:</strong> a peer that never answered is never live (<a href="https://github.com/core-wow-community/CORELink/commit/3ddd53a6b721cbbe7a08f8313b5b51ad8de98bbc">3ddd53a</a>)</li>
-</ul>
-<h3>Documentation</h3>
-<ul>
-<li>add ONBOARDING.md for new contributors starting without a GitHub account (#3) (<a href="https://github.com/core-wow-community/CORELink/commit/47b3a0a140061169981150dc6473e8612156d375">47b3a0a</a>)</li>
-<li>plain-language release flow in README (#6) (<a href="https://github.com/core-wow-community/CORELink/commit/716d46c8eee19822941400f1aeb3bfe13cf4f509">716d46c</a>)</li>
-<li>more technical release flow in README (CI checks, tags, gh-pages layout) (#7) (<a href="https://github.com/core-wow-community/CORELink/commit/fca718f7b1040906b5ce6ef143eaec46ac211bbd">fca718f</a>)</li>
-<li>agents never merge; merging is a human button press (#8) (<a href="https://github.com/core-wow-community/CORELink/commit/0e6dafe889db409532d987932a759afcfd674b87">0e6dafe</a>)</li>
-<li>merge commits instead of squash (<a href="https://github.com/core-wow-community/CORELink/commit/c09610d9a138f08085747c24926b9c34a70899b1">c09610d</a>)</li>
-<li><strong>mirror:</strong> community text is a Kstring token; treat |K..|k as sealed (<a href="https://github.com/core-wow-community/CORELink/commit/673bafba03935bf859540c93e44dd85fb7efef49">673bafb</a>)</li>
-<li>one short README; commands, troubleshooting, development and architecture move to docs/ (<a href="https://github.com/core-wow-community/CORELink/commit/bb5df827544ebf4e42908c159ca55c4b9e76658b">bb5df82</a>)</li>
-<li>describe the text relay and courier transport; realms no longer matter (<a href="https://github.com/core-wow-community/CORELink/commit/0717930511fdfd7da31bee4c7d38b7a918f6e704">0717930</a>)</li>
-</ul>
-<h3>Maintenance</h3>
-<ul>
-<li>add start-feature skill so agents branch before editing (<a href="https://github.com/core-wow-community/CORELink/commit/7a9344b0f29e5c322a918cd50ef5b6440935cf74">7a9344b</a>)</li>
-<li>CI tests on every PR, PR template with feature notes, CHANGELOG, feature-request rules (<a href="https://github.com/core-wow-community/CORELink/commit/d65f36c74c5a6b26cd1bc5fb74903802513ffc69">d65f36c</a>)</li>
-<li>live game-version check in CI, gameplay-impact review checklist and review-pr skill (<a href="https://github.com/core-wow-community/CORELink/commit/92bfc952f9dff6b84063392ea5df5c9a141090be">92bfc95</a>)</li>
-<li>make the surname block set up its own joined client (<a href="https://github.com/core-wow-community/CORELink/commit/e4be41df3aae401f308eb5feaf701b85d4746a88">e4be41d</a>)</li>
-<li>close the merged harness block (<a href="https://github.com/core-wow-community/CORELink/commit/3dfd74de9fcc47baa5bac54790a38d5bd248983c">3dfd74d</a>)</li>
-<li><strong>mirror:</strong> drop the piggyback; guild channels must be marked (<a href="https://github.com/core-wow-community/CORELink/commit/d0d02eff2ed7fed2b6f1412271e658802255c3a9">d0d02ef</a>)</li>
-<li>point install and version-check tooling at the live WoW: Forever client (<a href="https://github.com/core-wow-community/CORELink/commit/03b2c235b74315c8460d6090e2f0f0737a322f94">03b2c23</a>)</li>
-<li><strong>release:</strong> cut release candidates from release/* branches, finals from main (<a href="https://github.com/core-wow-community/CORELink/commit/fdbbd7cfaded8b2a2edbff66f2cbacc82ec5fb5b">fdbbd7c</a>)</li>
-<li>split the addon into fourteen files by concern, one function per command and packet (<a href="https://github.com/core-wow-community/CORELink/commit/7c14736d666918ebcae78379273849c291a10416">7c14736</a>)</li>
-<li>register events set after Events.lua loads, load-order test, state ownership, command checks (<a href="https://github.com/core-wow-community/CORELink/commit/536c916c86131ae272ffdfd904373dcdc525ee10">536c916</a>)</li>
-</ul>
-<h3>Other Changes</h3>
-<ul>
-<li>/cl report and /cl debug diagnostics, luacheck in tests and CI (0.1.1) (#4) (<a href="https://github.com/core-wow-community/CORELink/commit/f3112b785bbb1d68e34595743825f968340ce631">f3112b7</a>)</li>
+<li><strong>relay:</strong> the courier carries any line that gets no channel copy; a successful join clears the hold (<a href="https://github.com/core-wow-community/CORELink/commit/a53e4b8cdcc35d3d6ec73c6d868357a66026aa73">a53e4b8</a>)</li>
 </ul>
       </details>
     </article>
@@ -123,7 +55,7 @@
 
   <footer>
     <p>Permanent links: <a href="https://core-wow-community.github.io/CORELink/latest/CORELink.zip">https://core-wow-community.github.io/CORELink/latest/CORELink.zip</a> and <a href="https://core-wow-community.github.io/CORELink/rc/CORELink.zip">https://core-wow-community.github.io/CORELink/rc/CORELink.zip</a>. Older builds: <code>v/CORELink-&lt;version&gt;.zip</code>, their notes: <code>notes/&lt;version&gt;.md</code>. <a href="CHANGELOG.md">Full changelog</a>.</p>
-    <p class="meta">Page updated 2026-11-09 01:02 UTC.</p>
+    <p class="meta">Page updated 2026-11-09 01:34 UTC.</p>
   </footer>
 </main>
 </body>

@@ -2,6 +2,13 @@
 
 All notable changes to CORELink are documented in this file. It is generated at release time from the commit history; commit subjects follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `feat(scope)!:` ...).
 
+## [0.2.0-rc2](https://github.com/core-wow-community/CORELink/compare/v0.2.0-rc1...v0.2.0-rc2) (2026-11-09)
+
+
+### Bug Fixes
+
+* **relay:** the courier carries any line that gets no channel copy; a successful join clears the hold ([a53e4b8](https://github.com/core-wow-community/CORELink/commit/a53e4b8cdcc35d3d6ec73c6d868357a66026aa73))
+
 ## [0.2.0-rc1](https://github.com/core-wow-community/CORELink/compare/v0.1.0...v0.2.0-rc1) (2026-11-09)
 
 
