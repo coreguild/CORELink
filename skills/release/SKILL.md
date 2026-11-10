@@ -15,9 +15,10 @@ prints the section so the user can read it first; if commits lack `feat:`/`fix:`
 What an agent does:
 1. Make or update the release branch. New release: `git fetch origin && git switch -c release/<version> origin/main`
    with the version the merged and pending PRs call for (patch, minor or major over the last final tag). Existing
-   release: `git switch release/<version> && git pull`. Then `git merge origin/<feature-branch>` for each branch that
-   belongs in this release, merged into `main` or not, resolve conflicts, `tests/run.sh`, and push. Merging into a
-   release branch is allowed; merging into `main` is not.
+   release: `git switch release/<version> && git pull`. Push the new branch. Then open a PR into it from each
+   feature branch that belongs in this release, merged into `main` or not (`gh pr create --base release/<version>`);
+   if a feature branch conflicts, merge the release branch into the feature branch first, resolve, `tests/run.sh`,
+   push. Release branches are protected like `main`: a human reviews and merges each PR. Agents merge nothing.
 2. `scripts/release.sh rc --dry-run` on that branch and show the user the line "branch: ... this: v<ver>-rcN". That
    is the version the button will produce. The dry run refuses on `main` or any non-release branch.
 3. If the user asked for an RC, an agent may run `scripts/release.sh rc` locally on the pushed release branch, or
@@ -25,15 +26,15 @@ What an agent does:
    (https://coreguild.github.io/CORELink/rc/CORELink.zip) and the soak test: a day on two clients in two
    different guilds, one `/reload`, one fresh login, one client still on the previous stable to prove protocol
    compatibility.
-4. If the RC had problems: fix via normal PRs into `main`, merge the fix branch (or `main`) into the release branch,
-   push, `rc` again; it becomes `rcN+1` of the same version.
+4. If the RC had problems: fix on a branch from the release branch, open a PR into the release branch, a human
+   merges, `rc` again; it becomes `rcN+1` of the same version. The fix reaches `main` with the release PR.
 5. When the RC is good: open a PR from the release branch into `main` (`gh pr create --base main`), say it is ready,
    and stop. A human merges it. Never run `final`. Then tell them to press the button on `main` with `final` (or
    run `scripts/release.sh final` themselves) and give them the stable link
    (https://coreguild.github.io/CORELink/latest/CORELink.zip).
 6. If `final` fails with "the addon on main differs from v<ver>-rcN", something touching `CORELink/` was merged
-   after the RC: merge `main` into the release branch, cut a new RC, test, merge, then `final`. Do not use `no_rc`
-   to get around it.
+   after the RC: open a PR from `main` into the release branch, have it merged, cut a new RC, test, merge the
+   release PR, then `final`. Do not use `no_rc` to get around it.
 
 The job and the script run the tests and the game-version check and stop on any failure. Do not bypass them with
 manual `git tag` or `gh release` commands.
