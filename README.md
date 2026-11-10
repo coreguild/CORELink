@@ -2,6 +2,8 @@
 
 CORELink lets multiple guilds share guild chat in World of Warcraft: Forever.
 
+CORELink works much like [GreenWall](https://www.curseforge.com/wow/addons/greenwall), which was a major inspiration for the addon. We needed a few extra features for CORE Guild, so we decided to write our own solution.
+
 ## Install CORELink
 
 1. Open the [CORELink download page](https://coreguild.github.io/CORELink/) and download the stable ZIP.
