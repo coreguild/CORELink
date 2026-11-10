@@ -6,8 +6,9 @@ Written for Tanner; works for anyone joining the CORELink repo.
 
 1. Go to https://github.com/signup and create an account. Use the username you want to be known by in commits.
 2. Turn on two-factor authentication when prompted (GitHub requires it for contributors).
-3. Send your username to Jacob. He will invite you to the `coreguild` organization. Accept the
-   invitation from the email or from https://github.com/notifications.
+3. Send your username to one of the organization owners, the guild masters NickDJM and stravyn on GitHub. They
+   invite you to the `coreguild` organization. Accept the invitation from the email or from
+   https://github.com/notifications.
 
 ## 2. Tools (10 minutes)
 
