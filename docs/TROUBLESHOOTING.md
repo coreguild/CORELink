@@ -12,7 +12,9 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 | We only see guild X's lines from players who have the addon | Lines from X's members without the addon are carried by X's courier, who needs a peer in your guild | Someone in your guild has to have said something in guild chat since logging in, so X's courier knows them; `/cl peers` on X's side lists who it can whisper to |
 | "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
 | Lines from one guild never arrive | `heard` in `/cl report` lists the guilds whose lines reached you in the last 10 minutes | If the guild is missing, its members' clients are not posting (wrong channel or password, or refused); if it is listed and nothing shows, share the report |
-| Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
+| Nothing arrives from any guild, `/cl report` says `lastSend refused` | Version before 0.2.0: the server refuses what it sends | Everyone updates to 0.2.0 or later; `/cl report` starts with the version |
+| A guildmate without the addon (or with `/cl off`) sees nothing from other guilds | Expected: only addon users read the channel | Their own lines still reach the other guilds. For them to read, the GM adds `echo=on` to the Guild Info line (new in 0.2.0, test it first) |
+| Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.2.0 or later |
 | A line shows twice | Two clients relayed it inside the same back-off window, or a community copy was not matched | Rare and harmless; if it repeats, share `/cl report` from both clients |
 | "No player named X is currently playing" in chat | A whisper greeting reached someone who just logged off | Hidden by the addon when it is about a greeting of ours; otherwise it was a chat whisper of yours |
 
@@ -21,7 +23,8 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 * `channel <name> id <n>`: joined. `id not joined`: see the keypress row above and `lastNotice`.
 * `lastNotice`: the game's last answer about the channel. `NOT_ALLOWED_IN_CHANNEL` once, right after joining,
   is a send that beat the join and is harmless; repeated, it means the character may not speak there.
-* `lastSend 0`: the last packet was accepted. Anything else and the addon prints a warning once a minute.
+* `lastSend ok`: the last line was accepted by the client. `refused`: the server rejected it (the addon says so
+  once per 10 minutes). `error`: the send call itself failed; the log says why.
 * `me`: your name as the addon knows it. On Forever it must be `First Surname`; `short:` means the roster has
   not been read yet, and nicknames and courier duty may be off until it is.
 * `heard`: guild tags whose lines reached you in the last 10 minutes, by any path.

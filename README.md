@@ -1,8 +1,13 @@
 # CORELink
 
 Links the guild chat of two or more guilds in World of Warcraft: Forever. When someone in a linked guild types
-in guild chat, members of the other guilds see it in their own guild chat as `[TAG] [Name]: message`. Guilds
-on different realms link the same way as guilds on one realm.
+in guild chat, members of the other guilds see it in their own guild chat with that guild's tag in front:
+
+```
+[EMBER] [Tanner Ashvale]: anyone up for a dungeon run?
+```
+
+Guilds on different realms link the same way as guilds on one realm.
 
 Download: https://coreguild.github.io/CORELink/
 
