@@ -92,6 +92,12 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    still interoperates. Fixes go through normal PRs, are merged into the release branch too, and `rc` again
    gives `rcN+1`. `rc` is refused on `main`.
 
+   Both `rc` and `final` also upload the zip to CurseForge, as a beta or a release file, when the repository has
+   the `CURSEFORGE_API_KEY` secret and the `CURSEFORGE_PROJECT_ID` variable (Settings -> Secrets and variables ->
+   Actions). Game versions come from the TOC interface numbers; `CURSEFORGE_GAME_VERSIONS` overrides them with
+   the names CurseForge uses. Without the secret the step says it skipped and the release is unaffected.
+   `scripts/curseforge-upload.sh --dry-run` shows what would be sent.
+
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on
    `main` are identical to that rc, so what ships is what was tested (`no_rc` exists for a small hotfix that
