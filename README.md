@@ -1,98 +1,60 @@
 # CORELink
 
-Links the guild chat of two or more guilds in World of Warcraft: Forever. When someone in a linked guild types
-in guild chat, members of the other guilds see it in their own guild chat with that guild's tag in front:
+CORELink lets multiple guilds share guild chat in World of Warcraft: Forever.
 
-```
-[EMBER] [Tanner Ashvale]: anyone up for a dungeon run?
-```
+## Install CORELink
 
-Guilds on different realms link the same way as guilds on one realm.
+1. Open the [CORELink download page](https://coreguild.github.io/CORELink/) and download the stable ZIP.
+2. Unzip the download and move the `CORELink` folder into `World of Warcraft/_forever_/Interface/AddOns/`. If you're updating, replace the old `CORELink` folder.
+3. Start WoW, or type `/reload` if you're already logged in.
+4. Type `/cl` in chat. When the addon is ready, the status shows `ON` and `joined` next to the channel name.
 
-Download: https://coreguild.github.io/CORELink/
+CORELink reads its settings from Guild Information. If `/cl` still says `NOT CONFIGURED` after login, ask your guild master to check the CORELink line in Guild Information. If they've just updated it, type `/cl reload` to read it again.
 
-## Players: install it
+Use version 0.2.0 or later on the live Forever servers. To check which version you have, type `/cl report` and look at the start of the report.
 
-1. Download the stable zip from the page above and unzip it. You get a folder named `CORELink`.
-2. Move that folder into `World of Warcraft/_forever_/Interface/AddOns/`. If an older `CORELink` folder is
-   there, replace it.
-3. Start the game, or type `/reload` if you were already logged in.
-4. Type `/cl`. It should say `ON`, name your guild's tag and channel, and say `joined`.
+## Link your guild
 
-That is all. The addon reads its settings from your guild's Guild Information, so there is nothing to configure.
-If `/cl` says `NOT CONFIGURED`, your guild master has not added the line yet (see below).
+Each guild master adds one CORELink line to their own guild's Guild Information. Before you start, agree on a channel name and password with the other guild masters. Use the same name and password in every guild. Both must be single words, and the channel name should be hard to guess.
 
-Three things worth knowing:
+Give each guild a different tag of up to eight characters. The tag appears in brackets before the player's name. Here's a message from CORE Deux using the tag `DEUX`.
 
-* Lines from other guilds show in whatever chat window shows your guild chat, with the other guild's tag in
-  front. Names are class-coloured and officers are highlighted.
-* Guildmates who do not have the addon are still heard by the other guilds: the addon carries their lines for
-  them. They do not see the other guilds' lines unless your guild master turns echo on (see below).
-* Everyone must be on version 0.2.0 or later. Older versions do not work on the live Forever servers. `/cl report`
-  shows your version in its first words.
-
-If lines are not coming through, see [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). The one-line report from
-`/cl report` is what to paste when asking for help.
-
-## Guild masters: link your guild
-
-Every linked guild has one line in its Guild Information. Agree these with the other guild masters:
-
-* a **channel name** and a **password**, the same for every linked guild (one word each, no spaces; pick a
-  channel name nobody would guess, because the channel is shared by every realm);
-* a **tag** for each guild, up to 8 characters, different for every guild. It shows in front of your guild's
-  lines in the other guilds' chat.
-
-Then put this on its own line in your Guild Information, with your guild's values:
-
-```
-CORELink: <channel> <password> <TAG> 1 guilds=<Other Guild>, <Another Guild>
+```text
+[DEUX] [Tanner Ashvale]: anyone up for a dungeon run?
 ```
 
-* The `1` is the officer rank cutoff: ranks 0 to 1 (guild master and the next rank) are shown as officers. Raise
-  it if more of your ranks are officers.
-* `guilds=` lists the other linked guilds by their exact names, comma separated, always last on the line. It
-  helps the addon find a guild it has not heard from yet.
+1. Run `/cl setup <channel> <password> <tag>` with your guild's values. For example, `/cl setup corelink7100 hearth CORE`.
+2. Copy the line the addon shows you. Paste it on its own line in Guild Information and save.
+3. Ask someone in another linked guild to send a guild chat message. Check that you can see their message with their guild's tag, then send one back.
 
-Example for two guilds, CORE and Ember Watch, sharing channel `corelink7100` and password `hearth`:
+For example, CORE and CORE Deux might use the following lines. Each guild saves only its own line.
 
+**CORE**
+
+```text
+CORELink: corelink7100 hearth CORE 1 guilds=CORE Deux
 ```
-CORELink: corelink7100 hearth CORE 1 guilds=Ember Watch
-CORELink: corelink7100 hearth EMBER 1 guilds=CORE
+
+**CORE Deux**
+
+```text
+CORELink: corelink7100 hearth DEUX 1 guilds=CORE
 ```
 
-Save Guild Information. Members pick the line up within a minute of logging in, or at once with `/cl reload`.
-You can also type `/cl setup <channel> <password> <TAG>` in game and copy the line it shows.
+The `1` means ranks 0 and 1 are shown as officers. Rank 0 is the guild master. Increase that number if more ranks should be shown as officers. To help CORELink find guilds it hasn't heard from yet, you can add `guilds=` to the line before saving it. List the other guilds by their exact names, separate them with commas, and put the list last.
 
-Two optional additions to the line, both explained in [docs/COMMANDS.md](docs/COMMANDS.md):
+Members who are already online can type `/cl reload` after you save the line. See the [Guild Information settings](docs/COMMANDS.md#guild-information-settings) for the full format and options such as mirroring into a WoW Community.
 
-* `echo=on`: one addon user in your guild re-posts the other guilds' lines as plain guild chat, so guildmates
-  without the addon can read them too. New in 0.2.0 and not yet proven on the live servers; try it in a test
-  guild first.
-* `club=<community>`: also mirror the chat into a Blizzard Community. Docs to come.
+## Who can read linked chat?
 
-## Commands
+Members with CORELink can see messages from linked guilds in their guild chat window. A member without CORELink can still have their own messages carried by another addon user in their guild, but will not see the linked guild's messages themselves.
 
-| Command | Does |
-|---|---|
-| `/cl` | Status and the command list. |
-| `/cl report` | One pasteable line for asking for help. |
-| `/cl guilds` | Which linked guilds have been heard in the last 10 minutes. |
-| `/cl nickname <name>` | A nickname shown to your guild and the linked guilds. |
-| `/cl mute <tag>` / `/cl unmute <tag>` | Silence or restore one linked guild on this client. |
-| `/cl off` / `/cl on` | Switch the addon off or on for this character. |
-| `/cl reload` | Re-read Guild Information now. |
+## Get help
 
-Every command, with who may run it: [docs/COMMANDS.md](docs/COMMANDS.md).
+If chat isn't coming through, start with the [troubleshooting guide](docs/TROUBLESHOOTING.md). If you need to ask for help, type `/cl report` and share the report from the copy box. It includes your addon version and connection status.
 
-## How it works, in short
+See the [command reference](docs/COMMANDS.md) for commands to check linked guilds, set a nickname, mute a guild, or turn CORELink off.
 
-Every member's client sits in a hidden chat channel shared by all the linked guilds. When you type a guild line,
-your own client posts a copy into that channel, and every addon user in the other guilds shows it. A line from a
-guildmate without the addon is carried for them by one addon user in your guild. The longer version, file by
-file, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+## Contribute
 
-## More
-
-* Something not working: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
-* Working on the addon, tests, releases: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+Start with the [contribution guide](CONTRIBUTING.md). The [development guide](docs/DEVELOPMENT.md) covers local setup, tests, and releases. See the [architecture guide](docs/ARCHITECTURE.md) for how the addon relays messages.
