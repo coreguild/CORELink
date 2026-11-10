@@ -10,6 +10,7 @@
 # Without the key or the project id the script prints why it skipped and exits 0, so a release never fails
 # because CurseForge is not set up.
 set -euo pipefail
+set +x                      # never trace this script: the API key is in its environment
 cd "$(dirname "$0")/.."
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 API="https://wow.curseforge.com/api"
@@ -17,6 +18,12 @@ API="https://wow.curseforge.com/api"
 if [ -z "${CURSEFORGE_API_KEY:-}" ] || [ -z "${CURSEFORGE_PROJECT_ID:-}" ]; then
   echo "curseforge: skipped (CURSEFORGE_API_KEY secret or CURSEFORGE_PROJECT_ID variable not set)"; exit 0
 fi
+# The key goes to curl through a private header file, never on a command line (visible in ps and in traces)
+# and never in anything this script prints. curl -s keeps its own output quiet; -f turns an HTTP error into
+# a non-zero exit, which is the only thing reported about it.
+HDR=$(umask 077 && mktemp); trap 'rm -f "$HDR"' EXIT
+printf 'x-api-token: %s\n' "$CURSEFORGE_API_KEY" > "$HDR"
+unset CURSEFORGE_API_KEY
 [ -f dist/TAG ] || { echo "curseforge: dist/TAG missing; nothing was released in this run"; exit 0; }
 TAG=$(tr -d '[:space:]' < dist/TAG)
 VER=${TAG#v}; VER=${VER%-rc*}
@@ -35,7 +42,7 @@ if [ -z "$names" ]; then
         if ($0 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print $0;
         else { n = $0 + 0; printf "%d.%d.%d\n", int(n / 10000), int(n / 100) % 100, n % 100 } }' | sort -u | paste -sd, -)
 fi
-versions=$(curl -fsS -m 30 -H "x-api-token: $CURSEFORGE_API_KEY" "$API/game/versions") \
+versions=$(curl -fsS -m 30 -H "@$HDR" "$API/game/versions") \
   || { echo "curseforge: could not list game versions (check the API key)"; exit 2; }
 ids=""; missing=""
 for name in $(printf '%s' "$names" | tr ',' ' '); do
@@ -56,6 +63,6 @@ print(json.dumps({"changelog": sys.argv[1], "changelogType": "markdown", "displa
   "$notes" "$NAME" "$ids" "$TYPE")
 echo "curseforge: $NAME ($TYPE) game versions $names -> ids $ids"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
-out=$(curl -fsS -m 120 -H "x-api-token: $CURSEFORGE_API_KEY" -F "metadata=$metadata" -F "file=@$ZIP" \
+out=$(curl -fsS -m 120 -H "@$HDR" -F "metadata=$metadata" -F "file=@$ZIP" \
   "$API/projects/$CURSEFORGE_PROJECT_ID/upload-files") || { echo "curseforge: upload failed"; exit 2; }
 echo "curseforge: uploaded $ZIP, file id $(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id"))')"
