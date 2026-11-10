@@ -1,91 +1,96 @@
-# Commands and the Guild Info line
+# CORELink commands and settings
 
-## The Guild Info line
+Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat channel, and which commands you can run. Guild masters can also change the settings their guild uses to connect.
 
-```
+## Check your connection
+
+| Command | What it does |
+|---|---|
+| `/cl` | Shows whether CORELink is on, your guild tag, which channel you are connected to, where your settings came from, and which commands you can run. |
+| `/cl guilds` | Lists guilds heard in the last 10 minutes. It also shows who is carrying chat for your guild and any online counts from the latest guild lookup. |
+| `/cl report` | Opens a copy box with your addon version, connection status, and recent events. Share it when asking for help. |
+| `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. |
+
+## Mute a guild, set a nickname, or turn CORELink off
+
+| Command | What it does |
+|---|---|
+| `/cl on` | Turns CORELink on for this character. |
+| `/cl off` | Turns CORELink off for this character. If your guild uses echo, you can still see messages another member re-posts into guild chat. |
+| `/cl mute <tag>` | Hides messages from the linked guild with that tag on your client. |
+| `/cl unmute <tag>` | Shows messages from the linked guild with that tag again on your client. |
+| `/cl nickname <name>` | Sets the nickname shown to your guild and linked guilds. |
+| `/cl nickname clear` | Clears your nickname. |
+
+## Change how chat looks on your client
+
+| Command | What it does |
+|---|---|
+| `/cl nicknames on/off` | Shows or hides other people's nicknames. |
+| `/cl classcolor on/off` | Turns class colours for player names on or off. |
+| `/cl officer on/off` | Turns highlighting for officers' messages on or off. |
+| `/cl officercolor [RRGGBB\|reset]` | Sets the colour for officers' messages or restores the default. Type `/cl officercolor` on its own to open the colour picker. |
+| `/cl window <n>` | Shows linked messages in the chat window you specify. Type `/cl window` on its own to show them in windows that already display guild chat. |
+
+## Help relay messages
+
+The courier is the addon user who carries messages from guildmates without CORELink. A peer is an addon user in another linked guild.
+
+| Command | What it does |
+|---|---|
+| `/cl whisper on/off` | Controls whether your client can act as courier and pass along messages it receives from another courier. This is on by default. |
+| `/cl echo on/off` | Controls whether your client can re-post linked messages into guild chat. This is on by default and only takes effect if your guild master adds `echo=on` to the CORELink line. |
+| `/cl peers` | Lists known peers, their guilds and tags, and when CORELink last heard from them. |
+| `/cl who` | Looks up who is online in each guild listed in `guilds=` and contacts new names. Only the courier runs the lookup. |
+| `/cl hello <First Surname>` | Contacts an addon user in another guild by character name. They appear in `/cl peers` once they answer. |
+
+## Control Community mirroring
+
+| Command | What it does |
+|---|---|
+| `/cl mirror on/off` | Turns both reading and posting on or off for the Community configured with `club=`. Both are on by default. |
+| `/cl mirror read on/off` | Shows or hides the Community's messages in guild chat. |
+| `/cl mirror post on/off` | Starts or stops posting the guild messages you type to the Community. |
+| `/cl mirror hide on/off` | Hides or shows the original Community messages in any chat tab where you added that channel. |
+
+## Show debug messages
+
+| Command | What it does |
+|---|---|
+| `/cl debug on/off` | Shows or hides debug messages in chat. Recent events still appear in `/cl report`. |
+
+## Guild master commands
+
+These commands change settings on your client. To share the settings with your guild, run `/cl publish` and paste the line it shows into Guild Information.
+
+| Command | What it does |
+|---|---|
+| `/cl setup <channel> <password> [tag]` | Sets up CORELink on your client and shows the line to paste into Guild Information. Use `-` for no password. |
+| `/cl publish` | Shows the current CORELink line again. |
+| `/cl channel <name>` | Changes the channel name on your client. |
+| `/cl password <password>` | Changes the channel password on your client. |
+| `/cl tag <tag>` | Changes the guild tag on your client. |
+| `/cl officerrank <n>` | Treats ranks 0 through `n` as officers when displaying chat. Rank 0 is the guild master. |
+| `/cl clear` | Clears the connection settings on your client. |
+
+## Guild Information settings
+
+See [Link your guild](../README.md#link-your-guild) for a setup example. The square brackets below mark optional fields. Leave the brackets out of the line you paste into Guild Information.
+
+```text
 CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on] [guilds=<name>, <name>]
 ```
 
-* `channel`, `password`: the hidden chat channel every co-guild shares. `-` for no password.
-* `tag`: how this guild is labelled, up to 8 characters. `-` or nothing: the first six letters of the guild name.
-* `officerRankCutoff`: ranks 0 to n count as officers (0 = guild master). Default 1.
-* `club=`: a Blizzard Community to mirror into (see below).
-* `echo=on`: one addon user re-posts other guilds' lines into plain guild chat for members without the addon.
-* `guilds=`: the co-guilds by name, comma separated, always last on the line because names contain spaces.
-  Optional: addon users of other guilds are found from their own lines on the channel; this list lets the courier
-  look up a guild nobody has heard from yet. See [ARCHITECTURE.md](ARCHITECTURE.md).
+- Use the same channel and password for all linked guilds. Use `-` in the password position if the channel has no password.
+- Give each guild a distinct tag of up to eight characters. Use `-` or omit the tag to let CORELink make one from the guild name.
+- The officer rank cutoff defaults to 1, so ranks 0 and 1 are shown as officers.
+- Add `echo=on` if you want one addon user to re-post linked messages into guild chat for members without CORELink. Try this in a test guild before using it on the live Forever servers.
+- Add `guilds=` followed by the other guilds' exact names, separated by commas, to help CORELink find guilds it hasn't heard from. Put this setting last so guild names can contain spaces.
 
-`/cl setup` writes the line for you and `/cl publish` shows it again. Addons cannot write Guild Info, so the
-guild master pastes it by hand. The line is at most 500 characters, which is far more than it needs.
+### Mirror chat into a WoW Community
 
-### Mirroring into a community
+1. Create a World of Warcraft Community and give it a unique short name. Share its invite link with the members who need access.
+2. Add `club=<short name>` to each guild's CORELink line before `guilds=`, if present. You can also use the Community's numeric ID or its full name without spaces.
+3. In the Community settings, add one channel per linked guild. Name each channel after its guild tag and put `CORELink` in the channel description.
 
-Create a **World of Warcraft community** (not a Battle.net one; those show account names instead of characters
-and are the only kind that crosses factions), give it a short name that no other community of yours uses, append
-`club=<short name>` (or the full name without spaces, e.g. `club=CoreTest2`, or the numeric id) to every
-co-guild's line, and share the invite link. Then add one channel to the community per guild, named after that
-guild's tag, with `CORELink` in the channel description (Settings > Add Channel). Other channels of the community
-are left alone. Members read linked guilds in their guild chat; they do not need the community in a chat tab.
-
-## All commands, by task
-
-"GM" means the guild master only; the addon refuses the command for anyone else. "all" means every member.
-
-### Check that it works
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl` | all | Status line: ON or OFF, your tag, the channel and whether it is joined, where the settings came from, and the list of commands. |
-| `/cl guilds` | all | Which guild tags were heard on the link in the last 10 minutes, how many of their addon users you could whisper to, who your guild's courier is, and each `guilds=` guild's online count from the last who round. |
-| `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, your full name as the addon knows it, guilds heard, mirror, relay, whisper and echo counters, and the last 20 debug events. Paste it when asking for help. |
-| `/cl reload` | all | Re-read Guild Info now and retry the channel. |
-
-### Set up the link (guild master)
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl setup <channel> <password> [tag]` | GM | Configure this client and show the Guild Info line to paste. `-` for no password. |
-| `/cl publish` | GM | Show the Guild Info line again. |
-| `/cl channel <name>`, `/cl password <pw>`, `/cl tag <tag>` | GM | Change one setting locally, then `/cl publish`. |
-| `/cl officerrank <n>` | GM | Ranks 0..n count as officers (0 = GM). Shared via the Guild Info line. |
-| `/cl clear` | GM | Clear this client's settings. |
-
-### Every day
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl on`, `/cl off` | all | Enable or disable the addon for this character. Off means you see nothing from other guilds. |
-| `/cl mute <tag>`, `/cl unmute <tag>` | all | Silence a linked guild on this client. |
-| `/cl nickname <name>` or `/cl nickname clear` | all | Your nickname, shown to your guild and linked guilds. |
-
-### How lines look (this client only)
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl nicknames on/off` | all | Show other people's nicknames. |
-| `/cl classcolor on/off` | all | Class-coloured names. |
-| `/cl officer on/off` | all | Officer highlighting. |
-| `/cl officercolor [RRGGBB\|reset]` | all | Officer text colour; no argument opens the colour picker. |
-| `/cl window <n>` | all | Force linked lines into chat window n; no argument = the windows with Guild chat. |
-
-### Lines from members without the addon
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl whisper on/off` | all | Whether this client may be the courier (carrying guildmates' lines to other guilds) and may pass on carried lines it receives. Default on. |
-| `/cl echo on/off` | all | Whether this client may be the one that re-posts other guilds' lines into real guild chat (needs `echo=on` on the Guild Info line). Default on. |
-| `/cl peers` | all | Known peers (other guilds' addon users), their tag and guild, and when they were last heard from. |
-| `/cl who` | all | Run the who round now: ask who is online in each `guilds=` guild and greet new names. Only the courier queries. |
-| `/cl hello <First Surname>` | all | Greet one addon user of another guild directly, on any realm. They appear in `/cl peers` once they answer. |
-
-### Community mirror
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl mirror on/off`, `read off`, `post off`, `hide off` | all | Post your typed guild lines into the community named by `club=`, and show the community's lines in guild chat. Default both on. `hide off` shows the raw community channel lines again if you keep the community in a chat tab. |
-
-### Debugging
-
-| Command | Who | Does |
-|---|---|---|
-| `/cl debug on/off` | all | Echo debug events to chat as they happen. Events are always kept for `/cl report`. |
+Members can read linked messages in guild chat without adding the Community channel to a chat tab.
