@@ -96,7 +96,8 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    the `CURSEFORGE_API_KEY` secret and the `CURSEFORGE_PROJECT_ID` variable (Settings -> Secrets and variables ->
    Actions). Game versions come from the TOC interface numbers; `CURSEFORGE_GAME_VERSIONS` overrides them with
    the names CurseForge uses. Without the secret the step says it skipped and the release is unaffected.
-   `scripts/curseforge-upload.sh --dry-run` shows what would be sent.
+   The **curseforge-check** button (Actions -> curseforge-check -> Run workflow) proves the key and the version
+   names without releasing anything; `scripts/curseforge-upload.sh --dry-run` shows what a release would send.
 
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on

@@ -11,6 +11,8 @@ grep -nE 'curl[^|]*\s-(v|-verbose|-trace)' $files && bad "curl runs verbosely" |
 grep -nE '(echo|printf|cat)[^|]*\$\{?CURSEFORGE_API_KEY' $files | grep -v "> \"\$HDR\"" && bad "a script prints the API key" || true
 grep -nE -- '-H "x-api-token' $files && bad "the API key is on a curl command line" || true
 grep -nE 'secrets\.' .github/workflows/*.yml | grep -vE 'CURSEFORGE_API_KEY: \$\{\{ secrets\.CURSEFORGE_API_KEY \}\}' && bad "a workflow uses a secret outside the CurseForge step env" || true
-n=$(grep -c 'secrets.CURSEFORGE_API_KEY' .github/workflows/release.yml); [ "$n" -eq 1 ] || bad "the API key is wired into $n steps, expected 1"
-[ $fail -eq 0 ] && echo "secrets ok: no tracing, no verbose curl, key only in a header file for one step"
+for wf in release curseforge-check; do   # one step per workflow may hold the key
+  n=$(grep -c 'secrets.CURSEFORGE_API_KEY' ".github/workflows/$wf.yml"); [ "$n" -eq 1 ] || bad "$wf.yml wires the API key into $n steps, expected 1"
+done
+[ $fail -eq 0 ] && echo "secrets ok: no tracing, no verbose curl, key only in a header file, one step per workflow"
 exit $fail
