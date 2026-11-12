@@ -43,11 +43,13 @@ fi
 # and never in anything this script prints. Every call records the HTTP status and the answer; an answer is
 # shown only when it is JSON, which is what the API speaks, and with the key blanked out, because the API echoes
 # a refused token back in its error message and a proxy page may echo headers.
-HDR=$(umask 077 && mktemp); RESP=$(mktemp); trap 'rm -f "$HDR" "$RESP"' EXIT
+HDR=$(umask 077 && mktemp); RESP=$(mktemp); META=$(mktemp); trap 'rm -f "$HDR" "$RESP" "$META"' EXIT
 printf 'x-api-token: %s\n' "$CURSEFORGE_API_KEY" > "$HDR"
 unset CURSEFORGE_API_KEY
-call() {   # call <curl args...>: the answer lands in $RESP; prints the HTTP status, 000 when curl itself failed
-  curl -sS -m 120 -o "$RESP" -w '%{http_code}' -H "@$HDR" "$@" || printf 000
+call() {   # call <curl args...>: the answer lands in $RESP; prints "<HTTP status> <curl exit code>"
+  local rc=0   # curl itself prints 000 as the status when it got no answer, and says why in its exit code
+  curl -sS -m 120 -o "$RESP" -w '%{http_code}' -H "@$HDR" "$@" || rc=$?
+  printf ' %s' "$rc"
 }
 json_answer() {   # the answer, if it is JSON (at most 400 characters) with the key blanked out, else what it was
   python3 -c '
@@ -77,7 +79,7 @@ if [ -z "$names" ]; then
         if ($0 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print $0;
         else { n = $0 + 0; printf "%d.%d.%d\n", int(n / 10000), int(n / 100) % 100, n % 100 } }' | sort -u | paste -sd, -)
 fi
-status=$(call "$API/game/versions")
+read -r status _ <<< "$(call "$API/game/versions")"
 versions=$(python3 -c '
 import json, sys
 try:
@@ -118,21 +120,26 @@ case "$TAG" in
   *)     TYPE=release; NAME="CORELink $VER" ;;
 esac
 notes=$(gh release view "$TAG" --json body -q .body 2>/dev/null || true)
-[ -n "$notes" ] || notes="CORELink $TAG"     # CurseForge requires a changelog; a release without notes gets its name
-# The metadata goes through a file, both into python and into curl: notes can be longer than one argument may
-# be, and a value read from a file by "metadata=<file" is sent as it is, whereas a value on the command line has
-# a ";" read as the start of an option like ";type=" (seen live on 2026-11-12: "Invalid JSON").
-META=$(mktemp); trap 'rm -f "$HDR" "$RESP" "$META"' EXIT
+# CurseForge requires a changelog; a release whose notes are empty (or only whitespace, GitHub bodies end in CRLF)
+# gets its name
+[[ "$notes" =~ [^[:space:]] ]] || notes="CORELink $TAG"
+# The metadata goes through a file, into python on stdin and into curl as "metadata=<file": notes can be longer
+# than one argument may be (128 KB on Linux), and a value curl reads from a file is sent as it is, with no
+# option parsing at a ";" (what -F does to a value on its command line; seen live on 2026-11-12).
 printf '%s' "$notes" | python3 -c '
 import json, sys
-json.dump({"changelog": sys.stdin.read(), "changelogType": "markdown", "displayName": sys.argv[1],
-           "gameVersions": [int(i) for i in sys.argv[2].split(",")], "releaseType": sys.argv[3]}, open(sys.argv[4], "w"))' \
+try:
+    with open(sys.argv[4], "w") as f:
+        json.dump({"changelog": sys.stdin.read(), "changelogType": "markdown", "displayName": sys.argv[1],
+                   "gameVersions": [int(i) for i in sys.argv[2].split(",")], "releaseType": sys.argv[3]}, f)
+except Exception as e:
+    print("curseforge: could not build the metadata (%s); nothing uploaded" % e); sys.exit(2)' \
   "$NAME" "$ids" "$TYPE" "$META"
 echo "curseforge: $NAME ($TYPE)"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
 # Success is a 2xx whose JSON answer carries the file id: a wrong path answers with a redirect or a page, and a
 # status alone would call that fine.
-status=$(call -F "metadata=<$META" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
+read -r status rc <<< "$(call -F "metadata=<$META" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")"
 id=$(python3 -c '
 import json, sys
 try: print(json.load(open(sys.argv[1])).get("id") or "")
@@ -140,7 +147,11 @@ except Exception: print("")' "$RESP")
 case "$status" in
   2??) [ -n "$id" ] || { echo "curseforge: upload failed: HTTP $status but no file id in the answer; nothing is listed."; json_answer; exit 2; } ;;
   4??) echo "curseforge: upload failed: HTTP $status; nothing is listed."; json_answer; exit 2 ;;
-  000) echo "curseforge: upload failed: curl could not reach CurseForge; nothing was sent."; exit 2 ;;
+  000) case "$rc" in   # no answer: only a failure to connect proves the file never left
+         6|7|35) echo "curseforge: upload failed: could not connect to CurseForge (curl exit $rc); nothing was sent." ;;
+         *)      echo "curseforge: upload failed: no answer (curl exit $rc). The file may still have landed:" \
+                      "check the project's files page before pressing curseforge-upload again." ;;
+       esac; exit 2 ;;
   *)   echo "curseforge: upload failed: HTTP $status. The file may still have landed:" \
             "check the project's files page before pressing curseforge-upload again."; json_answer; exit 2 ;;
 esac

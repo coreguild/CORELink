@@ -51,7 +51,7 @@ fi
 case "$url" in
   */game/versions) [ "$FAKE_VERSIONS" = page ] && { printf '<html>login</html>' > "$out"; printf 200; exit 0; }
                    printf '[{"id":17053,"name":"1.60.1"}]' > "$out"; printf 200 ;;
-  */upload-file)   [ "$FAKE_STATUS" = exit28 ] && exit 28
+  */upload-file)   case "$FAKE_STATUS" in exit*) printf 000; exit "${FAKE_STATUS#exit}" ;; esac   # as curl: 000, then its exit code
                    printf '%s' "$FAKE_BODY" > "$out"; printf '%s' "$FAKE_STATUS" ;;
   *)               printf '<html>moved</html>' > "$out"; printf 302 ;;
 esac
@@ -59,7 +59,7 @@ STUB
 cat > "$box/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 case "${FAKE_NOTES:-}" in
-  empty) echo "" ;;
+  empty) printf '\r\n' ;;                                          # a web-made release with no description
   long)  head -c 200000 /dev/zero | tr '\0' 'x'; echo ;;         # past one argument's limit on Linux
   *)     echo 'notes; with a semicolon, "quotes" and a backslash \' ;;
 esac
@@ -87,7 +87,8 @@ for body in '<html>x-api-token: fake</html>' '{"errorMessage":"Token provided: f
   if printf '%s' "$out" | grep -q fake; then echo "FAIL curseforge upload: the key reached the output for '$body'"; fail=1
   else echo "PASS curseforge upload: the key stays out of the output for '$body'"; fi
 done
-upload 2 exit28 ''                  'curl could not reach CurseForge; nothing was sent'
+upload 2 exit7  ''                  'could not connect to CurseForge (curl exit 7); nothing was sent'
+upload 2 exit28 ''                  'no answer (curl exit 28). The file may still have landed'
 upload 2 503 '<html>busy</html>'    'HTTP 503. The file may still have landed'
 FAKE_NOTES=empty upload 0 200 '{"id":44}' 'as file 44'      # a release without notes still sends a changelog
 FAKE_NOTES=long  upload 0 200 '{"id":45}' 'as file 45'      # notes longer than one argument may be
