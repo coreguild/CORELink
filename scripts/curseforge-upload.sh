@@ -40,11 +40,23 @@ if [ -z "${CURSEFORGE_API_KEY:-}" ] || [ -z "${CURSEFORGE_PROJECT_ID:-}" ]; then
   if [ "$MODE" = check ] || [ -n "$TAG_ARG" ]; then exit 2; else exit 0; fi
 fi
 # The key goes to curl through a private header file, never on a command line (visible in ps and in traces)
-# and never in anything this script prints. curl -s keeps its own output quiet; -f turns an HTTP error into
-# a non-zero exit, which is the only thing reported about it.
-HDR=$(umask 077 && mktemp); trap 'rm -f "$HDR"' EXIT
+# and never in anything this script prints. Every call records the HTTP status and the answer; an answer is
+# shown only when it is JSON, which is what the API speaks, and with the key blanked out, because the API echoes
+# a refused token back in its error message and a proxy page may echo headers.
+HDR=$(umask 077 && mktemp); RESP=$(mktemp); trap 'rm -f "$HDR" "$RESP"' EXIT
 printf 'x-api-token: %s\n' "$CURSEFORGE_API_KEY" > "$HDR"
 unset CURSEFORGE_API_KEY
+call() {   # call <curl args...>: the answer lands in $RESP; prints the HTTP status, 000 when curl itself failed
+  curl -sS -m 120 -o "$RESP" -w '%{http_code}' -H "@$HDR" "$@" || printf 000
+}
+json_answer() {   # the answer, if it is JSON (at most 400 characters) with the key blanked out, else what it was
+  python3 -c '
+import json, sys
+raw = open(sys.argv[1], "rb").read()
+key = open(sys.argv[2]).read().split(": ", 1)[1].strip()   # the API echoes a refused token back in its message
+try: json.loads(raw); print(raw.decode("utf-8", "replace").replace(key, "<key>")[:400])
+except Exception: print("(the answer was not JSON: %d bytes)" % len(raw))' "$RESP" "$HDR"
+}
 
 # ---- --tag: the zip of an existing GitHub release stands in for what release.sh would have built ------------
 if [ -n "$TAG_ARG" ]; then
@@ -65,8 +77,16 @@ if [ -z "$names" ]; then
         if ($0 ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) print $0;
         else { n = $0 + 0; printf "%d.%d.%d\n", int(n / 10000), int(n / 100) % 100, n % 100 } }' | sort -u | paste -sd, -)
 fi
-versions=$(curl -fsS -m 30 -H "@$HDR" "$API/game/versions") \
-  || { echo "curseforge: could not list game versions (the API key is wrong, or not an author token from legacy.curseforge.com)"; exit 2; }
+status=$(call "$API/game/versions")
+versions=$(python3 -c '
+import json, sys
+try:
+    vs = json.load(open(sys.argv[1])); print(json.dumps(vs) if isinstance(vs, list) else "")
+except Exception: print("")' "$RESP")
+if [ -z "$versions" ]; then
+  echo "curseforge: could not list game versions (HTTP $status; the API key is wrong, or not an author token from legacy.curseforge.com)"
+  json_answer; exit 2
+fi
 ids=""; missing=""
 for name in $(printf '%s' "$names" | tr ',' ' '); do
   found=$(printf '%s' "$versions" | python3 -c '
@@ -105,6 +125,17 @@ print(json.dumps({"changelog": sys.argv[1], "changelogType": "markdown", "displa
   "$notes" "$NAME" "$ids" "$TYPE")
 echo "curseforge: $NAME ($TYPE)"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
-out=$(curl -fsS -m 120 -H "@$HDR" -F "metadata=$metadata" -F "file=@$ZIP" \
-  "$API/projects/$CURSEFORGE_PROJECT_ID/upload-files") || { echo "curseforge: upload failed"; exit 2; }
-echo "curseforge: uploaded $ZIP, file id $(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id"))')"
+# Success is a 2xx whose JSON answer carries the file id: a wrong path answers with a redirect or a page, and a
+# status alone would call that fine.
+status=$(call -F "metadata=$metadata" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
+id=$(python3 -c '
+import json, sys
+try: print(json.load(open(sys.argv[1])).get("id") or "")
+except Exception: print("")' "$RESP")
+case "$status" in
+  2??) [ -n "$id" ] || { echo "curseforge: upload failed: HTTP $status but no file id in the answer; nothing is listed."; json_answer; exit 2; } ;;
+  4??) echo "curseforge: upload failed: HTTP $status; nothing is listed."; json_answer; exit 2 ;;
+  *)   echo "curseforge: upload failed: HTTP $status (000 = no answer). The file may still have landed:" \
+            "check the project's files page before pressing curseforge-upload again."; json_answer; exit 2 ;;
+esac
+echo "curseforge: uploaded $ZIP as file $id"
