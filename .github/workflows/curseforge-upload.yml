@@ -1,0 +1,29 @@
+name: curseforge-upload
+# Manual button: Actions -> curseforge-upload -> Run workflow -> type a release tag (v0.2.0, v0.2.1-rc1).
+# Uploads that existing GitHub release's zip to CurseForge, as the release job would have: for a release that
+# shipped before CurseForge was set up, or whose upload step failed. CurseForge keeps every upload, so one press
+# per tag; the curseforge-check button is the one that changes nothing.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload, e.g. v0.2.0 (an rc tag becomes a beta file)"
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  upload:
+    name: upload ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    concurrency: release      # never alongside a release job or another upload
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload the release to CurseForge
+        env:                      # the tag goes through env, never interpolated into the shell
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
+        run: scripts/curseforge-upload.sh --tag "$TAG"

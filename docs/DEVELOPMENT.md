@@ -9,7 +9,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | Path | What it is |
 |---|---|
 | `CORELink/` | The addon: fourteen Lua files and two TOCs. This folder is what goes into `Interface/AddOns/`. |
-| `tests/` | `run.sh` runs everything below without the game. `harness.lua` is the mock WoW API, `size.sh` the size limits, `site-render.sh` the download page test. |
+| `tests/` | `run.sh` runs everything below without the game. `harness.lua` is the mock WoW API, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |
 | `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the download page on `gh-pages`. Run by the **release** workflow button, or locally. |
@@ -91,6 +91,16 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    for a day on two clients in two guilds, with one client left on the previous stable to prove the protocol
    still interoperates. Fixes go through normal PRs, are merged into the release branch too, and `rc` again
    gives `rcN+1`. `rc` is refused on `main`.
+
+   Both `rc` and `final` also upload the zip to CurseForge, as a beta or a release file, when the repository has
+   the `CURSEFORGE_API_KEY` secret and the `CURSEFORGE_PROJECT_ID` variable (Settings -> Secrets and variables ->
+   Actions). Game versions come from the TOC interface numbers; `CURSEFORGE_GAME_VERSIONS` overrides them with
+   the names CurseForge uses. Without the secret the step says it skipped and the release is unaffected.
+   The **curseforge-check** button (Actions -> curseforge-check -> Run workflow) proves the key and the version
+   names without releasing anything; `scripts/curseforge-upload.sh --dry-run` shows what a release would send.
+   The **curseforge-upload** button takes a release tag (`v0.2.0`) and uploads that existing GitHub release,
+   for a release that shipped before CurseForge was set up or whose upload step failed. One press per tag:
+   CurseForge keeps every upload.
 
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on
