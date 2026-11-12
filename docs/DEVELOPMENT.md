@@ -98,6 +98,9 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    the names CurseForge uses. Without the secret the step says it skipped and the release is unaffected.
    The **curseforge-check** button (Actions -> curseforge-check -> Run workflow) proves the key and the version
    names without releasing anything; `scripts/curseforge-upload.sh --dry-run` shows what a release would send.
+   Give that button a tag (`v0.2.0`) and it uploads that existing GitHub release instead, for a release that
+   shipped before CurseForge was set up or whose upload step failed. One press per tag: CurseForge keeps every
+   upload.
 
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on
