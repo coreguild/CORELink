@@ -18,3 +18,4 @@ bash tests/size.sh
 "$LUA" tests/load-order.lua
 "$LUA" tests/harness.lua
 bash tests/site-render.sh
+bash tests/secrets.sh

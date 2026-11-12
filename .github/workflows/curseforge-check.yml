@@ -1,0 +1,19 @@
+name: curseforge-check
+# Manual button: Actions -> curseforge-check -> Run workflow. Proves the CurseForge setup without releasing
+# anything: the CURSEFORGE_API_KEY secret is accepted, and the game versions the TOCs imply (or the
+# CURSEFORGE_GAME_VERSIONS variable) exist on CurseForge. Red means the next rc's upload step would fail too.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the CurseForge key and game versions
+        env:
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
+        run: scripts/curseforge-upload.sh --check
