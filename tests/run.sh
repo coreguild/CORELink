@@ -19,3 +19,4 @@ bash tests/size.sh
 "$LUA" tests/harness.lua
 bash tests/site-render.sh
 bash tests/secrets.sh
+bash tests/curseforge-args.sh

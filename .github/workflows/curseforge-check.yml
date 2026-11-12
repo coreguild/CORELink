@@ -2,29 +2,18 @@ name: curseforge-check
 # Manual button: Actions -> curseforge-check -> Run workflow. Proves the CurseForge setup without releasing
 # anything: the CURSEFORGE_API_KEY secret is accepted, and the game versions the TOCs imply (or the
 # CURSEFORGE_GAME_VERSIONS variable) exist on CurseForge. Red means the next rc's upload step would fail too.
-# With a tag (v0.2.0, v0.2.1-rc1) it uploads that existing GitHub release's zip instead: for a release that shipped
-# before CurseForge was set up, or whose upload step failed. CurseForge keeps every upload, so one press per tag.
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Leave empty to only check. A release tag (v0.2.0) uploads that GitHub release to CurseForge."
-        type: string
-        required: false
 permissions:
   contents: read
 jobs:
   check:
-    name: ${{ inputs.tag && format('upload {0}', inputs.tag) || 'check' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check the CurseForge key and game versions, or upload the tag
-        env:                      # the tag goes through env, never interpolated into the shell
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+      - name: Check the CurseForge key and game versions
+        env:
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
           CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
-        run: |
-          if [ -n "$TAG" ]; then scripts/curseforge-upload.sh --tag "$TAG"; else scripts/curseforge-upload.sh --check; fi
+        run: scripts/curseforge-upload.sh --check
