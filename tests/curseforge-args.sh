@@ -22,15 +22,24 @@ expect 2 --check --tag v0.2.0         # one or the other
 expect 2 --bogus
 
 # The upload believes a file id in CurseForge's answer and nothing else: a redirect or a page with a 2xx/3xx
-# status (what a wrong endpoint path answers) must fail. curl and gh are stand-ins here; no network.
+# status (what a wrong endpoint path answers) must fail. curl and gh are stand-ins here; no network. The stand-in
+# curl keeps -F's rule that a ";" ends the value and refuses metadata that is no longer JSON, and the stand-in gh
+# hands out release notes with a semicolon in them, as real notes have.
 box=$(mktemp -d); trap 'rm -rf "$box"' EXIT
 mkdir -p "$box/bin" "$box/scripts" "$box/dist"
 cp scripts/curseforge-upload.sh "$box/scripts/"
 printf 'v9.9.9\n' > "$box/dist/TAG"; printf 'zip' > "$box/dist/CORELink-9.9.9.zip"
 cat > "$box/bin/curl" <<'STUB'
 #!/usr/bin/env bash
-out=""; url=""
-while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; -w|-m|-H|-F) shift ;; -*) ;; *) url=$1 ;; esac; shift; done
+out=""; url=""; meta=""
+while [ $# -gt 0 ]; do case "$1" in
+  -o) out=$2; shift ;;
+  -F) if [ "${2#metadata=}" != "$2" ]; then meta=${2#metadata=}; meta=${meta%%;*}; fi; shift ;;   # -F stops a value at ";"
+  --form-string) [ "${2#metadata=}" != "$2" ] && meta=${2#metadata=}; shift ;;
+  -w|-m|-H) shift ;; -*) ;; *) url=$1 ;; esac; shift; done
+if [ -n "$meta" ] && ! printf '%s' "$meta" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+  printf '{"errorCode":1002,"errorMessage":"Error in field `metadata`: Invalid JSON."}' > "$out"; printf 400; exit 0
+fi
 case "$url" in
   */game/versions) [ "$FAKE_VERSIONS" = page ] && { printf '<html>login</html>' > "$out"; printf 200; exit 0; }
                    printf '[{"id":17053,"name":"1.60.1"}]' > "$out"; printf 200 ;;
@@ -39,7 +48,7 @@ case "$url" in
   *)               printf '<html>moved</html>' > "$out"; printf 302 ;;
 esac
 STUB
-printf '#!/usr/bin/env bash\necho "notes"\n' > "$box/bin/gh"; chmod +x "$box/bin/curl" "$box/bin/gh"
+printf '#!/usr/bin/env bash\necho "notes; with a semicolon, \\"quotes\\" and a backslash \\\\"\n' > "$box/bin/gh"; chmod +x "$box/bin/curl" "$box/bin/gh"
 upload() {   # upload <expected exit> <status> <body> <expected message>: run an upload against the stand-ins
   local want=$1 out got
   out=$(cd "$box" && PATH="$box/bin:$PATH" FAKE_STATUS=$2 FAKE_BODY=$3 FAKE_VERSIONS=${FAKE_VERSIONS:-} CURSEFORGE_API_KEY=fake \

@@ -127,7 +127,9 @@ echo "curseforge: $NAME ($TYPE)"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
 # Success is a 2xx whose JSON answer carries the file id: a wrong path answers with a redirect or a page, and a
 # status alone would call that fine.
-status=$(call -F "metadata=$metadata" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
+# --form-string, not -F: -F reads a ";" in the value as the start of an option like ";type=", and release notes
+# have semicolons, so the JSON would arrive cut short ("Invalid JSON", seen live on 2026-11-12).
+status=$(call --form-string "metadata=$metadata" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
 id=$(python3 -c '
 import json, sys
 try: print(json.load(open(sys.argv[1])).get("id") or "")
