@@ -234,6 +234,7 @@ case "$MODE" in
     run git tag -a "$TAG" -m "CORELink $VER release candidate $N"
     run git push -q origin "$TAG"
     run gh release create "$TAG" "dist/CORELink-$VER.zip" --prerelease --title "CORELink $VER rc$N" --notes "$RELEASE_NOTES"
+    [ $DRY -eq 1 ] || printf '%s\n' "$TAG" > dist/TAG     # for scripts/curseforge-upload.sh
     publish_site rc "dist/CORELink-$VER.zip"
     echo "RC published: $TAG"
     ;;
@@ -268,6 +269,7 @@ case "$MODE" in
     run git tag -a "$TAG" -m "CORELink $VER"
     run git push -q origin "$TAG"
     run gh release create "$TAG" "dist/CORELink-$VER.zip" --latest --title "CORELink $VER" --notes "$RELEASE_NOTES"
+    [ $DRY -eq 1 ] || printf '%s\n' "$TAG" > dist/TAG     # for scripts/curseforge-upload.sh
     publish_site latest "dist/CORELink-$VER.zip"
     echo "Release published: $TAG"
     ;;

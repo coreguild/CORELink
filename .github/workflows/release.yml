@@ -5,6 +5,8 @@ name: release
 #               series, else bump the last release and start rc1. Refused on main.
 # channel=final on main only: promotes the rc merged into main (addon files must match) to v<ver>; latest release
 # channel=site  on main: re-renders the download page; channel notes follow the GitHub releases (editable there)
+# rc and final also upload the zip to CurseForge (beta / release) when the CURSEFORGE_API_KEY secret and the
+# CURSEFORGE_PROJECT_ID variable are set in Settings -> Secrets and variables -> Actions.
 on:
   workflow_dispatch:
     inputs:
@@ -59,6 +61,14 @@ jobs:
           [ -n "$NOTES" ] && args+=(--notes "$NOTES")
           [ "$NO_RC" = "true" ] && args+=(--no-rc)
           scripts/release.sh "${args[@]}"
+      - name: Upload to CurseForge
+        if: inputs.channel != 'site'
+        env:                      # rc -> beta file, final -> release file; skipped when the secret or the id is unset
+          GH_TOKEN: ${{ github.token }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+          CURSEFORGE_GAME_VERSIONS: ${{ vars.CURSEFORGE_GAME_VERSIONS }}
+        run: scripts/curseforge-upload.sh
       - name: Summary
         if: always()
         run: |
