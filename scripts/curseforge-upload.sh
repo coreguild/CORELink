@@ -117,19 +117,22 @@ case "$TAG" in
   *-rc*) TYPE=beta;    NAME="CORELink $VER rc${TAG##*-rc}" ;;
   *)     TYPE=release; NAME="CORELink $VER" ;;
 esac
-notes=$(gh release view "$TAG" --json body -q .body 2>/dev/null || echo "CORELink $TAG")
-metadata=$(python3 -c '
+notes=$(gh release view "$TAG" --json body -q .body 2>/dev/null || true)
+[ -n "$notes" ] || notes="CORELink $TAG"     # CurseForge requires a changelog; a release without notes gets its name
+# The metadata goes through a file, both into python and into curl: notes can be longer than one argument may
+# be, and a value read from a file by "metadata=<file" is sent as it is, whereas a value on the command line has
+# a ";" read as the start of an option like ";type=" (seen live on 2026-11-12: "Invalid JSON").
+META=$(mktemp); trap 'rm -f "$HDR" "$RESP" "$META"' EXIT
+printf '%s' "$notes" | python3 -c '
 import json, sys
-print(json.dumps({"changelog": sys.argv[1], "changelogType": "markdown", "displayName": sys.argv[2],
-                  "gameVersions": [int(i) for i in sys.argv[3].split(",")], "releaseType": sys.argv[4]}))' \
-  "$notes" "$NAME" "$ids" "$TYPE")
+json.dump({"changelog": sys.stdin.read(), "changelogType": "markdown", "displayName": sys.argv[1],
+           "gameVersions": [int(i) for i in sys.argv[2].split(",")], "releaseType": sys.argv[3]}, open(sys.argv[4], "w"))' \
+  "$NAME" "$ids" "$TYPE" "$META"
 echo "curseforge: $NAME ($TYPE)"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
 # Success is a 2xx whose JSON answer carries the file id: a wrong path answers with a redirect or a page, and a
 # status alone would call that fine.
-# --form-string, not -F: -F reads a ";" in the value as the start of an option like ";type=", and release notes
-# have semicolons, so the JSON would arrive cut short ("Invalid JSON", seen live on 2026-11-12).
-status=$(call --form-string "metadata=$metadata" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
+status=$(call -F "metadata=<$META" -F "file=@$ZIP" "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file")
 id=$(python3 -c '
 import json, sys
 try: print(json.load(open(sys.argv[1])).get("id") or "")
@@ -137,7 +140,8 @@ except Exception: print("")' "$RESP")
 case "$status" in
   2??) [ -n "$id" ] || { echo "curseforge: upload failed: HTTP $status but no file id in the answer; nothing is listed."; json_answer; exit 2; } ;;
   4??) echo "curseforge: upload failed: HTTP $status; nothing is listed."; json_answer; exit 2 ;;
-  *)   echo "curseforge: upload failed: HTTP $status (000 = no answer). The file may still have landed:" \
+  000) echo "curseforge: upload failed: curl could not reach CurseForge; nothing was sent."; exit 2 ;;
+  *)   echo "curseforge: upload failed: HTTP $status. The file may still have landed:" \
             "check the project's files page before pressing curseforge-upload again."; json_answer; exit 2 ;;
 esac
 echo "curseforge: uploaded $ZIP as file $id"
