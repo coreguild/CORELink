@@ -10,7 +10,8 @@ mentions the bug (the expect regex); a clean case when the verdict is "approve".
     tests/review-evals/run.py [--model <id>] [--strict] [case ...]
 
 Costs plan usage, one review per case; not part of tests/run.sh. --strict exits 1 on any miss. Raw reviews land
-in tests/review-evals/out/ (ignored by git) so a miss can be read. A miss means the checklist needs a line.
+in tests/review-evals/out/ (ignored by git) so a miss can be read. A MISS means the checklist needs a line; an
+ERROR (the CLI failed or ran out of turns) means the run, not the reviewer, needs looking at.
 """
 import json, os, re, shutil, subprocess, sys
 
@@ -43,7 +44,7 @@ def review(name, model):
     case = json.loads(read(os.path.join(CASES, name, "case.json")))
     prompt = PROMPT.format(checklist=read(os.path.join(ROOT, "agents", "review-checklist.md")),
                            title=case["title"], diff=read(os.path.join(CASES, name, "diff.patch")))
-    cmd = ["claude", "-p", "--output-format", "json", "--max-turns", "12"]
+    cmd = ["claude", "-p", "--output-format", "json", "--max-turns", "20"]
     if model:
         cmd += ["--model", model]
     run = subprocess.run(cmd + [prompt], cwd=ROOT, capture_output=True, text=True)
@@ -52,20 +53,25 @@ def review(name, model):
         f.write(run.stdout)
     try:
         data = json.loads(run.stdout)
-        text, cost = str(data.get("result", "")), float(data.get("total_cost_usd") or 0)
     except ValueError:
-        text, cost = run.stdout + run.stderr, 0.0
-    return case, text, cost
+        return case, "", 0.0, "error: " + (run.stderr.strip().splitlines() or ["no JSON from claude"])[-1][:60]
+    text, cost = str(data.get("result") or ""), float(data.get("total_cost_usd") or 0)
+    error = ""
+    if data.get("is_error") or data.get("subtype") not in (None, "success"):
+        error = "error: " + str(data.get("subtype") or "is_error")   # a budget or CLI problem, not a reviewer miss
+    return case, text, cost, error
 
 
-def grade(case, text):
+def grade(case, text, error):
+    if error:
+        return "none", False, "ERROR"
     verdicts = re.findall(r"VERDICT:\s*(approve|needs changes)", text, re.I)
     verdict = verdicts[-1].lower() if verdicts else "none"
     if case["kind"] == "bug":
         hit = verdict == "needs changes" and bool(re.search(case["expect"], text, re.I))
     else:
         hit = verdict == "approve"
-    return verdict, hit
+    return verdict, hit, "HIT " if hit else "MISS"
 
 
 def main(argv):
@@ -73,24 +79,28 @@ def main(argv):
     while argv:
         a = argv.pop(0)
         if a == "--model":
+            if not argv:
+                print("usage: tests/review-evals/run.py [--model <id>] [--strict] [case ...]"); return 2
             model = argv.pop(0)
         elif a == "--strict":
             strict = True
         else:
             names.append(a)
-    names = names or sorted(os.listdir(CASES))
+    names = names or sorted(n for n in os.listdir(CASES) if os.path.isfile(os.path.join(CASES, n, "case.json")))
+    missing = [n for n in names if not os.path.isfile(os.path.join(CASES, n, "case.json"))]
+    if missing:
+        print("review-evals: no such case: " + ", ".join(missing)); return 2
     if not shutil.which("claude"):
         print("review-evals: the claude CLI is not on PATH")
         return 2
-    hits, total_cost = 0, 0.0
+    hits, errors, total_cost = 0, 0, 0.0
     print(f"{'case':24} {'kind':6} {'verdict':14} result  cost")
     for name in names:
-        case, text, cost = review(name, model)
-        verdict, hit = grade(case, text)
-        hits += hit
-        total_cost += cost
-        print(f"{name:24} {case['kind']:6} {verdict:14} {'HIT ' if hit else 'MISS'}    ${cost:.2f}")
-    print(f"review-evals: {hits}/{len(names)} hits, ${total_cost:.2f}" + (f" on {model}" if model else ""))
+        case, text, cost, error = review(name, model)
+        verdict, hit, result = grade(case, text, error)
+        hits, errors, total_cost = hits + hit, errors + bool(error), total_cost + cost
+        print(f"{name:24} {case['kind']:6} {verdict:14} {result}    ${cost:.2f}  {error}")
+    print(f"review-evals: {hits}/{len(names)} hits, {errors} errors, ${total_cost:.2f}" + (f" on {model}" if model else ""))
     return 1 if strict and hits < len(names) else 0
 
 

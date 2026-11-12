@@ -28,8 +28,9 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           LUA: lua5.4
+          LUAC: luac5.4
           BASE: origin/${{ github.base_ref }}
-          MUTATION_EXEMPT: ${{ startsWith(github.event.pull_request.title, 'refactor') || startsWith(github.event.pull_request.title, 'chore') || startsWith(github.event.pull_request.title, 'docs') || startsWith(github.event.pull_request.title, 'style') }}
+          MUTATION_EXEMPT: ${{ startsWith(github.event.pull_request.title, 'refactor') }}
         run: tests/mutation.sh "$BASE"
       - name: TOCs carry the version placeholder
         run: |

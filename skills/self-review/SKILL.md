@@ -9,14 +9,13 @@ review is the review. It has to be independent of the session that wrote the cod
 1. `tests/run.sh`, then `tests/mutation.sh origin/main`. If `CORELink/` changed, at least one harness check
    must fail against `main`'s addon files; if none does, the change has no check yet. Fix that first.
 2. Independent review of the diff. Run the `code-review` skill at level `high` on the branch: it gives fresh
-   reviewers the diff and nothing of your reasoning, then verifies each finding before reporting. Then walk the
-   blockers in `agents/review-checklist.md` yourself, one by one, against the diff.
+   reviewers the diff and nothing of your reasoning. Its findings are claims; confirm each against the code before
+   acting on it. Then walk `agents/review-checklist.md` against the diff as `skills/review-pr/SKILL.md` step 3 says.
 3. For each confirmed finding: fix it, add a harness `check(...)` that fails without the fix, and rerun step 1.
    A finding you decide not to fix goes in the PR body under "Open questions" with the reason. At most two
    rounds; after that, stop and list what is left in the PR body rather than polishing further.
-4. Post the verdict on the PR with `gh pr review <n> --comment --body ...` in the report format from
-   `agents/review-checklist.md`: a verdict line, one bullet per finding with file and line, and "not verified in
-   game" or the in-game steps. This comment is the review record.
+4. Post the verdict as `skills/review-pr/SKILL.md` step 6 says (`gh pr review <n> --comment`, the checklist's
+   report format). This comment is the review record.
 5. Say "PR #n is ready to merge: CI green, self-review posted" and stop. Never merge.
 
 Every few weeks, or after editing the checklist, run `tests/review-evals/run.py` to measure the reviewer against
