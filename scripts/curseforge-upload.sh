@@ -105,6 +105,18 @@ print(json.dumps({"changelog": sys.argv[1], "changelogType": "markdown", "displa
   "$notes" "$NAME" "$ids" "$TYPE")
 echo "curseforge: $NAME ($TYPE)"
 if [ $DRY -eq 1 ]; then echo "[dry-run] would upload $ZIP to project $CURSEFORGE_PROJECT_ID"; exit 0; fi
-out=$(curl -fsS -m 120 -H "@$HDR" -F "metadata=$metadata" -F "file=@$ZIP" \
-  "$API/projects/$CURSEFORGE_PROJECT_ID/upload-files") || { echo "curseforge: upload failed"; exit 2; }
-echo "curseforge: uploaded $ZIP, file id $(printf '%s' "$out" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id"))')"
+# Success is a file id in the JSON answer, not a 2xx: a wrong path answers with a redirect or a page and -f
+# would call that fine. The answer never holds the key, so it is safe to show.
+resp=$(mktemp); trap 'rm -f "$HDR" "$resp"' EXIT
+status=$(curl -sS -m 120 -o "$resp" -w '%{http_code}' -H "@$HDR" -F "metadata=$metadata" -F "file=@$ZIP" \
+  "$API/projects/$CURSEFORGE_PROJECT_ID/upload-file") || status=000
+id=$(python3 -c '
+import json, sys
+try: print(json.load(open(sys.argv[1])).get("id") or "")
+except Exception: print("")' "$resp")
+if [ "$status" != 200 ] || [ -z "$id" ]; then
+  echo "curseforge: upload failed (HTTP $status, no file id in the answer); nothing is listed. The answer began:"
+  head -c 400 "$resp" | tr -d '\r'; echo
+  exit 2
+fi
+echo "curseforge: uploaded $ZIP as file $id"
