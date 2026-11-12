@@ -1,0 +1,3 @@
+{"kind": "bug", "title": "chore(whisper): simplify the live-peer check; report reads mirror state directly",
+ "expect": "seen|never answered|answer|live",
+ "why": "Reverse of 3ddd53a. A peer we greeted but that never answered has seen == 0; the simplified check counts it live when GetTime() is small after login, so the courier whispers into the void and /cl peers lies."}

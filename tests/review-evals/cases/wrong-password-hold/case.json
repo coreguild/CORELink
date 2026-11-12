@@ -1,0 +1,3 @@
+{"kind": "bug", "title": "refactor(channel): one join path; every WRONG_PASSWORD notice pauses retries",
+ "expect": "wrong.?password|WRONG_PASSWORD|rejoin|remember|hold|pause|block",
+ "why": "Reverse of 6ff04fb. A WRONG_PASSWORD notice that answers no join of ours comes from the client rejoining the remembered channel without the password; treating it as a failed join of ours holds the addon off the channel for minutes after every login."}

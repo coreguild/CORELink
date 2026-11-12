@@ -2,3 +2,4 @@
 dist/
 *.zip
 .luacheckcache
+tests/review-evals/out/

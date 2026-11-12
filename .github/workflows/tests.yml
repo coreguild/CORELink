@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # tests/mutation.sh diffs against the base branch
       - name: Install Lua and luacheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4 lua-check
       - name: Syntax check, luacheck and mock harness
@@ -22,6 +24,13 @@ jobs:
           LUA: lua5.4
           LUAC: luac5.4
         run: tests/run.sh
+      - name: New harness checks fail without the change
+        if: github.event_name == 'pull_request'
+        env:
+          LUA: lua5.4
+          BASE: origin/${{ github.base_ref }}
+          MUTATION_EXEMPT: ${{ startsWith(github.event.pull_request.title, 'refactor') || startsWith(github.event.pull_request.title, 'chore') || startsWith(github.event.pull_request.title, 'docs') || startsWith(github.event.pull_request.title, 'style') }}
+        run: tests/mutation.sh "$BASE"
       - name: TOCs carry the version placeholder
         run: |
           for t in CORELink/*.toc; do
