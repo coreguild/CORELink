@@ -67,7 +67,7 @@ fi
 # the page and repairs the channels from the GitHub releases). Checked on --dry-run too.
 check_branch() {
   case "$MODE" in
-    rc)    [[ "$BRANCH" == release/* ]] || { echo "rc builds come from a release branch (release/<version> or release/<name>); you are on ${BRANCH:-a detached HEAD}. See skills/release/SKILL.md."; exit 2; } ;;
+    rc)    [[ "$BRANCH" == release/* ]] || { echo "rc builds come from a release branch (release/<version> or release/<name>); you are on ${BRANCH:-a detached HEAD}. See docs/DEVELOPMENT.md, How a change gets to players."; exit 2; } ;;
     final) [ "$BRANCH" = main ] || { echo "final runs from main only (you are on ${BRANCH:-a detached HEAD})"; exit 2; } ;;
   esac
 }

@@ -10,9 +10,9 @@
 5. Never push to `main`. Never force-push a shared branch. Never rewrite history on `main`.
 6. If the user asks to "just commit", still create a branch.
 7. Never merge. Not with `gh pr merge`, not with auto-merge, not by pushing to `main`. Before reporting, run
-   `skills/self-review/SKILL.md`: nobody else reviews, so the author's independent review is the review. Report
+   `.claude/skills/self-review/SKILL.md`: nobody else reviews, so the author's independent review is the review. Report
    "PR #n is ready to merge: CI green, self-review posted" and stop. A human presses the button. If the user says "merge it", point them
    at the button; do not do it for them.
 8. Release branches are the one place an agent merges: `release/<version>` is created from `main`, feature
    branches are merged into it (`git merge origin/feat/x`), and release candidates are cut from it. It reaches
-   `main` through a PR like any other branch. See `skills/release/SKILL.md`.
+   `main` through a PR like any other branch. See `.claude/skills/release/SKILL.md`.
