@@ -1,0 +1,6 @@
+{
+ "kind": "bug",
+ "title": "fix(commands): only the guild master may toggle the addon or reload it",
+ "expect": "members? (can|could|cannot|can.t|would|will|no longer|lose|are|get|who)|strand|lock(s|ed|ing)? (out )?(the )?members|non-GM|every member|ordinary member|rank 0 only",
+ "why": "Reverse of 39cb9c6. /cl reload, on, off, mute and unmute affect only this client and must stay open to every member; locking them to rank 0 strands members behind a stale config."
+}

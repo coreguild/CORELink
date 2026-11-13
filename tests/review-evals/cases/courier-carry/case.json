@@ -1,0 +1,6 @@
+{
+ "kind": "bug",
+ "title": "fix(relay): the courier skips lines from addon users; hold cleared only by a notice we map",
+ "expect": "IsAddonUser|addon users?|switched off|turned off|disabled the addon|YOU_JOINED|YOU_CHANGED|never clear|not clear|stays? (blocked|held|silent)",
+ "why": "Reverse of a53e4b8. A guildmate with the addon switched off (or broken) is an addon user whose client posts nothing, so skipping addon users loses their lines; and a successful join (YOU_JOINED/YOU_CHANGED) must clear the join hold or the client stays silent after a password fix."
+}
