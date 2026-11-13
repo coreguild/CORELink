@@ -1,0 +1,2 @@
+{"kind": "clean", "title": "fix(channel): answer the client's password prompt for the link channel from the config",
+ "expect": "", "why": "b0aea00 as merged, harness and .luacheckrc included. StaticPopup_Hide is a real WoW global and the call is guarded; the reviewer should approve."}

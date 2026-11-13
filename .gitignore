@@ -2,3 +2,5 @@
 dist/
 *.zip
 .luacheckcache
+tests/review-evals/out/
+__pycache__/
