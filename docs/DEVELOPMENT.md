@@ -94,7 +94,7 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
 
 4. **Release branch and candidate.** Create `release/<version>` from `main`, push it, and open a PR into it from
    each feature branch that belongs to that release, merged into `main` or not. Release branches are protected
-   like `main`: one review and green checks per PR. Then GitHub -> Actions -> **release** ->
+   like `main`: green checks on each PR, no required approval. Then GitHub -> Actions -> **release** ->
    **Run workflow**, pick the release branch, `rc`. The job re-runs the checks, takes the version from the branch
    name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it into the TOCs inside the zip, creates the
    tag, publishes a GitHub pre-release with the changelog section for that tag, and pushes `rc/CORELink.zip`,

@@ -18,7 +18,7 @@ What an agent does:
    release: `git switch release/<version> && git pull`. Push the new branch. Then open a PR into it from each
    feature branch that belongs in this release, merged into `main` or not (`gh pr create --base release/<version>`);
    if a feature branch conflicts, merge the release branch into the feature branch first, resolve, `tests/run.sh`,
-   push. Release branches are protected like `main`: a human reviews and merges each PR. Agents merge nothing.
+   push. Release branches are protected like `main`: a human merges each PR. Agents merge nothing.
 2. `scripts/release.sh rc --dry-run` on that branch and show the user the line "branch: ... this: v<ver>-rcN". That
    is the version the button will produce. The dry run refuses on `main` or any non-release branch.
 3. If the user asked for an RC, an agent may run `scripts/release.sh rc` locally on the pushed release branch, or

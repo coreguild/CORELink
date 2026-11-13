@@ -13,7 +13,7 @@
    `.claude/skills/self-review/SKILL.md`: nobody else reviews, so the author's independent review is the review. Report
    "PR #n is ready to merge: CI green, self-review posted" and stop. A human presses the button. If the user says "merge it", point them
    at the button; do not do it for them.
-8. Release branches are protected like `main`: one approving review, green checks, merge commits only. An agent
+8. Release branches are protected like `main`: green checks, merge commits only, no required approval. An agent
    creates `release/<version>` from `main` and pushes it, then opens a PR from each feature branch into it; a
    human merges. Release candidates are cut from the release branch, and it reaches `main` through a PR like any
    other branch. See `.claude/skills/release/SKILL.md`.
