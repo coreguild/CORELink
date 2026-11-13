@@ -15,8 +15,10 @@
 The PR template asks for feature notes (player-facing behaviour, commands, config and protocol impact, version) and
 a test checklist. Fill it in; an empty template is the most common reason a PR gets sent back. No reviewer approval
 is required, but CI must pass before the merge button works (`tests/run.sh`, and the TOC interface number must match
-the live game client), every PR gets the gameplay-impact review in `agents/review-checklist.md`, and `CHANGELOG.md` gets a line for
-every user-visible change.
+the live game client, and when `CORELink/` changed at least one harness check must fail without the change:
+`tests/mutation.sh`). Every PR gets the gameplay-impact review in `agents/review-checklist.md`, run by the author
+through `skills/self-review/SKILL.md` and posted as a PR comment, and `CHANGELOG.md` gets a line for every
+user-visible change.
 
 ## Before you push
 

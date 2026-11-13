@@ -12,7 +12,7 @@ Argument: a PR number or branch name. Default: the current branch's open PR.
 3. Walk `agents/review-checklist.md` top to bottom against the diff. For every blocker, find the exact line.
 4. Run `gh pr checks <n>`; both `tests` and `game-version` must be green. If `game-version` is red, the game
    patched: the fix is an interface bump PR, not a merge.
-5. Check out the branch and run `tests/run.sh` yourself. Read the harness diff: a new feature with no new
+5. Check out the branch and run `tests/run.sh` and `tests/mutation.sh origin/main` yourself. Read the harness diff: a new feature with no new
    `check(...)` is "needs changes".
 6. Post the review with `gh pr review <n> --comment --body ...` (or `--approve` when clean) in the report format
    from the checklist. Never merge; say the PR is ready to merge and let a human click it.
