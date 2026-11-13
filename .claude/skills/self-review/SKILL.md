@@ -10,11 +10,11 @@ review is the review. It has to be independent of the session that wrote the cod
    must fail against `main`'s addon files; if none does, the change has no check yet. Fix that first.
 2. Independent review of the diff. Run the `code-review` skill at level `high` on the branch: it gives fresh
    reviewers the diff and nothing of your reasoning. Its findings are claims; confirm each against the code before
-   acting on it. Then walk `agents/review-checklist.md` against the diff as `skills/review-pr/SKILL.md` step 3 says.
+   acting on it. Then walk `agents/review-checklist.md` against the diff as `.claude/skills/review-pr/SKILL.md` step 3 says.
 3. For each confirmed finding: fix it, add a harness `check(...)` that fails without the fix, and rerun step 1.
    A finding you decide not to fix goes in the PR body under "Open questions" with the reason. At most two
    rounds; after that, stop and list what is left in the PR body rather than polishing further.
-4. Post the verdict as `skills/review-pr/SKILL.md` step 6 says (`gh pr review <n> --comment`, the checklist's
+4. Post the verdict as `.claude/skills/review-pr/SKILL.md` step 6 says (`gh pr review <n> --comment`, the checklist's
    report format). This comment is the review record.
 5. Say "PR #n is ready to merge: CI green, self-review posted" and stop. Never merge.
 

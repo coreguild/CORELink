@@ -17,7 +17,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version. CI runs it on every PR and every 6 hours. |
 | `site/` | Template and stylesheet for the download page. Never edited on `gh-pages` by hand. |
 | `docs/` | This folder: commands, troubleshooting, architecture, development. |
-| `agents/`, `skills/` | Rules and step-by-step procedures for AI agents: branching, testing, gotchas, review, release. |
+| `agents/`, `.claude/skills/` | Rules and step-by-step procedures for AI agents: branching, testing, gotchas, review, release. |
 
 ## Everyday commands
 
@@ -86,7 +86,7 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    ruleset blocks merging until both are green and the branch is up to date with `main`. The gameplay-impact
    review in `agents/review-checklist.md` is posted as a comment.
 
-3. **Review and merge.** No second reviewer is required. The author runs `skills/self-review/SKILL.md`: tests,
+3. **Review and merge.** No second reviewer is required. The author runs `.claude/skills/self-review/SKILL.md`: tests,
    the mutation check, an independent review of the diff, fixes, and the verdict posted as a PR comment. Then a
    person clicks the button; agents never merge. Merge commits only, so the branch's history lands
    on `main`; the branch is deleted automatically.
