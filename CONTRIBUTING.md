@@ -86,3 +86,8 @@ The code is written to be read without an editor's help, and `tests/run.sh` enfo
 * A line is under 120 characters and holds one statement. No `if x then a; b end` on one line.
 * Shared state and functions live on `NS` with a comment saying what the key means; see the registries in
   `docs/ARCHITECTURE.md` for adding a command, a packet handler or an event without touching the dispatcher.
+
+## License
+
+CORELink is released under the ISC License (see `LICENSE`). By contributing you agree that your contribution
+is licensed the same way.
