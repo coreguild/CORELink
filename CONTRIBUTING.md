@@ -17,7 +17,7 @@ a test checklist. Fill it in; an empty template is the most common reason a PR g
 is required, but CI must pass before the merge button works (`tests/run.sh`, and the TOC interface number must match
 the live game client, and when `CORELink/` changed at least one harness check must fail without the change:
 `tests/mutation.sh`). Every PR gets the gameplay-impact review in `agents/review-checklist.md`, run by the author
-through `skills/self-review/SKILL.md` and posted as a PR comment, and `CHANGELOG.md` gets a line for every
+through `.claude/skills/self-review/SKILL.md` and posted as a PR comment, and `CHANGELOG.md` gets a line for every
 user-visible change.
 
 ## Before you push
