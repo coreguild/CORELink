@@ -1,6 +1,6 @@
 ---
 name: unslop
-description: Cut AI tells from prose. README, docs, agent rules, skills, PR bodies, commit subjects, changelog lines and code comments, not code. Use when asked to unslop, or from the self-review when prose changed.
+description: Cut AI tells from prose. README, docs, agent rules, skills, PR bodies, commit subjects, changelog lines and code comments, not code. Manual only (/unslop); the self-review reads this file and applies it to changed prose.
 disable-model-invocation: true
 ---
 
@@ -10,12 +10,21 @@ Edit prose to remove the patterns below. Keep the meaning and the author's tone;
 changed lines of the diff, not the whole file, unless asked for the whole file. Report what you changed and why,
 by rule number, so the author can push back.
 
-Scope: `README.md`, `docs/`, `agents/`, `.claude/skills/`, `CONTRIBUTING.md`, `ONBOARDING.md`, PR bodies, commit
-subjects, changelog lines, and comments in Lua and shell. Out of scope: code, command output, error text, quoted
-game messages, and anything inside a code fence.
+In scope: `README.md`, `docs/`, `agents/`, `.claude/skills/`, `CONTRIBUTING.md`, `ONBOARDING.md`, PR bodies,
+commit subjects, changelog lines, and comments in Lua and shell. Out of scope: code, command output, error text,
+quoted game messages, and anything inside a code fence.
 
-The rule numbers are the ids of the general unslop skill this one was trimmed from. Other documents cite them, so
-a dropped rule leaves a gap rather than renumbering, and rules of this project start at 40.
+Kept as they are, because the repository uses them on purpose:
+
+* UI navigation paths with arrows and bold names: `GitHub -> Actions -> **release** -> **Run workflow**`.
+* The labelled fields of `.github/pull_request_template.md` ("**Commands added/changed:** ...") in a PR body.
+* The `* path - description` lists in `AGENTS.md` and the tables in `docs/`.
+* File header comments and the comment on every `NS` key, which `CONTRIBUTING.md` requires.
+* Limits stated in a rule ("a file under 400 lines, a function under 40").
+
+The rule numbers are the ids of the general unslop skill this copy was trimmed from, which already skipped 1, 2,
+4, 6 and 21; this copy also drops 5 and 12. The numbers stay so that "rule 27" means the same thing in both, and a
+self-review report can cite them. Rules of this project start at 40.
 
 ## Words of this project that are not tells
 
@@ -35,7 +44,7 @@ list rather than fighting the rule below each time.
 8. **Fancy ways to say "is".** "serves as", "stands as", "boasts". Say "is" or "has".
 9. **"Not just X, but Y."** State the point directly.
 10. **Rule of three.** Use the natural number of items, not three.
-11. **Synonym cycling.** One name per thing, repeated. The addon's words are fixed: courier, relay, mirror.
+11. **Synonym cycling.** One name per thing, repeated. The addon's names are the project list above; use them.
 
 ## Style
 
@@ -43,7 +52,7 @@ list rather than fighting the rule below each time.
 14. **Colons as connectors.** A colon introduces a list or an example. Mid-sentence, rewrite without it.
 15. **Boldface.** Not on every proper noun or acronym.
 16. **Inline-header lists.** A bold label and colon that restates the line ("**Tests:** tests pass") becomes
-    prose. A bold lead-in ending in a period, followed by new detail, is fine.
+    prose. A bold lead-in ending in a period, followed by new detail, is fine. The PR template's fields stay.
 17. **Headings in sentence case.**
 18. **Emoji.** None in headings or bullets. The PR footer line is the one exception.
 19. **Straight quotes.**
@@ -72,8 +81,8 @@ list rather than fighting the rule below each time.
     mechanism or the number: "the relay sends at most one message a second". If a sentence could sit unchanged
     in another addon's README, it says nothing about this one. Cut it.
 28. **One idea per sentence.** If the reader has to backtrack, split it.
-29. **Active voice.** "queries are validated" is "the compiler validates queries". Passive only when the actor
-    is unknown or does not matter.
+29. **Active voice.** "messages are queued" is "the relay queues messages". Passive only when the actor is
+    unknown or does not matter.
 30. **Adverbs.** "runs quickly" is "is fast" or the number. "Significantly improves" is the measured change.
 31. **The plain word.** utilize and leverage are "use"; facilitate is "help"; numerous is "many"; "in the event
     that" is "if".
@@ -84,9 +93,8 @@ list rather than fighting the rule below each time.
 
 ## Rules of this project
 
-40. **Commit subjects are changelog lines.** Players read them. `type(scope): what changed`, under 72 characters,
-    no trailing period, no "various fixes", no "update". Say the behaviour, not the file.
-41. **Comments say why, not what.** A comment that restates the line below it goes. A comment longer than the
-    code it explains is a smell; move the explanation into a name or a doc. Rule 27 applies to comments too.
-42. **Numbers and paths stay out of sentences.** A count, a limit or a version on its own line or in a table;
-    a path only when the reader has to go there. One path per sentence, two per paragraph.
+40. **Commit subjects are changelog lines.** Players read them. The form is `CONTRIBUTING.md`'s
+    (`type(scope): what changed`); the content is the behaviour, not the file: no "various fixes", no "update
+    X". Fix the wording before the push; a pushed subject stays, since merge commits keep every one.
+41. **Comments say why, not what.** A comment that restates the line below it goes. The exceptions are listed at
+    the top: file headers and `NS` key comments are documentation, not narration. Rule 27 applies to comments.

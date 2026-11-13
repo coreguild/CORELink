@@ -11,8 +11,9 @@ review is the review. It has to be independent of the session that wrote the cod
 2. Independent review of the diff. Run the `code-review` skill at level `high` on the branch: it gives fresh
    reviewers the diff and nothing of your reasoning. Its findings are claims; confirm each against the code before
    acting on it. Then walk `agents/review-checklist.md` against the diff as `.claude/skills/review-pr/SKILL.md` step 3 says.
-   If prose changed (README, docs, agent rules, skills, Lua or shell comments, the PR body, commit subjects), run the
-   `unslop` skill over the changed lines; what it finds counts as findings too.
+   If prose changed (README, docs, agent rules, skills, Lua or shell comments, the PR body, commit subjects), read
+   `.claude/skills/unslop/SKILL.md` and apply it to the changed lines. It is manual-only, so it is not in the skill
+   list; reading the file is how it runs. A prose finding is fixed in place and needs no harness check.
 3. For each confirmed finding: fix it, add a harness `check(...)` that fails without the fix, and rerun step 1.
    A finding you decide not to fix goes in the PR body under "Open questions" with the reason. At most two
    rounds; after that, stop and list what is left in the PR body rather than polishing further.
