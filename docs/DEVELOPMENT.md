@@ -9,7 +9,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | Path | What it is |
 |---|---|
 | `CORELink/` | The addon: fourteen Lua files and two TOCs. This folder is what goes into `Interface/AddOns/`. |
-| `tests/` | `run.sh` runs everything below without the game. `harness.lua` is the mock WoW API, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. |
+| `tests/` | `run.sh` runs the checks below without the game. `harness.lua` is the mock WoW API, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. `mutation.sh` (CI runs it too, separately) proves a check fails without the change. `review-evals/` measures the reviewer against past bugs. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |
 | `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the download page on `gh-pages`. Run by the **release** workflow button, or locally. |
@@ -23,9 +23,11 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 
 ```
 scripts/install-local.sh            # link CORELink/ into the Forever client (macOS default path), then /reload in game
-tests/run.sh                        # everything CI runs: syntax, luacheck, size limits, mock harness, site render
+tests/run.sh                        # syntax, luacheck, size limits, mock harness, site render, secrets; CI runs this and mutation.sh
 scripts/package.sh                  # tests + dist/CORELink-<version>.zip
 scripts/release.sh rc --dry-run     # what the next release-candidate press would produce
+tests/mutation.sh origin/main       # the branch's harness must fail against main's addon files
+tests/review-evals/run.py           # how well the reviewer catches past bugs (uses the claude CLI, costs plan usage)
 ```
 
 Needs a Lua interpreter and luacheck: macOS `brew install lua luacheck`; Windows `winget install DEVCOM.Lua`;
@@ -45,6 +47,11 @@ Linux `apt install lua5.4 lua-check`.
    check prints `PASS` or `FAIL` with a sentence saying what it claims, and the script exits non-zero on any
    failure.
 5. `tests/site-render.sh`: the download page renders with awkward release notes.
+6. `tests/mutation.sh <base>` (not in `run.sh`; CI runs it on pull requests): when `CORELink/` changed, the
+   harness is run against the base branch's addon files and must fail there, so at least one check depends on
+   the change. Changes that compile to the same bytecode (comments, whitespace, local names) have nothing to
+   prove; PRs titled `refactor` are exempt on the author's word. Only the self-review's walk of the diff can say
+   whether every behaviour change has its own check.
 
 When you change behaviour, add a `check(...)` to the harness that fails without the change. Mock only what the
 addon calls, in the harness, never in the addon. If you use a WoW API that is not in `.luacheckrc`, add it to
@@ -79,7 +86,9 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    ruleset blocks merging until both are green and the branch is up to date with `main`. The gameplay-impact
    review in `agents/review-checklist.md` is posted as a comment.
 
-3. **Merge.** A person clicks the button; agents never merge. Merge commits only, so the branch's history lands
+3. **Review and merge.** No second reviewer is required. The author runs `skills/self-review/SKILL.md`: tests,
+   the mutation check, an independent review of the diff, fixes, and the verdict posted as a PR comment. Then a
+   person clicks the button; agents never merge. Merge commits only, so the branch's history lands
    on `main`; the branch is deleted automatically.
 
 4. **Release branch and candidate.** Create `release/<version>` from `main` and merge in the feature branches

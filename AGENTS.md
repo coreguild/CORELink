@@ -10,14 +10,16 @@ Start by reading `agents/README.md`, then follow the three documents it links:
 * `agents/feature-requests.md` - how to turn a feature request into a clear note, questions, tests, and a PR.
 * `agents/review-checklist.md` - the pre-merge review for gameplay impact. Every PR gets this review before merge.
 
-Procedures you can follow step by step live in `skills/` (`start-feature`, `test-addon`, `install-addon`, `release`).
+Procedures you can follow step by step live in `skills/` (`start-feature`, `test-addon`, `self-review`, `review-pr`,
+`install-addon`, `release`).
 Before editing anything, run the `start-feature` skill (or its commands) so you are on a `feat/`, `fix/`, `docs/` or `chore/` branch.
 
 Hard rules:
 
 1. Run `tests/run.sh` before claiming a change works. If it fails, fix it or say so.
    Every new or changed behaviour needs a `check(...)` in `tests/harness.lua` that fails without the change.
-   CI runs the same script on every pull request and `main` will not accept a PR whose tests fail.
+   CI runs the same script on every pull request, plus `tests/mutation.sh`: when `CORELink/` changed, the harness
+   must fail against the base branch's addon files. `main` will not accept a PR whose tests fail.
 2. For a feature request, restate it, ask about anything ambiguous, and fill in the PR template's
    "Feature notes" section completely (see `agents/feature-requests.md`). Commit subjects become changelog lines and must follow Conventional Commits (`feat(scope): ...`, `fix: ...`);
    see `CONTRIBUTING.md`.
@@ -28,8 +30,9 @@ Hard rules:
    list them in load order; a new file goes into both TOCs. `docs/ARCHITECTURE.md` says what goes where.
    `tests/size.sh` enforces: a file under 400 lines, a function under 40; luacheck caps lines at 120.
 6. Keep the addon Lua 5.1 compatible and guard any API that may be missing on this client.
-7. Before anything is merged, run the `review-pr` skill (or walk `agents/review-checklist.md`) and post the result
-   on the PR. CI also fails the PR when the TOC interface number no longer matches the live game client.
+7. Nobody else reviews. Before calling a PR ready, run the `self-review` skill (tests, mutation check, an independent
+   review of the diff, the checklist, the verdict posted on the PR). `review-pr` is for someone else's PR. CI also
+   fails the PR when the TOC interface number no longer matches the live game client.
 8. **Agents never merge.** Do not run `gh pr merge`, click merge, enable auto-merge, or push to `main` by any other
    route, even when asked to "finish it" or "get it in". Say the PR is ready and stop. Merging is a human button
    press. The same applies to `scripts/release.sh final`: run it only when a human explicitly asks for that release.

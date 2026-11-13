@@ -1,0 +1,2 @@
+{"kind": "clean", "title": "fix(commands): members can run /cl reload, on, off, mute and unmute",
+ "expect": "", "why": "39cb9c6 as merged, harness included. A correct, small fix with its check; the reviewer should approve."}

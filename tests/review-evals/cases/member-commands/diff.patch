@@ -1,0 +1,28 @@
+diff --git a/CORELink/CORELink.lua b/CORELink/CORELink.lua
+index 75baf1d..f8d2f54 100644
+--- a/CORELink/CORELink.lua
++++ b/CORELink/CORELink.lua
+@@ -672,11 +672,11 @@ end)
+ 
+ ---------------------------------------------------------------- slash cmds
+ SLASH_CORELINK1, SLASH_CORELINK2 = "/corelink", "/cl"
+--- Only the guild master (rank 0) may change the shared configuration. Everything that affects only this
+--- client (on, off, mute, unmute, reload, display toggles) is open to every member.
++-- Only the guild master (rank 0) may run these.
+ local GM_ONLY = {
+   setup = true, channel = true, password = true, tag = true, publish = true,
+-  officerrank = true, clear = true,
++  reload = true, officerrank = true, clear = true, on = true, off = true,
++  mute = true, unmute = true,
+ }
+ 
+ local function IsGM()
+@@ -847,7 +847,7 @@ SlashCmdList["CORELINK"] = function(input)
+     if IsGM() then
+       Print("/cl setup | channel | password | tag | publish | guilds | nickname | nicknames | classcolor | officer | officercolor | officerrank | window | reload | clear | on | off | mute | unmute | report | debug on|off")
+     else
+-      Print("/cl reload | on | off | mute <tag> | unmute <tag> | nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | report | debug on|off")
++      Print("/cl nickname <name> | nicknames on|off | classcolor on|off | officercolor | officer on|off | guilds | window | report | debug on|off")
+     end
+   end
+ end
