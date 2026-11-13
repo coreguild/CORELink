@@ -17,7 +17,8 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version. CI runs it on every PR and every 6 hours. |
 | `site/` | Template and stylesheet for the download page. Never edited on `gh-pages` by hand. |
 | `docs/` | This folder: commands, troubleshooting, architecture, development. |
-| `agents/`, `.claude/skills/` | Rules and step-by-step procedures for AI agents: branching, testing, gotchas, review, release. |
+| `agents/` | Rules for AI agents: branching, testing, gotchas, review. |
+| `.claude/skills/` | Step-by-step procedures (start a feature, test, self-review, release). Claude Code loads them from this hidden folder; they are plain Markdown anyone can follow. |
 
 ## Everyday commands
 

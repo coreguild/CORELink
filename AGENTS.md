@@ -11,7 +11,8 @@ Start by reading `agents/README.md`, then follow the three documents it links:
 * `agents/review-checklist.md` - the pre-merge review for gameplay impact. Every PR gets this review before merge.
 
 Procedures you can follow step by step live in `.claude/skills/` (`start-feature`, `test-addon`, `self-review`, `review-pr`,
-`install-addon`, `release`).
+`install-addon`, `release`). Claude Code loads them from there; the folder is hidden (`ls -a`) but each `SKILL.md` is plain
+Markdown that any tool or person can read.
 Before editing anything, run the `start-feature` skill (or its commands) so you are on a `feat/`, `fix/`, `docs/` or `chore/` branch.
 
 Hard rules:
