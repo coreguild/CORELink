@@ -64,6 +64,7 @@ end
 
 -- "[TAG] [Author]: (Rank Nick) text" in guild colour, officer colour when the author is an officer.
 -- textHasPrefix: the text already carries "(Rank Nick)" (community lines), so none is added.
+-- Callers clean what other clients sent (ShowPacket, OnClubMessage); a name from the game is drawn as given.
 function NS.Display(tag, author, class, msg, officerLabel, nick, textHasPrefix)
   local db = NS.db
   local c = ChatTypeInfo["GUILD"] or { r = .25, g = 1, b = .25 }
