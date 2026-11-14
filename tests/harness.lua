@@ -962,7 +962,7 @@ end
 
 ---------------------------------------------------------------- a guildmate runs a newer release
 do
-  local newer = NS.IsNewerVersion
+  local newer = NS.IsNewerVersion or function() return false end   -- absent before this feature: fail, not crash
   check("versions: finals compare by number, not as text", newer("0.10.0", "0.9.9") and newer("v1.0.0", "0.9.9") and not newer("0.2.0", "0.2.0") and not newer("0.1.9", "0.2.0"))
   check("versions: a candidate is older than its final and newer than the previous final", newer("0.3.0", "0.3.0-rc2") and newer("0.3.0-rc2", "0.3.0-rc1") and newer("0.3.0-rc1", "0.2.0-rc9"))
   check("versions: someone on a final is not told about a candidate", not newer("0.3.0-rc1", "0.2.0"))
