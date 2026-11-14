@@ -92,15 +92,16 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    person clicks the button; agents never merge. Merge commits only, so the branch's history lands
    on `main`; the branch is deleted automatically.
 
-4. **Release branch and candidate.** Create `release/<version>` from `main` and merge in the feature branches
-   that belong to that release, merged into `main` or not. Push it. Then GitHub -> Actions -> **release** ->
+4. **Release branch and candidate.** Create `release/<version>` from `main`, push it, and open a PR into it from
+   each feature branch that belongs to that release, merged into `main` or not. Release branches are protected
+   like `main`: green checks on each PR, no required approval. Then GitHub -> Actions -> **release** ->
    **Run workflow**, pick the release branch, `rc`. The job re-runs the checks, takes the version from the branch
    name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it into the TOCs inside the zip, creates the
    tag, publishes a GitHub pre-release with the changelog section for that tag, and pushes `rc/CORELink.zip`,
    `v/CORELink-<ver>.zip`, the notes, `CHANGELOG.md` and the re-rendered page to `gh-pages`. Testers run the RC
    for a day on two clients in two guilds, with one client left on the previous stable to prove the protocol
-   still interoperates. Fixes go through normal PRs, are merged into the release branch too, and `rc` again
-   gives `rcN+1`. `rc` is refused on `main`.
+   still interoperates. Fixes are PRs into the release branch, and `rc` again gives `rcN+1`. `rc` is refused on
+   `main`.
 
    Both `rc` and `final` also upload the zip to CurseForge, as a beta or a release file, when the repository has
    the `CURSEFORGE_API_KEY` secret and the `CURSEFORGE_PROJECT_ID` variable (Settings -> Secrets and variables ->
