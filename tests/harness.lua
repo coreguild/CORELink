@@ -341,6 +341,9 @@ n0 = #chatLines; local rep = report()
 check("/cl report fills the copy box", rep ~= "")
 check("report has version, channel id, last send result and log", rep:find("CORELink 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. rep)
+-- plain /cl: the send result is a word (ok, error, refused) since 0.2.0, so no "(0 = success)" hint after it
+out = lines(function() slash("") end) .. "\n"
+check("plain /cl prints the last send result without the old numeric hint", out:find("last send result: ok\n", 1, true) ~= nil, out)
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
