@@ -126,26 +126,37 @@ Addon messages carry the prefix `CORELink`; fields are separated by `~`.
 | whisper | `DIR~name@realm@tag@guild;...` | gossip: peers worth greeting |
 | whisper | `WB~<CL4 packet>` | a carried line |
 
-Changing the CL4 field order or separator is a protocol change: bump the version and keep old versions
-readable.
+These formats cannot change while a release that reads them is still supported: see the next section.
 
 ## Frozen formats
 
 0.2.0 is released and those clients will never change. What they read and write is frozen:
 
-* the channel line `CL4~id~tag~author~class~flags~nick~text`: exactly `CL4`, seven fields, text takes the rest;
+* the addon message prefix `CORELink`;
+* the channel line `CL4~id~tag~author~class~flags~nick~text`: exactly `CL4`, seven fields, text takes the rest.
+  0.2.0 drops any other version, so a `CL5` line is a line 0.2.0 players never see;
 * the line id, `NS.Hash(tag .. author .. msg)`: both sides must compute the same id or duplicates get through;
 * the whisper packets `HELLO~tag~realm~guild`, `PEER~tag~realm~guild`, `DIR~name@realm@tag@guild;...`, `WB~<packet>`;
 * the guild packets `PRESENT~version`, `NICK~name`, `NREQ`, `LINE~<packet>`, `ECHO~id`;
+* the echoed guild chat line `[TAG] Name (Rank Nick): text`: 0.2.0 recognises an echo by `[TAG] ...: ` at the
+  start, to hide it and to keep its courier from carrying it back out;
 * the Guild Info line `CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [guilds=a, b]`;
 * the saved variables `CORELinkDB` as 0.2.0 wrote them.
 
-New data travels in a new packet kind (old clients ignore a kind they do not know) or in a new `key=value`
-field on the Guild Info line, placed before `guilds=`. Never inside an existing format.
+New data never goes inside an existing format. It travels in:
 
-`tests/compat.sh` holds this: it loads the addon from the tag `v0.2.0` and from the working tree into two
-fake clients each and passes lines, greetings, settings and saved variables between them. The tag is the
-oldest release that must keep working, not the previous release.
+* a new packet kind whose name is letters only and does not start with an existing kind's name. 0.2.0 reads
+  the leading letters as the kind and ignores a kind it does not know, but it reads `NICK2~x` as `NICK` with
+  the name `2x`;
+* a new `key=value` field on the Guild Info line, after the four positional fields (`-` for no tag, then the
+  officer rank) and before `guilds=`. 0.2.0 takes the third and fourth words as tag and rank whatever they are:
+  it reads `CORELink: chan pw echo=on` as the tag `echo=on`. `/cl publish` always writes all four.
+
+`tests/compat.sh` holds this: it loads the addon from the baseline tag and from the working tree into fake
+clients, two guilds with one of each, and passes lines, greetings, settings and saved variables between them.
+The baseline (`BASELINE` in that script, `v0.2.0`) is the oldest release that must keep working, not the
+previous release. Changing a frozen format means dropping that release: a decision for a human, made by
+raising `BASELINE`.
 
 ## Peers and the courier
 

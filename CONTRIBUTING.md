@@ -25,7 +25,8 @@ user-visible change.
 1. `tests/run.sh` passes (syntax check, luacheck, and the mock harness).
 2. You loaded the addon in the Forever client and tried the change. Note what you did in the PR.
 3. If you changed the wire protocol, read `agents/wow-api-gotchas.md` first and bump the `PROTO` version.
-   Receivers must keep accepting older protocol versions for at least one release.
+   Receivers must keep accepting older protocol versions for at least one release. Released clients must
+   keep understanding what you send too: see "Frozen formats" in `docs/ARCHITECTURE.md`; `tests/compat.sh` checks it.
 4. No `print` left behind; use `/cl` status output for diagnostics.
 
 ## Versioning and releases
