@@ -87,10 +87,19 @@ preflight() {
 # ---- repair a channel from the GitHub release (a local run that died after tagging, see #27) ----------
 # The GitHub release is the source of truth: when the channel's zip is not byte-for-byte the release's asset, the
 # zip, notes and changelog section are written exactly as the rc/final run would have written them. A channel
-# that already serves the release's zip is left alone (its notes may predate this script). The asset's name says
-# what is stamped inside it: a candidate from before #19 is CORELink-<ver>.zip and says <ver>, a later one is
-# CORELink-<ver>-rcN.zip and says <ver>-rcN; VERSION and the v/ path follow the asset that was found.
+# that already serves the release's zip keeps it; its notes follow the release's body, which can be edited on
+# GitHub after publishing (a notes paragraph that did not make it through the button, a correction).
+# The asset's name says what is stamped inside it: a candidate from before #19 is CORELink-<ver>.zip and says
+# <ver>, a later one is CORELink-<ver>-rcN.zip and says <ver>-rcN; VERSION and the v/ path follow the asset found.
 SYNCED=""
+refresh_notes() {  # $1 = rc|latest, $2 = tag ; the channel's notes follow the GitHub release body
+  local body; body=$(gh release view "$2" --json body -q .body 2>/dev/null) || return 0
+  [ -n "$body" ] || return 0
+  [ "$body" = "$(cat "$wt/$1/NOTES.md" 2>/dev/null)" ] && return 0
+  echo "site: $1 notes refreshed from the $2 release"
+  printf '%s\n' "$body" > "$wt/notes/${2#v}.md"
+  printf '%s\n' "$body" > "$wt/$1/NOTES.md"
+}
 sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previous tag for the changelog ("" none)
   local channel="$1" tag="$2" prev="$3" name
   local tmp; tmp=$(mktemp -d)
@@ -98,7 +107,9 @@ sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previo
     echo "site: $tag has no GitHub release with $(asset_names "$tag" | paste -sd' ' -); $channel left as is"
     rm -rf "$tmp"; return 0
   fi
-  if cmp -s "$tmp/$name" "$wt/$channel/CORELink.zip"; then rm -rf "$tmp"; return 0; fi
+  if cmp -s "$tmp/$name" "$wt/$channel/CORELink.zip"; then
+    rm -rf "$tmp"; refresh_notes "$channel" "$tag"; return 0
+  fi
   echo "site: $channel <- $tag (recovered from the GitHub release)"
   cp "$tmp/$name" "$wt/$channel/CORELink.zip"
   cp "$tmp/$name" "$wt/v/$name"

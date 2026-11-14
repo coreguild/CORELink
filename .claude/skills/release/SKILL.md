@@ -5,6 +5,8 @@ description: Prepare or cut a CORELink release candidate, or explain how to prom
 
 Releases are a human button press: GitHub -> Actions -> **release** -> **Run workflow** -> pick the branch.
 Inputs: `channel` (`rc`, `final`, `site`), `bump` (`auto`, `patch`, `minor`, `major`; rc only), `notes`, `no_rc`.
+`notes` is one paragraph shown above the generated changelog. If it was left empty or needs a correction, edit the
+release body on GitHub and press the button with `site`: the page's notes follow the GitHub release.
 RCs are cut from a `release/*` branch, never from `main`; `final` runs on `main` after that branch is merged.
 Nobody edits version numbers. The job takes the version from the branch name (`release/0.2.0` -> `v0.2.0-rcN`) or
 computes it from the git tags (`release/<word>`, and `final`), stamps it into the zip (a candidate says
