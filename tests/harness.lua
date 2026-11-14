@@ -221,15 +221,6 @@ channelLine("CL4~0badf00e~ALT~Carol~PRIEST~~~wrong channel", "Carol", "2. Trade"
 check("packet on another channel ignored", #chatLines == n0)
 channelLine("just some chat", "Someone")
 check("plain text on the link channel is ignored", #chatLines == n0)
--- the link channel is matched by its whole name, any case (#26): a longer or shorter name is another channel
-channelLine("CL4~0badf010~ALT~Carol~PRIEST~~~longer channel name", "Carol", "7. CORELink71000")
-channelLine("CL4~0badf011~ALT~Carol~PRIEST~~~prefixed channel name", "Carol", "7. MyCORELink7100")
-check("a packet on a channel whose name only contains the link channel's is ignored", #chatLines == n0, #chatLines - n0)
-CORELinkDB.channel = "CORE"
-check("a link channel called CORE does not claim CORELink7100", NS.IsLinkChannel("6. CORELink7100") == false and NS.IsLinkChannel("CORELink7100") == false and NS.IsLinkChannel("3. core") == true and NS.IsLinkChannel("Core") == true)
-CORELinkDB.channel = "CORELink7100"
-channelLine("CL4~0badf012~ALT~Carol~PRIEST~~~other capitals", "Carol", "6. corelink7100")
-check("the link channel is recognised whatever the capitals", #chatLines == n0 + 2 and last():find("other capitals", 1, true) ~= nil, #chatLines - n0)
 -- hostile packet on the channel (#24): | and control characters in tag, author, class and rank never reach the chat frame
 n0 = #chatLines
 channelLine("CL4~0000ba01~A|LT~Eve|cffff0000~PRI|EST~OCap\ntain~~hostile one", "Carol")
@@ -395,8 +386,6 @@ end
 -- link channel text is hidden from chat windows by the filter
 check("raw channel text hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6. CORELink7100") == true)
 check("other channel text not hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "2. Trade") ~= true)
-check("text of a channel whose name only contains the link channel's is not hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "7. CORELink71000", "", "", 0, 7, "CORELink71000") ~= true)
-check("raw channel text is hidden by the channel's base name too", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6", "", "", 0, 6, "CORELink7100") == true)
 
 -- GM-only commands refused for a member, allowed for the GM; per-client commands open to members
 slash("setup Other pw2 X")

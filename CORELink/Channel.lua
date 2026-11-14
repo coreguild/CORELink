@@ -58,12 +58,9 @@ function NS.LeaveLink()
   if ChannelId() then LeaveChannelByName(NS.db.channel) end
 end
 
--- Is this the link channel? The game names it "CORELink7100" or, with its number, "6. CORELink7100". The whole
--- name must match (any case): a channel whose name merely contains ours is someone else's.
 function NS.IsLinkChannel(name)
-  if issecret(name) or type(name) ~= "string" or not Configured() then return false end
-  local plain = name:gsub("^%d+%.%s*", ""):gsub("%s+$", "")
-  return plain:lower() == NS.db.channel:lower()
+  if not name or issecret(name) or not Configured() then return false end
+  return name:lower():find(NS.db.channel:lower(), 1, true) ~= nil
 end
 local IsLinkChannel = NS.IsLinkChannel
 
@@ -146,8 +143,8 @@ end
 
 ---------------------------------------------------------------- chat filters
 -- The link channel carries packed lines: keep its raw text and join/leave notices out of chat windows.
-local function ChannelFilter(_, _, _, _, _, channelString, _, _, _, _, channelBaseName)
-  if IsLinkChannel(channelString) or IsLinkChannel(channelBaseName) then return true end
+local function ChannelFilter(_, _, _, _, _, channelString)
+  if IsLinkChannel(channelString) then return true end
 end
 for _, ev in ipairs({ "CHAT_MSG_CHANNEL", "CHAT_MSG_CHANNEL_NOTICE",
                       "CHAT_MSG_CHANNEL_JOIN", "CHAT_MSG_CHANNEL_LEAVE" }) do
