@@ -48,11 +48,25 @@ jobs:
   game-version:
     name: game-version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write          # the scheduled run opens an issue when the game moved ahead of us
     steps:
       - uses: actions/checkout@v4
       - name: TOC interface matches the live client
         id: check
-        run: scripts/check-game-version.sh | tee check.txt
+        shell: bash
+        # The script's own exit code decides, not tee's: 1 = a TOC does not list the live interface (fail),
+        # 2 = the version server could not be read (warn and pass, so its outage does not block every merge).
+        run: |
+          set +e
+          scripts/check-game-version.sh | tee check.txt
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 2 ]; then
+            echo "::warning::game version not checked: $(tail -1 check.txt)"
+            exit 0
+          fi
+          exit "$status"
       - name: Open an issue when the game moved ahead of us (scheduled runs only)
         if: failure() && github.event_name == 'schedule'
         env:
