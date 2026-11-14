@@ -12,7 +12,7 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 | We only see guild X's lines from players who have the addon | Lines from X's members without the addon are carried by X's courier, who needs a peer in your guild | Someone in your guild has to have said something in guild chat since logging in, so X's courier knows them; `/cl peers` on X's side lists who it can whisper to |
 | "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
 | Lines from one guild never arrive | `heard` in `/cl report` lists the guilds whose lines reached you in the last 10 minutes | If the guild is missing, its members' clients are not posting (wrong channel or password, or refused); if it is listed and nothing shows, share the report |
-| "a linked guild runs a newer CORELink whose lines this version cannot read", or a linked guild went quiet after it updated | That guild's packets use a later protocol than this version reads (`proto CL4 (a linked guild sent CL5, not readable)` in `/cl report`). Said once per session. This is about another guild's protocol, not a guildmate's newer release | Update CORELink. If no newer version exists, someone typed a fake packet on the channel; ignore it |
+| "a linked guild runs a newer CORELink whose lines this version cannot read", or a linked guild went quiet after it updated | A packet arrived in a later format than this version reads (`proto CL4 (a linked guild sent a newer one)` in `/cl report`). Said once per session. It is about another guild's packet format, not about a guildmate's newer release | Update CORELink when a newer release is out. If none is, nothing is wrong on your side: a linked guild is trying a pre-release, or someone sent a made-up packet |
 | Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
 | A line shows twice | Two clients relayed it inside the same back-off window, or a community copy was not matched | Rare and harmless; if it repeats, share `/cl report` from both clients |
 | "No player named X is currently playing" in chat | A whisper greeting reached someone who just logged off | Hidden by the addon when it is about a greeting of ours; otherwise it was a chat whisper of yours |
@@ -20,8 +20,9 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 ## Reading `/cl report`
 
 * `channel <name> id <n>`: joined. `id not joined`: see the keypress row above and `lastNotice`.
-* `proto CL4`: the packet format this version reads. `(a linked guild sent CL5, not readable)` after it: a
-  packet of a later format arrived this session; see the row above.
+* `proto CL4`: the packet format this version reads. `(a linked guild sent a newer one)` after it: a packet of
+  a later format arrived this session (the log line `packet of newer protocol CL5 via ...` has the number while
+  it lasts); see the row above.
 * `lastNotice`: the game's last answer about the channel. `NOT_ALLOWED_IN_CHANNEL` once, right after joining,
   is a send that beat the join and is harmless; repeated, it means the character may not speak there.
 * `lastSend 0`: the last packet was accepted. Anything else and the addon prints a warning once a minute.
