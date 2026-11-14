@@ -158,7 +158,8 @@ C_Timer.NewTicker(1, function()
   for _ = 1, WHISPERS_PER_SECOND do
     local w = table.remove(NS.whisperQueue, 1)
     if not w then return end
-    pcall(C_ChatInfo.SendAddonMessage, NS.PREFIX, w.text, "WHISPER", w.target)
-    NS.whisperedAt[w.target] = GetTime()
+    if pcall(C_ChatInfo.SendAddonMessage, NS.PREFIX, w.text, "WHISPER", w.target) then
+      NS.whisperedAt[w.target] = GetTime()
+    end
   end
 end)
