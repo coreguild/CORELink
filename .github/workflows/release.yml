@@ -4,7 +4,7 @@ name: release
 # channel=rc    on a release/* branch only: release/0.2.0 -> v0.2.0-rcN; release/<name> -> next rc of the open
 #               series, else bump the last release and start rc1. Refused on main.
 # channel=final on main only: promotes the rc merged into main (addon files must match) to v<ver>; latest release
-# channel=site  on main: only re-renders the download page
+# channel=site  on main: re-renders the download page; channel notes follow the GitHub releases (editable there)
 # rc and final also upload the zip to CurseForge (beta / release) when the CURSEFORGE_API_KEY secret and the
 # CURSEFORGE_PROJECT_ID variable are set in Settings -> Secrets and variables -> Actions.
 on:
