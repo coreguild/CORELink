@@ -8,6 +8,7 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 |---|---|---|
 | "not configured" after login | No `CORELink:` line in Guild Info, or it could not be read yet | The guild master pastes the line (`/cl publish` shows it); members `/cl reload` |
 | "could not join ...: wrong channel password" | This guild's line differs from the other guilds' | GM re-publishes with `/cl publish`, members `/cl reload` |
+| "could not join ...: the game keeps asking for the channel password" | The addon answered the password prompt three times and the channel still was not joined | Same as a wrong password; if the prompt is open, close it, then `/cl reload` |
 | Status says "not joined" long after login | Joining a channel needs a keypress or click after login | Press any key or click in the world, then `/cl` again |
 | We only see guild X's lines from players who have the addon | Lines from X's members without the addon are carried by X's courier, who needs a peer in your guild | Someone in your guild has to have said something in guild chat since logging in, so X's courier knows them; `/cl peers` on X's side lists who it can whisper to |
 | "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
