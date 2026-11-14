@@ -469,12 +469,27 @@ do
   check("wrong password is reported to the player once", notices == 1)
   advance(130)                                           -- login retries + two housekeeping ticks
   check("join retries pause after a wrong-password notice", #joinCalls == jc, #joinCalls - jc)
-  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")    -- #74: the client asks again after the refusal
-  check("a password request while the join is on hold is not answered", #joinCalls == jc, #joinCalls - jc)
-  n0 = #chatLines
-  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
-  check("a refused password-less rejoin while the join is on hold is not answered, and not reported twice",
-    #joinCalls == jc and #chatLines == n0, #joinCalls - jc)
+  -- #74: the hold does not stop an answer to the game's prompt (the refusal may not have been ours); the cap does
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a password request while the join is on hold is still answered, and counted",
+    #joinCalls == jc + 1 and report():find("passwordAnswers 1", 1, true) ~= nil, #joinCalls - jc)
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "YOU_JOINED", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  check("a join after that answer clears the hold", report():find("joinHold no", 1, true) ~= nil, report())
+  jc = #joinCalls; n0 = #chatLines
+  for _ = 1, 5 do                                       -- a password that really is wrong: asked, refused, asked ...
+    local before = #joinCalls
+    H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+    if #joinCalls > before then                         -- the server refuses only what was sent
+      H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+    end
+  end
+  local wrongLines, askLines = 0, 0
+  for i = n0 + 1, #chatLines do
+    if chatLines[i].text:find("could not join CORELink7100: wrong channel password", 1, true) then wrongLines = wrongLines + 1 end
+    if chatLines[i].text:find("could not join CORELink7100: the game keeps asking", 1, true) then askLines = askLines + 1 end
+  end
+  check("a refused password is sent at most three times in answer to prompts", #joinCalls == jc + 3, #joinCalls - jc)
+  check("each reason for the failed join is told once", wrongLines == 1 and askLines == 1, wrongLines .. "/" .. askLines)
   slash("off"); slash("reload"); advance(10); jc = #joinCalls; n0 = #chatLines
   H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
   check("a refused password-less rejoin while disabled is left alone", #joinCalls == jc and #chatLines == n0,

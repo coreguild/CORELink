@@ -98,11 +98,11 @@ function NS.ClearJoinHold()
 end
 
 -- Why an answer to the game (a password prompt, its password-less rejoin) may not join now, or nil.
--- The same gate EnsureChannel applies to its own joins.
+-- The hold is deliberately not consulted: a WRONG_PASSWORD for the client's own rejoin can be taken for ours
+-- at login, and the answer to the prompt that follows is what gets the player in. The cap bounds the answers.
 local function JoinBlocked()
   if not NS.db.enabled then return "the addon is off" end
   if Locked() then return "chat lockdown" end
-  if GetTime() < conn.blockedUntil then return "join on hold (" .. tostring(conn.blockedWhy) .. ")" end
 end
 
 -- Notices the game sends about channels: joined, left, wrong password, banned, refused ...
@@ -122,7 +122,8 @@ local function OnChannelNotice(notice, channelName, channelBaseName)
     return
   end
   local why = JOIN_FAILURE_TEXT[notice]
-  if why then HoldJoin(notice, why) end
+  -- said once per hold: a refusal of an answer we gave while already on hold for it is not news
+  if why then HoldJoin(notice, why, GetTime() < conn.blockedUntil and conn.blockedWhy == notice) end
 end
 
 function NS.SetConfig(channel, password, tag, source)
@@ -155,11 +156,13 @@ NS.events.CHAT_MSG_CHANNEL_NOTICE = function(notice, _, _, channelName, _, _, _,
   OnChannelNotice(notice, channelName, channelBaseName)
 end
 
--- The cap on answered password prompts is reached: hold the join (again, each time a hold has run out, so
--- EnsureChannel does not keep causing prompts nobody answers) and tell the player the first time.
+-- The cap on answered password prompts is reached: tell the player the first time and hold the join, then
+-- hold it again each time a hold has run out, so EnsureChannel does not keep causing prompts nobody answers.
 local function PasswordCapped()
   if conn.passwordAnswers < PASSWORD_ANSWER_CAP then return nil end
-  HoldJoin("PASSWORD_REQUESTS", "the game keeps asking for the channel password", conn.passwordCapTold)
+  if not conn.passwordCapTold or GetTime() >= conn.blockedUntil then
+    HoldJoin("PASSWORD_REQUESTS", "the game keeps asking for the channel password", conn.passwordCapTold)
+  end
   conn.passwordCapTold = true
   return "answered " .. PASSWORD_ANSWER_CAP .. " times already"
 end
