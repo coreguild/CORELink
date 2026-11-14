@@ -118,7 +118,7 @@ Addon messages carry the prefix `CORELink`; fields are separated by `~`.
 | Where | Packet | Meaning |
 |---|---|---|
 | hidden channel, as text | `CL4~id~tag~author~class~flags~nick~text` | an addon user's own guild line (`flags` = `O<rank>` for officers) |
-| guild | `PRESENT~version` | I run the addon (elects the courier); every two minutes and at login. A version newer than the reader's own produces the update notice |
+| guild | `PRESENT~version` | I run the addon (elects the courier); every two minutes and at login. A version higher than the reader's own produces the update notice |
 | guild | `NICK~name`, `NREQ` | nickname, request for nicknames |
 | guild | `LINE~<CL4 packet>` | a carried line fanned out to guildmates |
 | guild | `ECHO~id` | this client is echoing that line |

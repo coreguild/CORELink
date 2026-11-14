@@ -103,39 +103,49 @@ end
 
 ---------------------------------------------------------------- newer version
 NS.newest = nil         -- the newest release a guildmate reported this session, when it is newer than ours
+local notNewer          -- the last reported version that was not: the usual PRESENT, skipped with a compare
+local announced = false -- one notice per session
+local ANNOUNCE_WAIT = 15   -- seconds, so the line does not drown in the login messages
 
--- "0.3.0", "v0.3.0" or "0.3.0-rc2" -> major, minor, patch, rc (nil for a final). nil for anything else: a dev
--- checkout, or text a guildmate's client made up.
+-- "0.3.0" -> 0, 3, 0. nil for anything else: a dev checkout, or text a guildmate's client made up.
 local function ParseVersion(v)
   if type(v) ~= "string" or #v > 20 then return nil end
-  local major, minor, patch, tail = v:match("^v?(%d+)%.(%d+)%.(%d+)(.*)$")
-  local rc = tail and tail:match("^%-rc(%d+)$")
-  if not major or (tail ~= "" and not rc) then return nil end
-  return tonumber(major), tonumber(minor), tonumber(patch), tonumber(rc)
+  local major, minor, patch = v:match("^(%d+)%.(%d+)%.(%d+)$")
+  return tonumber(major), tonumber(minor), tonumber(patch)
 end
 
--- True when version a is a later release than b. Someone on a final is never told about a release candidate.
+-- True when version a is a later release than b.
 function NS.IsNewerVersion(a, b)
-  local a1, a2, a3, arc = ParseVersion(a)
-  local b1, b2, b3, brc = ParseVersion(b)
-  if not a1 or not b1 or (arc and not brc) then return false end
+  local a1, a2, a3 = ParseVersion(a)
+  local b1, b2, b3 = ParseVersion(b)
+  if not a1 or not b1 then return false end
   if a1 ~= b1 then return a1 > b1 end
   if a2 ~= b2 then return a2 > b2 end
-  if a3 ~= b3 then return a3 > b3 end
-  return (arc or math.huge) > (brc or math.huge)
+  return a3 > b3
 end
 
--- PRESENT~<version>: the dispatcher noted the sender as an addon user. A newer release than ours is announced
--- in chat once per session; later, still newer reports only update NS.newest for /cl report.
+-- One chat line per session, and not for a version an earlier session already announced (db.updateTold).
+local function Announce(version, sender)
+  local db = NS.db
+  if announced or db.updateTold == version then return end
+  announced, db.updateTold = true, version
+  local mine = NS.Version()
+  C_Timer.After(ANNOUNCE_WAIT, function()
+    NS.Print(sender .. " runs CORELink " .. version .. ", newer than your " .. mine
+      .. ". Check CurseForge, or wherever you installed it, for the update.")
+  end)
+end
+
+-- PRESENT~<version>: the dispatcher noted the sender as an addon user. A version newer than ours is kept for
+-- /cl report and announced. A release candidate reports the version it will be released as, so a guildmate
+-- testing one is announced too: the line names them instead of claiming a release.
 NS.guildPackets.PRESENT = function(rest, sender)
-  if not NS.IsNewerVersion(rest, NS.newest or NS.Version()) then return end
-  local first = NS.newest == nil
+  local db = NS.db
+  if rest == notNewer or rest == NS.newest or not db or not db.enabled then return end
+  if not NS.IsNewerVersion(rest, NS.newest or NS.Version()) then notNewer = rest return end
   NS.newest = rest
   NS.Debug("%s runs CORELink %s, newer than ours", sender, rest)
-  if first then
-    NS.Print("version " .. rest .. " is available (" .. sender .. " runs it); you have " .. NS.Version()
-      .. ". Update from CurseForge or wherever you installed CORELink.")
-  end
+  Announce(rest, sender)
 end
 
 -- NICK~<name>: a guildmate's nickname (empty clears it).

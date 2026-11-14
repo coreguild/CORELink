@@ -13,7 +13,7 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 | "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
 | Lines from one guild never arrive | `heard` in `/cl report` lists the guilds whose lines reached you in the last 10 minutes | If the guild is missing, its members' clients are not posting (wrong channel or password, or refused); if it is listed and nothing shows, share the report |
 | Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
-| "version X is available (Name runs it)" | A guildmate's client reported a newer release than yours; addons cannot check the web, so this is the only way it is noticed | Update from CurseForge or wherever you installed it. Said once per login; release candidates are only announced to players already on one |
+| "Name runs CORELink X, newer than your Y" | A guildmate's client reported a higher version than yours; addons cannot check the web, so this is the only way it is noticed | Check CurseForge or wherever you installed it. A guildmate testing a release candidate triggers it too, before the release exists. Said once per version, at most once per login |
 | A line shows twice | Two clients relayed it inside the same back-off window, or a community copy was not matched | Rare and harmless; if it repeats, share `/cl report` from both clients |
 | "No player named X is currently playing" in chat | A whisper greeting reached someone who just logged off | Hidden by the addon when it is about a greeting of ours; otherwise it was a chat whisper of yours |
 
