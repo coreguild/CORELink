@@ -40,10 +40,15 @@ If it keeps happening, ask the sender and receiver to run `/cl report`. Share bo
 
 If the notice keeps appearing while you use CORELink, share a report. WoW can show this notice if someone logs off before receiving a whisper or an addon greeting. CORELink hides notices it recognizes as replies to its own greetings.
 
+## CORELink says a linked guild runs a newer CORELink it can't read
+
+Update CORELink. A linked guild sent a message in a newer format than your version reads, so you won't see that guild's messages until you update. You see the notice once per session. It's about another guild's message format, not about a guild member's version.
+
 ## Read the report
 
 | Field | What it tells you |
 |---|---|
+| `proto` | The message format your version reads. `(a linked guild sent a newer one)` after it means a newer format arrived this session; the log has the number. |
 | `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
 | `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |
 | `lastSend` | `ok` means the local send call completed. `refused` means the server reported a refusal. `error` means the call itself failed. |

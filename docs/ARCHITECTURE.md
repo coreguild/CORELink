@@ -129,6 +129,10 @@ Addon messages carry the prefix `CORELink`; fields are separated by `~`.
 Changing the CL4 field order or separator is a protocol change: bump the version and keep old versions
 readable.
 
+Today the code reads `CL4` only (`ParsePacket`); the rule above is for whoever adds `CL5`. A packet-shaped line with a later word (`CL5~id~tag~`) from another guild is not
+shown; the first one in a session, by any path, prints one notice asking the player to update and is noted in
+`/cl report` (`Relay.lua`, `NoteNewerProto`). An earlier word (`CL3~`) is ignored silently.
+
 ## Peers and the courier
 
 A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line

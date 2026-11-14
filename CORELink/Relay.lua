@@ -98,11 +98,27 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
+-- Text that is not a packet we read: if it has the shape of one of a later protocol (CL5~id~tag~... while we
+-- speak CL4), a linked guild has updated past this client and its lines will not show here. Say so once per
+-- session; after that this is one flag test, so hand-made "CL99~0~X~" lines cost nothing more. Our own guild's
+-- tag (we see those lines natively) and muted tags do not count. Nothing of the text reaches chat.
+local function NoteNewerProto(text, via)
+  if stats.newerProto then return end
+  local n, tag = text:match("^CL(%d%d?%d?)" .. SEP .. "%x+" .. SEP .. "([^" .. SEP .. "]+)" .. SEP)
+  n = tonumber(n)
+  if not n or n <= tonumber(PROTO:match("%d+")) then return end
+  if tag == GetTag() or (NS.db and NS.db.muted[tag:lower()]) then return end
+  stats.newerProto = n
+  Debug("packet of newer protocol CL%d via %s: this version reads %s, line not shown", n, via, PROTO)
+  NS.Print("a linked guild runs a newer CORELink whose lines this version cannot read."
+    .. " Update CORELink to keep seeing that guild's lines.")
+end
+
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
 function NS.ShowPacket(text, via)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
-  if not id then return nil end
+  if not id then NoteNewerProto(text, via) return nil end
   local now = GetTime()
   seen[id] = now
   NS.heard[tag] = now
