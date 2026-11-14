@@ -237,6 +237,7 @@ end
 NS.whisperPackets.WB = function(rest, sender)
   if not NS.db or NS.db.whisper == false then return end
   local tag = rest:match("^CL%d+" .. SEP .. "%x+" .. SEP .. "([^" .. SEP .. "]+)")
+  tag = tag and NS.CleanField(tag)           -- as ShowPacket files it under NS.heard
   local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
   if not known then
     Debug("dropped a carried line from %s: not a peer, tag %s not heard", sender, tostring(tag))
@@ -255,6 +256,7 @@ end
 
 function NS.OnWhisperAddon(text, sender)
   if issecret(text) or issecret(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+  if not NS.db then return end               -- the handlers read settings
   local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
   local handler = cmd and NS.whisperPackets[cmd]
   if handler then handler(rest, sender) end

@@ -221,6 +221,29 @@ channelLine("CL4~0badf00e~ALT~Carol~PRIEST~~~wrong channel", "Carol", "2. Trade"
 check("packet on another channel ignored", #chatLines == n0)
 channelLine("just some chat", "Someone")
 check("plain text on the link channel is ignored", #chatLines == n0)
+-- the link channel is matched by its whole name, any case (#26): a longer or shorter name is another channel
+channelLine("CL4~0badf010~ALT~Carol~PRIEST~~~longer channel name", "Carol", "7. CORELink71000")
+channelLine("CL4~0badf011~ALT~Carol~PRIEST~~~prefixed channel name", "Carol", "7. MyCORELink7100")
+check("a packet on a channel whose name only contains the link channel's is ignored", #chatLines == n0, #chatLines - n0)
+CORELinkDB.channel = "CORE"
+check("a link channel called CORE does not claim CORELink7100", NS.IsLinkChannel("6. CORELink7100") == false and NS.IsLinkChannel("CORELink7100") == false and NS.IsLinkChannel("3. core") == true and NS.IsLinkChannel("Core") == true)
+CORELinkDB.channel = "CORELink7100"
+channelLine("CL4~0badf012~ALT~Carol~PRIEST~~~other capitals", "Carol", "6. corelink7100")
+check("the link channel is recognised whatever the capitals", #chatLines == n0 + 2 and last():find("other capitals", 1, true) ~= nil, #chatLines - n0)
+-- hostile packet on the channel (#24): | and control characters in tag, author, class and rank never reach the chat frame
+n0 = #chatLines
+channelLine("CL4~0000ba01~A|LT~Eve|cffff0000~PRI|EST~OCap\ntain~~hostile one", "Carol")
+check("channel: a packet with | in tag, author and class is displayed with them cleaned, the line intact",
+  #chatLines == n0 + 2 and last() == "[ALT] |Hplayer:Evecffff0000|h|cffffffff[Evecffff0000]|r|h: (Captain) hostile one", last())
+out = lines(function() slash("guilds") end)
+check("channel: the cleaned tag is the guild already known, not a new one", out:find("A|LT", 1, true) == nil and select(2, out:gsub("ALT %- heard", "")) == 1, out)
+n0 = #chatLines; channelLine("CL4~0000ba04~|~Eve~PRIEST~~~no tag left", "Carol"); channelLine("CL4~0000ba05~ALT~|\1~PRIEST~~~no author left", "Carol")
+check("channel: a packet whose tag or author is nothing but | and control characters is dropped", #chatLines == n0, #chatLines - n0)
+channelLine("CL4~0000ba0a~ALT~Zo\195\169 Brul\195\169~PRIEST~OCapitaine~Z\195\169~accents stay", "Carol")
+check("channel: a well-formed packet with accented letters in name, rank and nickname is displayed exactly as before",
+  last() == "[ALT] |Hplayer:Zo\195\169 Brul\195\169|h|cffffffff[Zo\195\169 Brul\195\169]|r|h: (Capitaine Z\195\169) accents stay", last())
+NS.Display("T|AG", "Na|me\1", "", "direct", nil, nil)
+check("display: tag and author are cleaned by the display itself, whoever calls it", last() == "[TAG] |Hplayer:Name|h[Name]|h: direct", last())
 out = lines(function() slash("guilds") end)
 check("/cl guilds lists the guilds heard, their peers, and the courier", out:find("ALT - heard", 1, true) and out:find("1 peer(s) to whisper to", 1, true) and out:find("MAIN (your guild) - heard", 1, true) and out:find("courier for your guild: you", 1, true), out)
 
@@ -280,6 +303,39 @@ advance(3)
 check("a line fanned out by a guildmate is shown and goes no further", #chatLines == n0 + 2 and last():find("[Deux]", 1, true) ~= nil and #guildSends(amark, "LINE~") == 0 and #whisperSends(amark, "WB~") == 0, #chatLines - n0)
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "GUILD", "Tanner-Beta")
 check("our own fan-out coming back from the guild channel is not shown again", #chatLines == n0 + 2)
+-- hostile packets by whisper and by guild fan-out (#24)
+n0 = #chatLines; amark = #sentAddon
+H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000ba02~Tr|ois~Zed|Hitem:1|h~MA|GE~~~hostile two", "WHISPER", "Zag Mathris")
+advance(3)
+check("whisper: a carried packet with | in tag, author and class is displayed with them cleaned, the line intact",
+  #chatLines == n0 + 2 and last() == "[Trois] |Hplayer:ZedHitem:1h|h|cff40c7eb[ZedHitem:1h]|r|h: hostile two", last())
+check("whisper: the packet is fanned out as it came, the wire format untouched", guildSends(amark, "LINE~")[1] == "LINE~CL4~0000ba02~Tr|ois~Zed|Hitem:1|h~MA|GE~~~hostile two", guildSends(amark, "LINE~")[1])
+n0 = #chatLines
+H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000ba03~De|ux~Dee|r Vale~PRI\1EST~O|cff00ff00Lead~|cff00ff00Dee~hostile three", "GUILD", "Tanner-Beta")
+check("guild fan-out: a packet with | in tag, author, class, rank and nickname is displayed with them cleaned",
+  #chatLines == n0 + 2 and last() == "[Deux] |Hplayer:Deer Vale|h|cffffffff[Deer Vale]|r|h: (cff00ff00Lead cff00ff00Dee) hostile three", last())
+-- secret values in the addon-message event (#26 item 1): prefix and chat type go through NS.Plain before any compare
+do
+  local realPlain, asked = NS.Plain, {}
+  NS.Plain = function(v) asked[v or false] = true; return realPlain(v) end
+  local sp, st = sealed("CORELink"), sealed("GUILD")
+  n0 = #chatLines
+  local okSecret = pcall(H, nil, "CHAT_MSG_ADDON", sp, "LINE~CL4~0000ba06~Deux~Dee Vale~PRIEST~~~sealed prefix", "GUILD", "Tanner-Beta")
+  okSecret = pcall(H, nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000ba07~Deux~Dee Vale~PRIEST~~~sealed type", st, "Tanner-Beta") and okSecret
+  NS.Plain = realPlain
+  check("an addon message whose prefix or chat type is a secret value is unwrapped before it is compared, and ignored", okSecret and asked[sp] == true and asked[st] == true and #chatLines == n0, #chatLines - n0)
+end
+-- events before the saved variables are loaded (#26 item 2): the chat handlers do nothing instead of erroring
+do
+  local savedDb = NS.db; NS.db = nil
+  local ok1, e1 = pcall(H, nil, "CHAT_MSG_GUILD", "too early", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
+  local ok2, e2 = pcall(H, nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Early", "GUILD", "Bob-Beta")
+  local ok3, e3 = pcall(H, nil, "CHAT_MSG_ADDON", "CORELink", "HELLO~ALT~PvE~Alt Guild", "WHISPER", "Carol")
+  local ok4, e4 = pcall(H, nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000ba08~Deux~Dee Vale~PRIEST~~~too early", "GUILD", "Tanner-Beta")
+  NS.db = savedDb
+  check("a guild line before the settings are loaded is ignored without an error", ok1, e1)
+  check("guild and whisper addon messages before the settings are loaded are ignored without an error", ok2 and ok3 and ok4, tostring(e2) .. " / " .. tostring(e3) .. " / " .. tostring(e4))
+end
 
 -- the server refuses our channel text: said once, counted
 n0 = #chatLines
@@ -301,10 +357,30 @@ check("a send with no refusal reads ok in the report", report():find("lastSend o
 H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Bobby", "GUILD", "Bob-Beta")
 local _, newMsg = filters.CHAT_MSG_GUILD(nil, "CHAT_MSG_GUILD", "yo", "Bob-Beta")
 check("nickname + officer rank prefix in guild chat filter", type(newMsg) == "string" and newMsg:find("(Officer Bobby) yo", 1, true) ~= nil, newMsg)
+-- nicknames of members who left are forgotten on a complete roster read, and only then (#26 item 5)
+do
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "NICK~Lefty", "GUILD", "Gone-Beta")      -- not on the roster: left the guild
+  CORELinkDB.nicks["Shockly"] = "Shocks"
+  local realNum, realInfo = GetNumGuildMembers, GetGuildRosterInfo
+  GetNumGuildMembers = function() return 0 end
+  local refreshed = NS.RefreshRoster()
+  check("an empty roster read forgets no nickname", refreshed == false and CORELinkDB.nicks["Gone"] == "Lefty" and CORELinkDB.nicks["Bob"] == "Bobby")
+  GetNumGuildMembers = realNum
+  GetGuildRosterInfo = function(i) if i == 1 then return realInfo(i) end end   -- the roster stops after one of four
+  NS.RefreshRoster()
+  check("a roster read that stops short forgets no nickname", CORELinkDB.nicks["Gone"] == "Lefty" and CORELinkDB.nicks["Bob"] == "Bobby", tostring(CORELinkDB.nicks["Bob"]))
+  GetGuildRosterInfo = realInfo
+  NS.RefreshRoster()
+  check("a complete roster read forgets the nickname of someone no longer in the guild", CORELinkDB.nicks["Gone"] == nil, CORELinkDB.nicks["Gone"])
+  check("a complete roster read keeps guildmates' nicknames and our own", CORELinkDB.nicks["Bob"] == "Bobby" and CORELinkDB.nicks["Shockly"] == "Shocks")
+  CORELinkDB.nicks["Shockly"] = nil
+end
 
 -- link channel text is hidden from chat windows by the filter
 check("raw channel text hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6. CORELink7100") == true)
 check("other channel text not hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "2. Trade") ~= true)
+check("text of a channel whose name only contains the link channel's is not hidden", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "7. CORELink71000", "", "", 0, 7, "CORELink71000") ~= true)
+check("raw channel text is hidden by the channel's base name too", filters.CHAT_MSG_CHANNEL(nil, "CHAT_MSG_CHANNEL", "anything", "x", "", "6", "", "", 0, 6, "CORELink7100") == true)
 
 -- GM-only commands refused for a member, allowed for the GM; per-client commands open to members
 slash("setup Other pw2 X")
@@ -728,6 +804,13 @@ do
   slash("mute QUIET"); n0 = #chatLines
   H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 209); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 210); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 211)
   check("wow club: readable [TAG] text lines keep tag filtering", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil, last())
+  -- a readable post with | in its tag, name and nickname (#24): cleaned like a packet's fields
+  clubMessages[213] = { messageId = 213, content = "[Tr|ois] Zed|cffff0000 (Z|red): readable hostile", author = { memberId = 7 } }
+  clubMessages[214] = { messageId = 214, content = "[QU|IET] Zed: readable hostile muted", author = { memberId = 7 } }
+  advance(10); n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 213); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 214)
+  check("wow club: a readable post with | in tag, name and nickname is displayed with them cleaned, and a muted tag stays muted",
+    #chatLines == n0 + 2 and last() == "[Trois] |Hplayer:Zedcffff0000|h|cff40c7eb[Zedcffff0000]|r|h: (Zred) readable hostile", last())
+  check("wow club: the cleaned tag is the guild already known, not a new one", lines(function() slash("guilds") end):find("Tr|ois", 1, true) == nil)
   slash("unmute QUIET")
   guildInfoText = savedTextForRestore
 end
@@ -817,6 +900,10 @@ do
   advance(2)
   check("echo: /cl echo off stops this client echoing", #chatSends == 1, #chatSends)
   slash("echo on")
+  channelLine("CL4~0000ba09~A|LT~Eve|cffff0000~PRIEST~OCap\ntain~~echo hostile", "Carol")
+  advance(2)
+  check("echo: a packet with | and control characters in its fields is echoed into guild chat without them (#24)",
+    #chatSends == 2 and chatSends[2].text == "[ALT] Evecffff0000 (Captain): echo hostile", chatSends[2] and chatSends[2].text)
   CORELinkDB = {}; joined = {}; chatSends = {}
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild\n"
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
@@ -892,7 +979,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=3 fanned=2", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=4 fanned=3", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)

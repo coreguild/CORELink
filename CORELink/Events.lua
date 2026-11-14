@@ -94,6 +94,7 @@ end
 -- CORELink packets arrive on two addon channels, GUILD (our guildmates, every realm) and WHISPER (peers in
 -- other guilds), and as text on the link channel (addon users' own lines).
 NS.events.CHAT_MSG_ADDON = function(prefix, text, chatType, sender)
+  prefix, chatType = NS.Plain(prefix), NS.Plain(chatType)   -- comparing a secret value is an error
   if prefix ~= NS.PREFIX then return end
   if chatType == "GUILD" then
     NS.OnGuildAddon(text, sender)

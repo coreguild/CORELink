@@ -89,6 +89,10 @@ end
 
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
+-- A name, tag or class another client sent, safe to put between the chat frame's | codes: no | and no control
+-- characters. A well-formed field has neither, so it comes back unchanged.
+function NS.CleanField(s) return (s:gsub("[|%c]", "")) end
+
 function NS.Hash(s)
   local h = 5381
   for i = 1, #s do h = (h * 33 + s:byte(i)) % 4294967296 end

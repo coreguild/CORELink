@@ -64,8 +64,10 @@ end
 
 -- "[TAG] [Author]: (Rank Nick) text" in guild colour, officer colour when the author is an officer.
 -- textHasPrefix: the text already carries "(Rank Nick)" (community lines), so none is added.
+-- Tag and author are cleaned here as well as on receipt: community lines come straight to this function.
 function NS.Display(tag, author, class, msg, officerLabel, nick, textHasPrefix)
   local db = NS.db
+  tag, author = tag and NS.CleanField(tag), NS.CleanField(author)
   local c = ChatTypeInfo["GUILD"] or { r = .25, g = 1, b = .25 }
   local prefix = textHasPrefix and "" or RankNickPrefix(officerLabel, (db.showNick ~= false) and nick or nil)
   if officerLabel then

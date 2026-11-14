@@ -157,6 +157,8 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if (guid and NS.me.guid and guid == NS.me.guid) or (name and IsMe(name, guid)) then return end
   if NS.IsGuildmate(name, guid) then return end          -- our own guild: already in our guild chat
   local tag, pname, nick, msg, channelTag = ParseClubLine(info.content, streamId)
+  -- what a readable post says about its guild and author is as untrusted as a packet's fields
+  tag, pname, nick = tag and NS.CleanField(tag), pname and NS.CleanField(pname), nick and NS.CleanNick(nick)
   local who = pname or name or "?"
   local line = {
     tag = tag, who = who, content = info.content, msg = msg, pname = pname,

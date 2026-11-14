@@ -27,21 +27,35 @@ function NS.ClassOf(author, guid)
   return ""
 end
 
+-- Forget the saved nicknames of members who left the guild. Only called after a complete roster read; our own
+-- nickname stays whatever the roster says (it may be saved under the short name until the full one is known).
+local function PruneNicks()
+  local nicks = NS.db and NS.db.nicks
+  if not nicks then return end
+  local short = UnitName("player")
+  for name in pairs(nicks) do
+    if rankOf[name] == nil and name ~= NS.me.name and name ~= short then nicks[name] = nil end
+  end
+end
+
 -- Read the roster: ranks, guids, and our own full name when our GUID is in it. False when it was empty.
 function NS.RefreshRoster()
   if not IsInGuild() then return false end
   local n = GetNumGuildMembers() or 0
   if n == 0 then return false end
   wipe(rankOf); wipe(rankNameOf)
+  local read = 0
   for i = 1, n do
     local name, rankName, rankIndex, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
     if not name then break end
+    read = read + 1
     name = Ambiguate(name, "none")
     rankOf[name] = rankIndex
     rankNameOf[name] = rankName
     if guid and not issecret(guid) then rosterGuid[guid] = name end
     if NS.me.guid and guid and not issecret(guid) and guid == NS.me.guid then NS.LearnMyName(name) end
   end
+  if read == n then PruneNicks() end   -- a roster that stopped short says nothing about who left
   return true
 end
 
@@ -117,6 +131,7 @@ end
 -- A packet on the guild addon channel: note the sender as an addon user, then hand it to its handler.
 function NS.OnGuildAddon(text, sender)
   if issecret(text) or issecret(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+  if not NS.db then return end               -- the handlers read settings
   sender = Ambiguate(sender, "none")
   NS.addonUsers[sender] = GetTime()
   local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
