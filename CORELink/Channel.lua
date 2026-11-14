@@ -81,17 +81,28 @@ local function OnRefusal()
     .. " Linked guilds did not get it. Run /cl report and share it.")
 end
 
--- Stop joining for ten minutes and tell the player why; /cl reload or a successful join ends it.
-local function HoldJoin(why, text)
+-- Stop joining for ten minutes and tell the player why, unless quiet. /cl reload, a new config or a
+-- successful join ends it.
+local function HoldJoin(why, text, quiet)
   conn.blockedUntil, conn.blockedWhy = GetTime() + JOIN_BLOCK_SECS, why
+  if quiet then return end
   Print("could not join " .. tostring(NS.db.channel) .. ": " .. text
     .. ". /cl reload to retry, /cl report for details.")
 end
 
--- The join works again or the player asked for a retry: no hold, and password prompts are answered again.
+-- The join works again, the config changed or the player asked for a retry: no hold, and password prompts
+-- are answered again.
 function NS.ClearJoinHold()
   conn.blockedUntil, conn.blockedWhy = 0, nil
   conn.passwordAnswers, conn.passwordCapTold = 0, false
+end
+
+-- Why an answer to the game (a password prompt, its password-less rejoin) may not join now, or nil.
+-- The same gate EnsureChannel applies to its own joins.
+local function JoinBlocked()
+  if not NS.db.enabled then return "the addon is off" end
+  if Locked() then return "chat lockdown" end
+  if GetTime() < conn.blockedUntil then return "join on hold (" .. tostring(conn.blockedWhy) .. ")" end
 end
 
 -- Notices the game sends about channels: joined, left, wrong password, banned, refused ...
@@ -104,8 +115,10 @@ local function OnChannelNotice(notice, channelName, channelBaseName)
   if notice == "YOU_CHANGED" or notice == "YOU_JOINED" then NS.ClearJoinHold() return end
   if notice == "WRONG_PASSWORD" and GetTime() - conn.lastJoinAt > 5 and NS.db.password ~= "" then
     -- not an answer to our join: the client rejoined the remembered channel without the password
-    Debug("the client rejoined %s without the password; joining with it", tostring(NS.db.channel))
-    JoinWithPassword()
+    local blocked = JoinBlocked()
+    Debug("the client rejoined %s without the password; %s", tostring(NS.db.channel),
+      blocked and ("not joining: " .. blocked) or "joining with it")
+    if not blocked then JoinWithPassword() end
     return
   end
   local why = JOIN_FAILURE_TEXT[notice]
@@ -114,6 +127,7 @@ end
 
 function NS.SetConfig(channel, password, tag, source)
   NS.LeaveLink()
+  NS.ClearJoinHold()
   local db = NS.db
   db.channel, db.password, db.tag, db.source = channel, password, tag, source
   C_Timer.After(1.5, NS.EnsureChannel)
@@ -141,32 +155,40 @@ NS.events.CHAT_MSG_CHANNEL_NOTICE = function(notice, _, _, channelName, _, _, _,
   OnChannelNotice(notice, channelName, channelBaseName)
 end
 
--- Whether a password prompt may be answered now: the gate EnsureChannel applies to any join, plus a cap, so a
--- password the server keeps refusing is not sent again each time the client asks.
-local function MayAnswerPassword()
-  if not NS.db.enabled or Locked() then return false end
-  if GetTime() < conn.blockedUntil then
-    Debug("password prompt for %s not answered: join on hold (%s)", tostring(NS.db.channel), tostring(conn.blockedWhy))
-    return false
-  end
-  if conn.passwordAnswers < PASSWORD_ANSWER_CAP then return true end
-  if not conn.passwordCapTold then
-    conn.passwordCapTold = true
-    HoldJoin("PASSWORD_REQUESTS", "the game keeps asking for the channel password")
-  end
-  return false
+-- The cap on answered password prompts is reached: hold the join (again, each time a hold has run out, so
+-- EnsureChannel does not keep causing prompts nobody answers) and tell the player the first time.
+local function PasswordCapped()
+  if conn.passwordAnswers < PASSWORD_ANSWER_CAP then return nil end
+  HoldJoin("PASSWORD_REQUESTS", "the game keeps asking for the channel password", conn.passwordCapTold)
+  conn.passwordCapTold = true
+  return "answered " .. PASSWORD_ANSWER_CAP .. " times already"
+end
+
+-- Close the game's password prompt, unless it names another channel. Blizzard's prompt carries the channel
+-- name as its data; when that cannot be read, close it as before.
+local function ClosePasswordPrompt()
+  if not StaticPopup_Hide then return end
+  local name = StaticPopup_Visible and select(2, pcall(StaticPopup_Visible, "CHAT_CHANNEL_PASSWORD"))
+  local prompt = type(name) == "string" and _G[name]
+  local data = type(prompt) == "table" and prompt.data
+  if type(data) == "string" and not issecret(data) and not IsLinkChannel(data) then return end
+  pcall(StaticPopup_Hide, "CHAT_CHANNEL_PASSWORD")
 end
 
 -- The client remembers custom channels between logins and rejoins them without the password, then asks the
--- player for it. Answer from the config instead and close that prompt. An unanswered prompt stays open.
+-- player for it. Answer from the config instead and close the prompt. An unanswered prompt stays open.
 NS.events.CHANNEL_PASSWORD_REQUEST = function(channelName)
   if not Configured() or NS.db.password == "" or not IsLinkChannel(channelName) then return end
-  if not MayAnswerPassword() then return end
+  local why = JoinBlocked() or PasswordCapped()
+  if why then
+    Debug("password prompt for %s not answered: %s", tostring(NS.db.channel), why)
+    return
+  end
   conn.passwordAnswers = conn.passwordAnswers + 1
-  Debug("client asked for the %s password; answering from config", tostring(NS.db.channel))
+  Debug("client asked for the %s password; answering from config (%d of %d)", tostring(NS.db.channel),
+    conn.passwordAnswers, PASSWORD_ANSWER_CAP)
   JoinWithPassword()
-  -- Blizzard's prompt carries the channel name from this event as its data; passing it leaves other prompts open
-  if StaticPopup_Hide then pcall(StaticPopup_Hide, "CHAT_CHANNEL_PASSWORD", channelName) end
+  ClosePasswordPrompt()
 end
 
 ---------------------------------------------------------------- chat filters
