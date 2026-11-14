@@ -281,6 +281,54 @@ check("a line fanned out by a guildmate is shown and goes no further", #chatLine
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "GUILD", "Tanner-Beta")
 check("our own fan-out coming back from the guild channel is not shown again", #chatLines == n0 + 2)
 
+-- a packet of a later protocol than ours (#25): said once per session whichever path brings it, never quoted
+do
+  local function notices(from) local n = 0 for i = from + 1, #chatLines do if chatLines[i].text:find("newer CORELink", 1, true) then n = n + 1 end end return n end
+  local function quoted(from) for i = from + 1, #chatLines do if chatLines[i].text:find("f00d", 1, true) or chatLines[i].text:find("PAYLOAD", 1, true) then return true end end return false end
+  local function logged() return select(2, table.concat(NS.debugLog, "\n"):gsub("newer protocol", "")) end
+  local newer = "~0000f00d~Trois~Zag Mathris~MAGE~~~PAYLOAD"
+  local ws = NS.whisperStats
+  local recv, fannedOut = ws.recv, ws.fanned            -- put back below: later checks count carried lines
+  local start = #chatLines; amark = #sentAddon
+  channelLine("CL3" .. newer, "Zag Mathris")
+  channelLine("CL4 is what we speak, CL5 comes later", "Someone")
+  channelLine("CL5 without the separator", "Someone")
+  channelLine("xCL5" .. newer, "Someone")
+  channelLine("CL99999999999999999999" .. newer, "Someone")
+  channelLine("CL5" .. newer, "Zag Mathris", "2. Trade")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL5~0000f00d~Quatre~Nobody Known~MAGE~~~PAYLOAD", "WHISPER", "Nobody Known")
+  check("newer protocol: an older number, plain chat, another channel and a stranger's whisper say nothing",
+    #chatLines == start and logged() == 0 and report():find("a linked guild sent", 1, true) == nil, report())
+  start = #chatLines
+  channelLine("CL5" .. newer, "Zag Mathris")
+  check("newer protocol: a CL5 packet on the link channel prints one notice and shows no line",
+    #chatLines == start + 1 and notices(start) == 1, #chatLines - start)
+  check("newer protocol: the notice quotes nothing from the packet", notices(start) == 1 and not quoted(start), last())
+  rep = report()
+  check("newer protocol: the report says it next to our own protocol and the log records the path",
+    rep:find("| proto CL4 (a linked guild sent CL5, not readable) |", 1, true) ~= nil and rep:find("newer protocol CL5 via channel", 1, true) ~= nil, rep)
+  start = #chatLines
+  channelLine("CL5" .. newer, "Zag Mathris"); channelLine("CL99~x", "Someone"); channelLine("CL6~y", "Someone")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL5" .. newer, "WHISPER", "Zag Mathris")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL7" .. newer, "GUILD", "Tanner-Beta")
+  check("newer protocol: more of them, by every path and with any number, print and log nothing further",
+    #chatLines == start and logged() == 1 and report():find("a linked guild sent CL5,", 1, true) ~= nil, (#chatLines - start) .. " " .. logged())
+  -- a fresh session, once per remaining path
+  NS.relayStats.newerProto = nil; start = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL5" .. newer, "WHISPER", "Zag Mathris")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL5" .. newer, "WHISPER", "Zag Mathris")
+  check("newer protocol: a whispered CL5 packet from a known guild prints the notice once",
+    notices(start) == 1 and #chatLines == start + 1 and not quoted(start) and report():find("newer protocol CL5 via whisper", 1, true) ~= nil, #chatLines - start)
+  NS.relayStats.newerProto = nil; start = #chatLines
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL12" .. newer, "GUILD", "Tanner-Beta")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL12" .. newer, "GUILD", "Tanner-Beta")
+  check("newer protocol: a CL12 packet fanned out by a guildmate prints the notice once",
+    notices(start) == 1 and #chatLines == start + 1 and not quoted(start) and report():find("a linked guild sent CL12,", 1, true) ~= nil, #chatLines - start)
+  NS.relayStats.newerProto = nil; ws.recv, ws.fanned = recv, fannedOut
+  advance(3)
+  check("newer protocol: no protocol of ours changed and nothing was whispered onward", NS.PROTO == "CL4" and #whisperSends(amark, "WB~") == 0)
+end
+
 -- the server refuses our channel text: said once, counted
 n0 = #chatLines
 typeLine("refused line")

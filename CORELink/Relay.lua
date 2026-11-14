@@ -98,11 +98,24 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
+-- Text that is not a packet we read: if it is one of a later protocol (CL5~... while we speak CL4), a linked
+-- guild has updated past this client and its lines will not show here. Say so once per session; after that
+-- this is one flag test, so a hand-typed "CL99~x" costs nothing more. Nothing of the text reaches chat.
+local function NoteNewerProto(text, via)
+  if stats.newerProto then return end
+  local n = tonumber(text:match("^CL(%d%d?%d?)" .. SEP))
+  if not n or n <= tonumber(PROTO:match("%d+")) then return end
+  stats.newerProto = n
+  Debug("packet of newer protocol CL%d via %s: this version reads %s, line not shown", n, via, PROTO)
+  NS.Print("a linked guild runs a newer CORELink whose lines this version cannot read."
+    .. " Update CORELink to keep seeing that guild's lines.")
+end
+
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
 function NS.ShowPacket(text, via)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
-  if not id then return nil end
+  if not id then return NoteNewerProto(text, via) end
   local now = GetTime()
   seen[id] = now
   NS.heard[tag] = now
