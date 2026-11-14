@@ -9,7 +9,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | Path | What it is |
 |---|---|
 | `CORELink/` | The addon: fourteen Lua files and two TOCs. This folder is what goes into `Interface/AddOns/`. |
-| `tests/` | `run.sh` runs the checks below without the game. `harness.lua` is the mock WoW API, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. `mutation.sh` (CI runs it too, separately) proves a check fails without the change. `review-evals/` measures the reviewer against past bugs. |
+| `tests/` | `run.sh` runs the checks below without the game. `harness.lua` is the mock WoW API, `compat.sh` and `compat.lua` the test against the released addon, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. `mutation.sh` (CI runs it too, separately) proves a check fails without the change. `review-evals/` measures the reviewer against past bugs. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |
 | `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the download page on `gh-pages`. Run by the **release** workflow button, or locally. |
@@ -24,7 +24,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 
 ```
 scripts/install-local.sh            # link CORELink/ into the Forever client (macOS default path), then /reload in game
-tests/run.sh                        # syntax, luacheck, size limits, mock harness, site render, secrets; CI runs this and mutation.sh
+tests/run.sh                        # syntax, luacheck, size limits, mock harness, released-version test, site render, secrets; CI runs this and mutation.sh
 scripts/package.sh                  # tests + dist/CORELink-<version>.zip
 scripts/release.sh rc --dry-run     # what the next release-candidate press would produce
 tests/mutation.sh origin/main       # the branch's harness must fail against main's addon files
@@ -47,8 +47,12 @@ Linux `apt install lua5.4 lua-check`.
    fan-out, the community mirror, echo, filters, nicknames and commands. Every
    check prints `PASS` or `FAIL` with a sentence saying what it claims, and the script exits non-zero on any
    failure.
-5. `tests/site-render.sh`: the download page renders with awkward release notes.
-6. `tests/mutation.sh <base>` (not in `run.sh`; CI runs it on pull requests): when `CORELink/` changed, the
+5. `tests/compat.sh`: the addon as released at the baseline tag (`BASELINE` in the script, the oldest release
+   that must keep working) and the working copy, each in its own fake clients, exchange lines, greetings, the
+   Guild Info line and saved variables. It needs the tag: without it the script says how to fetch it
+   (`git fetch origin tag v0.2.0`), skips with a note on your machine and fails in CI.
+6. `tests/site-render.sh`: the download page renders with awkward release notes.
+7. `tests/mutation.sh <base>` (not in `run.sh`; CI runs it on pull requests): when `CORELink/` changed, the
    harness is run against the base branch's addon files and must fail there, so at least one check depends on
    the change. Changes that compile to the same bytecode (comments, whitespace, local names) have nothing to
    prove; PRs titled `refactor` are exempt on the author's word. Only the self-review's walk of the diff can say

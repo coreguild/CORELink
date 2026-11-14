@@ -27,6 +27,8 @@ Hard rules:
    Never edit `## Version:` in the TOCs; it is `@project-version@` and the release job stamps the real number.
 3. You cannot run the game. Say "not verified in game" for anything the mock harness does not cover.
 4. Do not change the wire protocol (`PROTO`, field order, separator) without bumping the version and keeping old versions readable.
+   What a supported release reads and writes does not change at all: `tests/compat.sh` runs that release against
+   your branch, and "Frozen formats" in `docs/ARCHITECTURE.md` says where new data goes instead.
 5. Do not add dependencies or build steps. The addon is the Lua files in `CORELink/` plus two TOC files that
    list them in load order; a new file goes into both TOCs. `docs/ARCHITECTURE.md` says what goes where.
    `tests/size.sh` enforces: a file under 400 lines, a function under 40; luacheck caps lines at 120.
