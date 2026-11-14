@@ -903,6 +903,28 @@ do
   check("whisper: other 'not playing' lines are left alone", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Someone Else' is currently playing.") ~= true)
   out = lines(function() slash("peers") end)
   check("whisper: /cl peers lists peers with tag, guild and state", out:find("Zag Mathris - Trois (Trois Royaume) seen", 1, true) ~= nil and out:find("Rook Hale - Deux (Deux) not yet answered", 1, true) ~= nil, out)
+  -- a peer logged off: the game answers every whisper to them, a carried line as much as a hello, with a
+  -- "not playing" line. It is hidden, and that peer gets no more carried lines until heard from again.
+  do
+    local zag, sent, carriedN = CORELinkDB.peers["Zag Mathris"], NS.whisperStats.sent, NS.relayStats.carried
+    local seenBefore = zag.seen
+    local function carriedTo(text)
+      local from = #sentAddon
+      H(nil, "CHAT_MSG_GUILD", text, "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob"); advance(4)
+      local n = 0
+      for _, w in ipairs(whisperSends(from, "WB~")) do if w.target == "Zag Mathris" then n = n + 1 end end
+      return n
+    end
+    advance(30)   -- well past the last hello to anyone
+    check("whisper: a 'not playing' line about a peer we have not just whispered is left alone", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Zag Mathris' is currently playing.") ~= true and zag.seen == seenBefore)
+    check("whisper: a guildmate's line is carried to the live peer", carriedTo("is anyone there") == 1)
+    check("whisper: the game's 'not playing' line for a carried line is hidden", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Zag Mathris' is currently playing.") == true)
+    check("whisper: a peer the game says is not playing gets no more carried lines", carriedTo("still nobody") == 0 and zag.seen == 0)
+    H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~CAMWOWUS2Realm1PvE~Trois Royaume", "WHISPER", "Zag Mathris")
+    check("whisper: once that peer is heard from again, lines are carried to them again", carriedTo("welcome back") == 1)
+    zag.seen, NS.whisperStats.sent, NS.relayStats.carried = seenBefore, sent, carriedN
+    NS.whisperStats.answered = NS.whisperStats.answered - 1
+  end
   slash("whisper off")
   nSent = #sentAddon
   H(nil, "CHAT_MSG_GUILD", "while off", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora"); advance(3)

@@ -270,23 +270,33 @@ local function PeerUpkeep()
     elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY then Hello(key, "HELLO") end
   end
   for id, t in pairs(fanned) do if now - t > NS.FORGET_SECS then fanned[id] = nil end end
+  for key, t in pairs(NS.whisperedAt) do if now - t > NS.FORGET_SECS then NS.whisperedAt[key] = nil end end
   SavePeers()
   NS.ScheduleWho()
 end
 C_Timer.NewTicker(60, PeerUpkeep)
 
--- A hello to someone who logged off makes the game print "No player named 'X' is currently playing."; hide it
--- when it is about a name we whispered in the last few seconds, and forget that peer for now.
+-- An addon whisper to someone who logged off makes the game print "No player named 'X' is currently playing."
+-- to the sender, once per whisper: a hello, or every line the courier carries to that peer. Hide it when it is
+-- about a name we whispered in the last few seconds, and stop whispering to that peer until they are heard
+-- from again (their own line on the channel, or an answered hello).
+local NOT_PLAYING_SECS = 10
+local function WhisperedJust(name, now)
+  for _, sent in ipairs({ NS.whisperedAt, helloAt }) do
+    for key, t in pairs(sent) do
+      if now - t <= NOT_PLAYING_SECS and (key == name or PeerName(key) == name) then return key end
+    end
+  end
+end
+
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
   if issecret(msg) or type(msg) ~= "string" then return false end
   local name = msg:match("^No player named '([^']+)' is currently playing")
-  if not name then return false end
-  local now = GetTime()
-  for key, t in pairs(helloAt) do
-    if now - t <= 10 and (key == name or PeerName(key) == name or key:gsub("%-.*$", "") == name) then
-      if peers[key] then peers[key].seen = 0 end
-      return true
-    end
+  local key = name and WhisperedJust(name, GetTime())
+  if not key then return false end
+  if peers[key] and peers[key].seen > 0 then
+    peers[key].seen = 0
+    Debug("%s is not playing: no more whispers to them until they are heard from again", key)
   end
-  return false
+  return true
 end)
