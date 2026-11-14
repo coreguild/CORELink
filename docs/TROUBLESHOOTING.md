@@ -1,55 +1,57 @@
-# Troubleshooting
+# Troubleshooting CORELink
 
-Start with `/cl report`. It prints one line and opens it in a copy box; paste it to whoever is helping.
+Type `/cl` in WoW to check whether CORELink is on and whether it joined the channel. If you need help, type `/cl report` and copy the report from the box it opens. Tell the person helping you which guild sent the message and which guild couldn't see it.
 
-## Symptoms
+## `/cl` says `NOT CONFIGURED`
 
-| Symptom | Cause | What to do |
-|---|---|---|
-| "not configured" after login | No `CORELink:` line in Guild Info, or it could not be read yet | The guild master pastes the line (`/cl publish` shows it); members `/cl reload` |
-| "could not join ...: wrong channel password" | This guild's line differs from the other guilds' | GM re-publishes with `/cl publish`, members `/cl reload` |
-| Status says "not joined" long after login | Joining a channel needs a keypress or click after login | Press any key or click in the world, then `/cl` again |
-| We only see guild X's lines from players who have the addon | Lines from X's members without the addon are carried by X's courier, who needs a peer in your guild | Someone in your guild has to have said something in guild chat since logging in, so X's courier knows them; `/cl peers` on X's side lists who it can whisper to |
-| "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
-| Lines from one guild never arrive | `heard` in `/cl report` lists the guilds whose lines reached you in the last 10 minutes | If the guild is missing, its members' clients are not posting (wrong channel or password, or refused); if it is listed and nothing shows, share the report |
-| Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
-| A line shows twice | Two clients relayed it inside the same back-off window, or a community copy was not matched | Rare and harmless; if it repeats, share `/cl report` from both clients |
-| "No player named X is currently playing" in chat | A whisper greeting reached someone who just logged off | Hidden by the addon when it is about a greeting of ours; otherwise it was a chat whisper of yours |
+Ask your guild master to check for a CORELink line in Guild Information. If they've just added or changed the line, type `/cl reload` to load the updated settings.
 
-## Reading `/cl report`
+## CORELink says the channel password is wrong
 
-* `channel <name> id <n>`: joined. `id not joined`: see the keypress row above and `lastNotice`.
-* `lastNotice`: the game's last answer about the channel. `NOT_ALLOWED_IN_CHANNEL` once, right after joining,
-  is a send that beat the join and is harmless; repeated, it means the character may not speak there.
-* `lastSend ok`: the last packet was accepted. Anything else and the addon prints a warning once a minute.
-* `me`: your name as the addon knows it. On Forever it must be `First Surname`; `short:` means the roster has
-  not been read yet, and nicknames and courier duty may be off until it is.
-* `heard`: guild tags whose lines reached you in the last 10 minutes, by any path.
-* `relay typed=N carried=N shown=N`: your own lines posted, guildmates' lines you carried as courier, other
-  guilds' lines shown.
-* `mirror ...`: the community. `member=false` means this character is not in it. `hooks=editbox+send` is normal.
-* `whisper courier=me`: this client carries guildmates' lines; otherwise the courier's name. `peers=N` live
-  peers, `sent=N` lines carried, `recv=N` carried lines received, `fanned=N` passed to your guild.
-* `log:` the last 20 events. `/cl debug on` echoes them live.
+Ask the guild masters to compare the CORELink lines in Guild Information. The channel name and password should match in every linked guild. Once your guild master saves the corrected line, type `/cl reload` to try connecting again.
 
-## Realms
+## `/cl` still says `not joined` after login
 
-Realms do not matter to CORELink on Forever. The hidden channel is shared by every realm, guild addon messages
-and whispers cross them, names are unique across them, and no name ever carries a `-Realm` suffix. The only
-thing a realm changes is where you can trade and group. The only way to learn someone's realm is to ask:
-`/run print(GetRealmName())` on their client.
+Press a key or click in the game world, then type `/cl` again. If you still see `not joined`, share the output of `/cl report` so the person helping you can see the last message WoW sent about the channel.
 
-What the server does refuse, on every realm, is an addon message sent on a custom channel. CORELink therefore
-sends your own lines as plain text from your keypress, and has the courier whisper the lines of members
-without the addon. See [ARCHITECTURE.md](ARCHITECTURE.md).
+## I can't see messages from another guild
 
-## Testing with two guilds
+1. Ask someone in the other guild to type `/cl` and check your own status too. Both should say `ON` and `joined`. Use `/cl report` to check that you're both running 0.2.0 or later on the live Forever servers.
+2. Ask that player to send a message in guild chat, then send one back to check whether messages travel both ways.
+3. If either message is missing, run `/cl report` on both characters. If the sender's report says `lastSend refused`, WoW refused a send. If the receiver's report lists the sending guild under `heard`, check whether the receiver has muted that guild.
 
-Two characters in two guilds, both with the addon and the same channel and password, different tags.
+## I only see messages from players who have CORELink
 
-1. Type a line in guild A. Within a second it shows in B as `[TAGA] [Name]: text`. `/cl report` on A: `relay
-   typed=1`, `lastSend ok`.
-2. `/cl peers` on B lists A's character as a live peer. `/cl guilds` on B lists TAGA.
-3. Have a member of A without the addon type a line (or log A's character out and use a second one without the
-   addon). Within two seconds it shows in B. `/cl report` on A's courier: `carried=1`; on B: `recv=1 fanned=1`.
-4. `/cl hello First Surname` greets one addon user by hand; `/cl peers` shows the answer a few seconds later.
+Send a guild chat message while CORELink is on. Then ask someone in the other guild to have their courier run `/cl peers` and look for your character's name. The courier is the player whose addon carries messages for guild members without CORELink. If your name isn't listed, the courier can type `/cl hello <FirstName Surname>` with your character's full name to make contact.
+
+## A guild member without CORELink can't see linked messages
+
+Ask them to install CORELink if they want to read linked chat. If your guild master wants members without the addon to see it too, they can try [enabling echo](COMMANDS.md#guild-information-settings) in a test guild first. Echo lets another member's addon re-post linked messages into guild chat.
+
+## My nickname or officer label is missing from my own messages
+
+Type `/cl report` and check the version at the start. If it's older than 0.2.0, install a newer version. If you're already up to date, share the report when asking for help.
+
+## The same message appears twice
+
+If it keeps happening, ask the sender and receiver to run `/cl report`. Share both reports and mention whether your guilds also share chat through a WoW Community.
+
+## WoW says "No player named X is currently playing"
+
+If the notice keeps appearing while you use CORELink, share a report. WoW can show this notice if someone logs off before receiving a whisper or an addon greeting. CORELink hides notices it recognizes as replies to its own greetings.
+
+## Read the report
+
+| Field | What it tells you |
+|---|---|
+| `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
+| `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |
+| `lastSend` | `ok` means the local send call completed. `refused` means the server reported a refusal. `error` means the call itself failed. |
+| `me` | The name CORELink knows for your character. `short:` means it hasn't learned your full name, which can affect nicknames and who carries messages. |
+| `heard` | Guild tags heard in the last ten minutes. |
+| `relay` | Counts messages you typed and relayed, messages you carried for guild members, and linked messages shown to you. |
+| `mirror` | Community connection details. `member=false` means this character isn't a member of the configured Community. |
+| `whisper` | Shows the courier and counts known peers, carried messages sent or received, and messages passed on to your guild. |
+| `log` | The last 20 debug events. Use `/cl debug on` to also show new events in chat. |
+
+See the [testing guide](../agents/testing.md) for the full in-game checks and the [architecture guide](ARCHITECTURE.md) for how messages travel between guilds.
