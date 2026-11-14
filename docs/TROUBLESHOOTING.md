@@ -42,7 +42,7 @@ If the notice keeps appearing while you use CORELink, share a report. WoW can sh
 
 ## CORELink says a guild member runs a newer version
 
-Check CurseForge, or wherever you installed CORELink, for an update. Addons can't check the web, so CORELink learns about a newer version from guild members who already run it. A guild member testing a release candidate also triggers the notice, so the update might not be published yet. You see the notice once per version.
+Check CurseForge, or wherever you installed CORELink, for an update. Addons can't check the web, so CORELink learns about a newer version from guild members who already run it. If you find nothing newer there, the guild member may be testing a version that isn't published yet. You see the notice once per version.
 
 ## Read the report
 

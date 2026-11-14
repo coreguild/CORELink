@@ -107,21 +107,26 @@ local notNewer          -- the last reported version that was not: the usual PRE
 local announced = false -- one notice per session
 local ANNOUNCE_WAIT = 15   -- seconds, so the line does not drown in the login messages
 
--- "0.3.0" -> 0, 3, 0. nil for anything else: a dev checkout, or text a guildmate's client made up.
+-- "0.3.0" -> 0, 3, 0. nil for anything else: a dev checkout, a release candidate ("0.3.0-rc1"), or text a
+-- guildmate's client made up.
 local function ParseVersion(v)
   if type(v) ~= "string" or #v > 20 then return nil end
   local major, minor, patch = v:match("^(%d+)%.(%d+)%.(%d+)$")
   return tonumber(major), tonumber(minor), tonumber(patch)
 end
 
--- True when version a is a later release than b.
+-- True when a guildmate's version a is a later release than our version b. Only releases are announced: a
+-- candidate reported by a guildmate compares as not newer. When we run a candidate ourselves ("0.3.0-rc2"),
+-- its own release counts as newer, so a tester left on a candidate still hears that the release is out.
 function NS.IsNewerVersion(a, b)
+  local base = type(b) == "string" and #b <= 20 and b:match("^(.-)%-rc%d+$")
   local a1, a2, a3 = ParseVersion(a)
-  local b1, b2, b3 = ParseVersion(b)
+  local b1, b2, b3 = ParseVersion(base or b)
   if not a1 or not b1 then return false end
   if a1 ~= b1 then return a1 > b1 end
   if a2 ~= b2 then return a2 > b2 end
-  return a3 > b3
+  if a3 ~= b3 then return a3 > b3 end
+  return base ~= nil
 end
 
 -- One chat line per session, and not for a version an earlier session already announced (db.updateTold).
@@ -137,8 +142,8 @@ local function Announce(version, sender)
 end
 
 -- PRESENT~<version>: the dispatcher noted the sender as an addon user. A version newer than ours is kept for
--- /cl report and announced. A release candidate reports the version it will be released as, so a guildmate
--- testing one is announced too: the line names them instead of claiming a release.
+-- /cl report and announced. The line names the guildmate instead of claiming a release: candidates built
+-- before they carried their number ("0.3.0" for rc1) look like releases.
 NS.guildPackets.PRESENT = function(rest, sender)
   local db = NS.db
   if rest == notNewer or rest == NS.newest or not db or not db.enabled then return end

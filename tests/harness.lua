@@ -966,6 +966,7 @@ do
   check("versions: releases compare by number, not as text", newer("0.10.0", "0.9.9") and newer("1.0.0", "0.9.9") and newer("0.2.1", "0.2.0") and not newer("0.2.0", "0.2.0") and not newer("0.1.9", "0.2.0"))
   check("versions: a dev checkout and anything that is not N.N.N compare as not newer", not newer("0.3.0", "dev") and not newer("dev", "0.2.0") and not newer("9.9.9|cffff0000", "0.2.0") and not newer("9.9.9-rc1", "0.2.0") and not newer("999999999999999999.0.0", "0.2.0") and not newer(nil, "0.2.0"))
   -- a PRESENT from a guildmate, then long enough for a delayed notice to print
+  check("versions: on a candidate, its own release and later ones are newer; other candidates and older releases are not", newer("0.3.0", "0.3.0-rc2") and newer("0.3.1", "0.3.0-rc2") and not newer("0.2.9", "0.3.0-rc2") and not newer("0.3.0-rc3", "0.3.0-rc2") and not newer("0.4.0-rc1", "0.3.0-rc2") and not newer("0.3.0", "0.3.0-rc") and not newer("0.3.0", "0.3.0-rc2-x"))
   local function present(version, who)
     return lines(function() H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~" .. version, "GUILD", who); advance(20) end)
   end
