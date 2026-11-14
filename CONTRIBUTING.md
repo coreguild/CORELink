@@ -36,8 +36,8 @@ user-visible change.
 * Two channels, two presses of the **release** workflow (Actions tab -> release -> Run workflow). A person presses
   the button; agents never run `final`. `scripts/release.sh` is the same code for local use; `--dry-run` previews.
   * **Release candidate** (`rc`): run on a `release/*` branch, never on `main`. `release/0.2.0` pins the version
-    and counts `rcN` up; `release/<word>` continues an open candidate series or `bump`s the last release. Merge the
-    feature branches for that release into the branch (merged into `main` or not), push, press. Publishes a GitHub
+    and counts `rcN` up; `release/<word>` continues an open candidate series or `bump`s the last release. Feature
+    branches reach it through reviewed PRs, like `main` (release branches share its protection), then press. Publishes a GitHub
     pre-release and updates the RC download link. Guild leads run it for a day on two clients in two guilds, with
     one client left on the previous stable to prove the protocol still interoperates.
   * **Latest release** (`final`): run on `main` after the release branch is merged. Promotes the rc merged into
