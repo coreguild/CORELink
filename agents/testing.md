@@ -40,6 +40,12 @@ line:
 2. Type a guild message on A. B sees `[TAGA] [A]: ...`. Check `/cl` on A shows `last send result: 0`.
 3. Type on B; A sees it. Then `/cl guilds` lists both tags.
 4. `/reload` on both and confirm it still works (tests the auto-join path).
+5. Have a member of A's guild without the addon type a guild message. B must not see it, and nobody's screen
+   shows "No player named ... is currently playing." (0.2.1 sends no whispers; `/cl report` on A has no
+   `whisper` section).
+6. Only when one guild is still on 0.2.0: a member of that guild without the addon types. A 0.2.1 client in the
+   other guild that spoke in the last 20 minutes shows the line once, and so do its guildmates; its
+   `/cl report` counts it under `carried recv=` and `fanned=`.
 
 Record exactly this in the PR. If you only ran the harness, write "not verified in game".
 

@@ -22,7 +22,9 @@ Press a key or click in the game world, then type `/cl` again. If you still see 
 
 ## I only see messages from players who have CORELink
 
-Send a guild chat message while CORELink is on. Then ask someone in the other guild to have their courier run `/cl peers` and look for your character's name. The courier is the player whose addon carries messages for guild members without CORELink. If your name isn't listed, the courier can type `/cl hello <FirstName Surname>` with your character's full name to make contact.
+That is how CORELink works from version 0.2.1. A member without CORELink is not bridged to other guilds: their messages stay in their own guild. Ask them to install the addon if they want the linked guilds to see what they say.
+
+Up to version 0.2.0, an addon user in their guild carried those messages by whisper. A guild that is still on 0.2.0 keeps doing that, and newer versions still show those messages. This stops once that guild updates.
 
 ## A guild member without CORELink can't see linked messages
 
@@ -38,7 +40,13 @@ If it keeps happening, ask the sender and receiver to run `/cl report`. Share bo
 
 ## WoW says "No player named X is currently playing"
 
-If the notice keeps appearing while you use CORELink, share a report. WoW can show this notice if someone logs off before receiving a whisper or an addon greeting. CORELink hides notices it recognizes as replies to its own greetings.
+Update to CORELink 0.2.1 or later. Type `/cl report` and check the version at the start.
+
+Version 0.2.0 whispered messages from members without the addon to an addon user in each linked guild. When that player logged off, WoW printed this notice for every whisper, for up to 20 minutes. From 0.2.1 CORELink sends no whispers, so it can't cause the notice.
+
+Guild masters: the notice appears on the client that sends the whispers, so it stops for each member as they update. After the update, a member without CORELink is no longer bridged to other guilds.
+
+If you still see the notice on 0.2.1 or later, it comes from something else, such as another addon or a whisper you sent yourself.
 
 ## Read the report
 
@@ -47,11 +55,11 @@ If the notice keeps appearing while you use CORELink, share a report. WoW can sh
 | `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
 | `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |
 | `lastSend` | `ok` means the local send call completed. `refused` means the server reported a refusal. `error` means the call itself failed. |
-| `me` | The name CORELink knows for your character. `short:` means it hasn't learned your full name, which can affect nicknames and who carries messages. |
+| `me` | The name CORELink knows for your character. `short:` means it hasn't learned your full name, which can affect nicknames. |
 | `heard` | Guild tags heard in the last ten minutes. |
-| `relay` | Counts messages you typed and relayed, messages you carried for guild members, and linked messages shown to you. |
+| `relay` | Counts messages you typed and relayed, and linked messages shown to you. |
 | `mirror` | Community connection details. `member=false` means this character isn't a member of the configured Community. |
-| `whisper` | Shows the courier and counts known peers, carried messages sent or received, and messages passed on to your guild. |
+| `carried` | Messages that a guild still on 0.2.0 carried to you by whisper: `recv` counts those received, `fanned` those passed on to your guild. `read=off` means you turned them off with `/cl whisper off` in 0.2.0. `peers` counts the addon users of other guilds your client knows. |
 | `log` | The last 20 debug events. Use `/cl debug on` to also show new events in chat. |
 
 See the [testing guide](../agents/testing.md) for the full in-game checks and the [architecture guide](ARCHITECTURE.md) for how messages travel between guilds.

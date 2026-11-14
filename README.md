@@ -34,22 +34,26 @@ For example, CORE and CORE Deux might use the following lines. Each guild saves 
 **CORE**
 
 ```text
-CORELink: corelink7100 hearth CORE 1 guilds=CORE Deux
+CORELink: corelink7100 hearth CORE 1
 ```
 
 **CORE Deux**
 
 ```text
-CORELink: corelink7100 hearth DEUX 1 guilds=CORE
+CORELink: corelink7100 hearth DEUX 1
 ```
 
-The `1` means ranks 0 and 1 are shown as officers. Rank 0 is the guild master. Increase that number if more ranks should be shown as officers. To help CORELink find guilds it hasn't heard from yet, you can add `guilds=` to the line before saving it. List the other guilds by their exact names, separate them with commas, and put the list last.
+The `1` means ranks 0 and 1 are shown as officers. Rank 0 is the guild master. Increase that number if more ranks should be shown as officers.
 
 Members who are already online can type `/cl reload` after you save the line. See the [Guild Information settings](docs/COMMANDS.md#guild-information-settings) for the full format and options such as mirroring into a WoW Community.
 
 ## Who can read linked chat?
 
-Members with CORELink can see messages from linked guilds in their guild chat window. A member without CORELink can still have their own messages carried by another addon user in their guild, but will not see the linked guild's messages themselves.
+Members with CORELink can see messages from linked guilds in their guild chat window, and their own guild chat messages reach the linked guilds.
+
+A member without CORELink is not part of the link. Their messages stay in their own guild, and they don't see the linked guilds' messages. Everyone who wants to take part needs the addon.
+
+Up to version 0.2.0, another addon user in the guild carried those members' messages to the other guilds by whisper. Version 0.2.1 stopped that. It caused repeated `No player named ... is currently playing` notices whenever the player on the other end logged off. Updating to 0.2.1 or later stops those notices on your client. While a guild is still on 0.2.0, its addon users keep carrying messages, and newer versions still show them.
 
 ## Get help
 
