@@ -855,6 +855,11 @@ do
     hellos["Nia Thorn"] and hellos["Cosmo Vale"] and hellos["Orla Finch"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
   out = lines(function() slash("guilds") end)
   check("whisper: /cl guilds counts the exact guild's online members from the last round", out:find("Trois Royaume - 5 online (asked", 1, true) ~= nil, out)
+  -- /cl who from a client that is not the courier: no query, and the courier is named (per guild, no realm)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.2.0-test", "GUILD", "Aaron-Beta"); whoSent = {}
+  out = lines(function() slash("who") end)
+  check("whisper: /cl who away from the courier names the courier and asks nothing",
+    #whoSent == 0 and out:find("CORELink:|r Aaron is the courier for this guild; only the courier runs /cl who.", 1, true) ~= nil, out)
   advance(616); whoSent = {}                                     -- the automatic round at +600 runs and times out
   slash("who")
   whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
