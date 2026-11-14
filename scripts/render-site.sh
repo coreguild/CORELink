@@ -32,7 +32,8 @@ RC_VERSION=$(read_or "$WT/rc/VERSION" "none")
 STABLE_DATE=$(read_or "$WT/latest/DATE" "-")
 RC_DATE=$(read_or "$WT/rc/DATE" "-")
 RC_CLASS=""
-if [ "$RC_VERSION" != none ] && [ "$RC_VERSION" != "$STABLE_VERSION" ]; then RC_CLASS="show"; fi
+# The candidate card is hidden once its version shipped: rc/VERSION 0.3.0-rc2 (0.3.0 before #19), stable 0.3.0.
+if [ "$RC_VERSION" != none ] && [ "${RC_VERSION%-rc*}" != "$STABLE_VERSION" ]; then RC_CLASS="show"; fi
 STABLE_NOTES=""; if [ -f "$WT/latest/NOTES.md" ]; then STABLE_NOTES=$(notes_html < "$WT/latest/NOTES.md"); fi
 RC_NOTES="";     if [ -f "$WT/rc/NOTES.md" ];     then RC_NOTES=$(notes_html < "$WT/rc/NOTES.md"); fi
 UPDATED=$(date -u +'%Y-%m-%d %H:%M UTC')

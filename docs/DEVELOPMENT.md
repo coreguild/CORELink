@@ -95,9 +95,10 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
 4. **Release branch and candidate.** Create `release/<version>` from `main` and merge in the feature branches
    that belong to that release, merged into `main` or not. Push it. Then GitHub -> Actions -> **release** ->
    **Run workflow**, pick the release branch, `rc`. The job re-runs the checks, takes the version from the branch
-   name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it into the TOCs inside the zip, creates the
+   name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it with the rc number into the TOCs inside the
+   zip (`0.2.0-rcN`, which is what `/cl report` then says; the zip is `CORELink-0.2.0-rcN.zip`), creates the
    tag, publishes a GitHub pre-release with the changelog section for that tag, and pushes `rc/CORELink.zip`,
-   `v/CORELink-<ver>.zip`, the notes, `CHANGELOG.md` and the re-rendered page to `gh-pages`. Testers run the RC
+   `v/CORELink-<ver>-rcN.zip`, the notes, `CHANGELOG.md` and the re-rendered page to `gh-pages`. Testers run the RC
    for a day on two clients in two guilds, with one client left on the previous stable to prove the protocol
    still interoperates. Fixes go through normal PRs, are merged into the release branch too, and `rc` again
    gives `rcN+1`. `rc` is refused on `main`.
@@ -115,9 +116,11 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on
    `main` are identical to that rc, so what ships is what was tested (`no_rc` exists for a small hotfix that
-   touches neither the relay path nor the protocol). It tags `v<ver>`, publishes the GitHub release as latest,
+   touches neither the relay path nor the protocol). It rebuilds the zip from those files with the plain version
+   (`CORELink-<ver>.zip`, `/cl report` says `<ver>`), tags `v<ver>`, publishes the GitHub release as latest,
    and updates `latest/CORELink.zip` and the page. Everyone in every linked guild should run the same version.
 
 Permanent download URLs: `latest/CORELink.zip` (stable), `rc/CORELink.zip` (candidate), `v/CORELink-<ver>.zip`
-(every build), `channels.json` (`{"stable","rc","updated"}` for bots). Only the release job writes to
+and `v/CORELink-<ver>-rcN.zip` (every build; a candidate keeps its own, the ones up to 0.2.0 shared their
+version's), `channels.json` (`{"stable","rc","updated"}` for bots). Only the release job writes to
 `gh-pages`. GitHub Pages serves that branch publicly even though the source is private.

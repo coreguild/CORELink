@@ -20,6 +20,7 @@
 set -euo pipefail
 set +x                      # never trace this script: the API key is in its environment
 cd "$(dirname "$0")/.."
+. scripts/release-names.sh
 MODE=upload; TAG_ARG=""; DRY=0
 usage() { echo "usage: $0 [--check] [--tag vX.Y.Z[-rcN]] [--dry-run]"; exit 2; }
 while [ $# -gt 0 ]; do
@@ -67,8 +68,16 @@ if [ -n "$TAG_ARG" ]; then
     || { echo "curseforge: could not download the CORELink zip of release $TAG_ARG (see gh's message above)"; exit 2; }
   printf '%s\n' "$TAG_ARG" > dist/TAG
 fi
+zip_of() {   # zip_of <tag>: the tag's zip in dist/. A release run built it under the tag's own name; only a --tag
+  local n    # download can have fetched a candidate from before #19, whose asset is named with the bare version
+  for n in $(asset_names "$1"); do
+    if [ -f "dist/$n" ]; then echo "dist/$n"; return; fi
+    [ -n "$TAG_ARG" ] || break
+  done
+  echo "dist/$(asset_names "$1" | head -1)"
+}
 tocs() {   # the TOCs that describe the file being uploaded: inside the tag's zip, else the working tree's
-  if [ -n "$TAG_ARG" ]; then v=${TAG_ARG#v}; unzip -p "dist/CORELink-${v%-rc*}.zip" 'CORELink/*.toc'; else cat CORELink/*.toc; fi
+  if [ -n "$TAG_ARG" ]; then unzip -p "$(zip_of "$TAG_ARG")" 'CORELink/*.toc'; else cat CORELink/*.toc; fi
 }
 
 # ---- game versions: TOC interface numbers -> "major.minor.patch" -> CurseForge ids ----------------------
@@ -113,7 +122,7 @@ echo "curseforge: key accepted; game versions $names -> ids $ids; project $CURSE
 [ -f dist/TAG ] || { echo "curseforge: dist/TAG missing; nothing was released in this run"; exit 0; }
 TAG=$(tr -d '[:space:]' < dist/TAG)
 VER=${TAG#v}; VER=${VER%-rc*}
-ZIP="dist/CORELink-$VER.zip"
+ZIP=$(zip_of "$TAG")
 [ -f "$ZIP" ] || { echo "curseforge: $ZIP missing"; exit 2; }
 case "$TAG" in
   *-rc*) TYPE=beta;    NAME="CORELink $VER rc${TAG##*-rc}" ;;
