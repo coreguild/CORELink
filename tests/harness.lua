@@ -397,6 +397,58 @@ do
   check("the password prompt is closed", hidden[1] == "CHAT_CHANNEL_PASSWORD")
   H(nil, "CHANNEL_PASSWORD_REQUEST", "SomeOtherChannel")
   check("a password request for another channel is left alone", #joinCalls == jc + 1 and #hidden == 1)
+  -- #74: the request passes the same gate as any join, is capped, and closes only our prompt
+  StaticPopup_Visible = function() return "StaticPopup1" end
+  StaticPopup1 = { data = "SomeOtherChannel" }          -- another channel's prompt is the one on screen
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("another channel's password prompt is not closed", #hidden == 1, #hidden)
+  StaticPopup1.data = "corelink7100"; slash("reload")
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("the link channel's prompt is closed when the prompt names it", #hidden == 2, #hidden)
+  StaticPopup1.data = nil; slash("reload")
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a prompt that names no channel is closed as before", #hidden == 3, #hidden)
+  StaticPopup_Visible, StaticPopup1 = nil, nil; hidden = { "CHAT_CHANNEL_PASSWORD" }
+  slash("off"); jc = #joinCalls
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a password request while disabled is not answered", #joinCalls == jc and #hidden == 1, #joinCalls - jc)
+  slash("on"); jc = #joinCalls
+  C_ChatInfo.InChatMessagingLockdown = function() return true end
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a password request during lockdown is not answered", #joinCalls == jc and #hidden == 1, #joinCalls - jc)
+  C_ChatInfo.InChatMessagingLockdown = nil
+  slash("reload"); jc = #joinCalls; n0 = #chatLines
+  for _ = 1, 6 do H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100") end
+  local capLines = 0
+  for i = n0 + 1, #chatLines do
+    if chatLines[i].text:find("could not join CORELink7100: the game keeps asking", 1, true) then capLines = capLines + 1 end
+  end
+  check("password requests are answered at most three times", #joinCalls == jc + 3, #joinCalls - jc)
+  check("the player is told once when the password requests are capped", capLines == 1, capLines)
+  rep = report()
+  check("report names the capped password requests as the join hold and counts the answers",
+    rep:find("joinHold PASSWORD_REQUESTS", 1, true) and rep:find("passwordAnswers 3", 1, true)
+      and rep:find("not answered: answered 3 times already", 1, true), rep)
+  advance(601); jc = #joinCalls; n0 = #chatLines         -- the hold has run out; the cap has not
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("the cap outlasts the hold, without a second notice", #joinCalls == jc and #chatLines == n0, #joinCalls - jc)
+  check("a capped password request puts the join on hold again",
+    report():find("joinHold PASSWORD_REQUESTS", 1, true) ~= nil, report())
+  guildInfoText = "CORELink: CORELink7100 pw2 MAIN 1\n"  -- the GM corrected the line: a fresh start
+  advance(61); joined["CORELink7100"] = 6; jc = #joinCalls
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a config change clears the password request cap and the hold",
+    #joinCalls == jc + 1 and joinCalls[#joinCalls][2] == "pw2", #joinCalls - jc)
+  guildInfoText = savedText
+  slash("reload"); jc = #joinCalls
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("/cl reload clears the password request cap", #joinCalls == jc + 1, #joinCalls - jc)
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "YOU_JOINED", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  jc = #joinCalls
+  for _ = 1, 3 do H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100") end
+  check("a successful join starts the password request count again", #joinCalls == jc + 3, #joinCalls - jc)
+  slash("reload")                                      -- no cap or hold left for the blocks that follow
   StaticPopup_Hide = nil
   JoinChannelByName = savedJoin
 end
@@ -417,6 +469,33 @@ do
   check("wrong password is reported to the player once", notices == 1)
   advance(130)                                           -- login retries + two housekeeping ticks
   check("join retries pause after a wrong-password notice", #joinCalls == jc, #joinCalls - jc)
+  -- #74: the hold does not stop an answer to the game's prompt (the refusal may not have been ours); the cap does
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("a password request while the join is on hold is still answered, and counted",
+    #joinCalls == jc + 1 and report():find("passwordAnswers 1", 1, true) ~= nil, #joinCalls - jc)
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "YOU_JOINED", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  check("a join after that answer clears the hold", report():find("joinHold no", 1, true) ~= nil, report())
+  jc = #joinCalls; n0 = #chatLines
+  for _ = 1, 5 do                                       -- a password that really is wrong: asked, refused, asked ...
+    local before = #joinCalls
+    H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+    if #joinCalls > before then                         -- the server refuses only what was sent
+      H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+    end
+  end
+  local wrongLines, askLines = 0, 0
+  for i = n0 + 1, #chatLines do
+    if chatLines[i].text:find("could not join CORELink7100: wrong channel password", 1, true) then wrongLines = wrongLines + 1 end
+    if chatLines[i].text:find("could not join CORELink7100: the game keeps asking", 1, true) then askLines = askLines + 1 end
+  end
+  check("a refused password is sent at most three times in answer to prompts", #joinCalls == jc + 3, #joinCalls - jc)
+  check("each reason for the failed join is told once", wrongLines == 1 and askLines == 1, wrongLines .. "/" .. askLines)
+  slash("off"); slash("reload"); advance(10); jc = #joinCalls; n0 = #chatLines
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
+  check("a refused password-less rejoin while disabled is left alone", #joinCalls == jc and #chatLines == n0,
+    #joinCalls - jc)
+  slash("on"); jc = #joinCalls
+  H(nil, "CHAT_MSG_CHANNEL_NOTICE", "WRONG_PASSWORD", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
   H(nil, "CHAT_MSG_CHANNEL_NOTICE", "YOU_CHANGED", nil, nil, "CORELink7100", nil, nil, nil, 0, "CORELink7100")
   check("a successful join clears the hold", report():find("joinHold no", 1, true) ~= nil, report())
   H(nil, "CHANNEL_UI_UPDATE")                           -- our own attempt, answered with WRONG_PASSWORD
@@ -427,6 +506,8 @@ do
   check("debug log uses wall-clock timestamps", rep:match("log: %d%d:%d%d:%d%d ") ~= nil)
   slash("reload")                                   -- a member may reload (#23)
   check("/cl reload clears the hold and retries the join", #joinCalls == jc + 2, #joinCalls - jc)
+  H(nil, "CHANNEL_PASSWORD_REQUEST", "CORELink7100")
+  check("after /cl reload a password request is answered again", #joinCalls == jc + 3, #joinCalls - jc)
 end
 
 -- The client rejoins the remembered channel without its password at login, before the addon's first attempt;

@@ -10,6 +10,10 @@ Ask your guild master to check for a CORELink line in Guild Information. If they
 
 Ask the guild masters to compare the CORELink lines in Guild Information. The channel name and password should match in every linked guild. Once your guild master saves the corrected line, type `/cl reload` to try connecting again.
 
+## CORELink says the game keeps asking for the channel password
+
+CORELink answered the password prompt three times and still wasn't let in. Treat it like a wrong password: check the Guild Information line, close the prompt if it is open, then type `/cl reload`.
+
 ## `/cl` still says `not joined` after login
 
 Press a key or click in the game world, then type `/cl` again. If you still see `not joined`, share the output of `/cl report` so the person helping you can see the last message WoW sent about the channel.

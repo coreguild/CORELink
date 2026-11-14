@@ -220,8 +220,7 @@ commands.window = function(arg)
 end
 
 commands.reload = function()
-  local conn = NS.conn
-  NS.db.lastGI = nil; conn.blockedUntil = 0; conn.blockedWhy = nil
+  NS.db.lastGI = nil; NS.ClearJoinHold()
   NS.ReadGuildInfo(); NS.EnsureChannel(); Print("re-read Guild Info and retried the channel.")
 end
 
