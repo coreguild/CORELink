@@ -341,6 +341,9 @@ n0 = #chatLines; local rep = report()
 check("/cl report fills the copy box", rep ~= "")
 check("report has version, channel id, last send result and log", rep:find("CORELink 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. rep)
+-- plain /cl: the send result is a word (ok, error, refused) since 0.2.0, so no "(0 = success)" hint after it
+out = lines(function() slash("") end) .. "\n"
+check("plain /cl prints the last send result without the old numeric hint", out:find("last send result: ok\n", 1, true) ~= nil, out)
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
@@ -837,7 +840,14 @@ do
   advance(400)                                                   -- earlier blocks' guildmates age out of the election
   check("whisper: we are the courier when no guildmate runs the addon", report():find("courier=me guilds=2", 1, true) ~= nil, report())
   -- who round: one silent query per listed guild; results are names without realms; exact guild only
-  advance(60); whoSent = {}
+  advance(60)
+  -- /cl who from a client that is not the courier: no query, and the courier is named (per guild, no realm).
+  -- The guildmate is forgotten again at once, so the rounds below run on the timing they always had.
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.2.0-test", "GUILD", "Aaron-Beta"); whoSent = {}
+  out = lines(function() slash("who") end)
+  check("whisper: /cl who away from the courier names the courier and sends no query",
+    #whoSent == 0 and out:find("CORELink:|r Aaron is the courier for this guild; only the courier runs /cl who.", 1, true) ~= nil, out)
+  NS.addonUsers["Aaron"] = nil; whoSent = {}
   slash("who")
   check("whisper: a who round queries the first listed guild", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
   whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },

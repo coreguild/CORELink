@@ -30,7 +30,7 @@ end
 local function ShowStatus()
   Print(NS.StatusLine())
   local lastSend = NS.conn.lastSendResult
-  if Configured() and lastSend then Print("last send result: " .. lastSend .. " (0 = success)") end
+  if Configured() and lastSend then Print("last send result: " .. lastSend) end
   Print(HelpLine(IsGM()))
 end
 
@@ -173,7 +173,7 @@ commands.who = function()
   NS.ResetWhoTimer()
   if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.")
   elseif not NS.IsCourier() then
-    Print("a guildmate is the courier on " .. NS.MyRealm() .. "; only the courier queries.")
+    Print(NS.Courier() .. " is the courier for this guild; only the courier runs /cl who.")
   else NS.ScheduleWho(); Print("asking who is online in " .. #db.guilds .. " guild(s).") end
 end
 
