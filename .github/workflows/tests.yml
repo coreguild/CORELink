@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  issues: write
 jobs:
   tests:
     name: tests
@@ -50,25 +49,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write          # the scheduled run opens an issue when the game moved ahead of us
+      issues: write          # this job only: the scheduled run opens an issue when the game moved ahead of us
     steps:
       - uses: actions/checkout@v4
       - name: TOC interface matches the live client
         id: check
         shell: bash
-        # The script's own exit code decides, not tee's: 1 = a TOC does not list the live interface (fail),
-        # 2 = the version server could not be read (warn and pass, so its outage does not block every merge).
+        # The script's exit code decides, not tee's. 1: a TOC does not list the live interface. 2: the version
+        # file could not be read. On a pull request an unreachable server is a warning (--outage-ok); the
+        # scheduled run fails on it, so a lookup that stays broken is noticed.
         run: |
+          flag=--outage-ok
+          [ "${{ github.event_name }}" = "schedule" ] && flag=
           set +e
-          scripts/check-game-version.sh | tee check.txt
+          scripts/check-game-version.sh $flag | tee check.txt
           status=${PIPESTATUS[0]}
-          if [ "$status" -eq 2 ]; then
-            echo "::warning::game version not checked: $(tail -1 check.txt)"
-            exit 0
-          fi
+          [ "$status" -eq 1 ] && echo "mismatch=true" >> "$GITHUB_OUTPUT"
           exit "$status"
       - name: Open an issue when the game moved ahead of us (scheduled runs only)
-        if: failure() && github.event_name == 'schedule'
+        if: failure() && github.event_name == 'schedule' && steps.check.outputs.mismatch == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
