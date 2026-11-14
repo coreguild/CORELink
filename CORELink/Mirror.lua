@@ -90,6 +90,12 @@ local function ParseClubLine(content, streamId)
   return nil, nil, nil, nil, nil
 end
 
+-- A field read from a post's text, cleaned; nil when it was absent or nothing is left of it.
+local function Cleaned(s, clean)
+  s = s and clean(s)
+  return s ~= "" and s or nil
+end
+
 local function ClassToken(classID)
   if classID and GetClassInfo then
     local okc, _, token = pcall(GetClassInfo, classID)
@@ -157,8 +163,10 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   if (guid and NS.me.guid and guid == NS.me.guid) or (name and IsMe(name, guid)) then return end
   if NS.IsGuildmate(name, guid) then return end          -- our own guild: already in our guild chat
   local tag, pname, nick, msg, channelTag = ParseClubLine(info.content, streamId)
-  -- what a readable post says about its guild and author is as untrusted as a packet's fields
-  tag, pname, nick = tag and NS.CleanField(tag), pname and NS.CleanField(pname), nick and NS.CleanNick(nick)
+  -- what a readable post says about its guild and author is as untrusted as a packet's fields; a tag from the
+  -- channel name, and the name in the member record, come from the game and stay as they are
+  if not channelTag then tag = Cleaned(tag, NS.CleanTag) end
+  pname, nick = Cleaned(pname, NS.CleanField), nick and NS.CleanNick(nick)
   local who = pname or name or "?"
   local line = {
     tag = tag, who = who, content = info.content, msg = msg, pname = pname,

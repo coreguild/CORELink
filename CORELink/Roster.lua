@@ -27,14 +27,23 @@ function NS.ClassOf(author, guid)
   return ""
 end
 
--- Forget the saved nicknames of members who left the guild. Only called after a complete roster read; our own
--- nickname stays whatever the roster says (it may be saved under the short name until the full one is known).
+-- Forget the saved nicknames of members who left the guild. Only called after a complete roster read, and a
+-- name must stay missing for ten minutes of such reads (the roster can lag behind someone who just joined).
+-- Our own nickname stays: it may be saved under the short name until the roster teaches us the full one.
+local goneSince = {}    -- nickname holder missing from the roster -> when a complete read first missed them
+local PRUNE_AFTER = 600
 local function PruneNicks()
   local nicks = NS.db and NS.db.nicks
   if not nicks then return end
-  local short = UnitName("player")
+  local now, short = GetTime(), UnitName("player")
+  for name in pairs(goneSince) do
+    if rankOf[name] ~= nil or not nicks[name] then goneSince[name] = nil end
+  end
   for name in pairs(nicks) do
-    if rankOf[name] == nil and name ~= NS.me.name and name ~= short then nicks[name] = nil end
+    if rankOf[name] == nil and name ~= short then
+      goneSince[name] = goneSince[name] or now
+      if now - goneSince[name] >= PRUNE_AFTER then nicks[name], goneSince[name] = nil, nil end
+    end
   end
 end
 

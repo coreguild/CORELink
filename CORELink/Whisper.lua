@@ -65,6 +65,7 @@ function NS.PeerName(key) return (key:match("^([^-]+)")) or key end
 local PeerName = NS.PeerName
 
 local function RememberPeer(key, tag, realm, guild)
+  tag = tag and NS.CleanTag(tag)
   if not key or key == "" or not tag or tag == "" then return end
   local p = peers[key] or {}
   p.tag, p.seen = tag, GetTime()
@@ -205,6 +206,7 @@ end
 ---------------------------------------------------------------- packets
 -- HELLO and PEER carry the sender's card: tag~realm~guild. A HELLO is answered with PEER and our directory.
 local function OnCard(cmd, rest, sender)
+  rest = NS.CleanField(rest)                 -- tag, realm and guild are saved and printed by /cl peers
   local tag, realm, guild = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
   if not tag then return end
   RememberPeer(sender, tag, realm, guild)
@@ -221,8 +223,9 @@ NS.whisperPackets.PEER = function(rest, sender) OnCard("PEER", rest, sender) end
 -- DIR: gossip, names worth greeting; never trusted as live peers until they answer a hello of ours.
 NS.whisperPackets.DIR = function(rest)
   local greeted = 0
-  for entry in rest:gmatch("[^;]+") do
+  for entry in NS.CleanField(rest):gmatch("[^;]+") do
     local key, realm, tag, guild = entry:match("^([^@]+)@([^@]*)@([^@]*)@(.*)$")
+    tag = tag and NS.CleanTag(tag)
     if key and tag ~= "" and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
       peers[key] = { tag = tag, realm = realm ~= "" and realm or "?", guild = guild, seen = 0 }   -- not yet confirmed
       SavePeers()
@@ -237,7 +240,7 @@ end
 NS.whisperPackets.WB = function(rest, sender)
   if not NS.db or NS.db.whisper == false then return end
   local tag = rest:match("^CL%d+" .. SEP .. "%x+" .. SEP .. "([^" .. SEP .. "]+)")
-  tag = tag and NS.CleanField(tag)           -- as ShowPacket files it under NS.heard
+  tag = tag and NS.CleanTag(tag)             -- as ShowPacket files it under NS.heard
   local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
   if not known then
     Debug("dropped a carried line from %s: not a peer, tag %s not heard", sender, tostring(tag))

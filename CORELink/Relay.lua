@@ -86,7 +86,7 @@ end
 -- "O<rank name>" in the flags field -> the officer label to show, or nil.
 local function OfficerLabel(flags)
   if NS.db.officer == false or not flags or flags:sub(1, 1) ~= "O" then return nil end
-  local label = (flags:sub(2):gsub("[~|%c]", ""))
+  local label = NS.CleanField(flags:sub(2))
   return label ~= "" and label or "Officer"
 end
 
@@ -99,13 +99,13 @@ local function NoteAuthor(author, class, label, nick)
 end
 
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
--- Tag, author and class go into chat formatting codes, saved peers and the echo, so they are cleaned first. The
--- id is the sender's and is never recomputed here, so cleaning does not disturb the dedupe.
+-- Tag, author, class and text go into chat formatting codes, saved peers and the echo, so they are cleaned
+-- first. The id is the sender's and is never recomputed here, so cleaning does not disturb the dedupe.
 function NS.ShowPacket(text, via)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then return nil end
-  tag, author, class = NS.CleanField(tag), NS.CleanField(author), NS.CleanField(class)
+  tag, author, class, msg = NS.CleanTag(tag), NS.CleanField(author), NS.CleanField(class), NS.CleanText(msg)
   if tag == "" or author == "" then return nil end
   local now = GetTime()
   seen[id] = now

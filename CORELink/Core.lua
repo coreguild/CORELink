@@ -89,9 +89,14 @@ end
 
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
--- A name, tag or class another client sent, safe to put between the chat frame's | codes: no | and no control
--- characters. A well-formed field has neither, so it comes back unchanged.
-function NS.CleanField(s) return (s:gsub("[|%c]", "")) end
+-- What another client sent, made safe to show, save and echo. A well-formed value comes back unchanged. The
+-- control characters are spelled out (0-31, 127) because %c follows the C locale and could eat UTF-8 bytes.
+-- CleanField: a name, class, realm or guild name; no | (the chat frame's code character), no control characters.
+-- CleanTag: a guild tag; also no space or ~, which no real tag has. CleanText: a line's text, which may carry
+-- links and colours, so only the control characters go (a line break would draw a second, forged line).
+function NS.CleanField(s) return (s:gsub("[|%z\1-\31\127]", "")) end
+function NS.CleanTag(s) return (s:gsub("[ ~|%z\1-\31\127]", "")) end
+function NS.CleanText(s) return (s:gsub("[%z\1-\31\127]", "")) end
 
 function NS.Hash(s)
   local h = 5381
