@@ -40,10 +40,15 @@ If it keeps happening, ask the sender and receiver to run `/cl report`. Share bo
 
 If the notice keeps appearing while you use CORELink, share a report. WoW can show this notice if someone logs off before receiving a whisper or an addon greeting. CORELink hides notices it recognizes as replies to its own greetings.
 
+## CORELink says a guild member runs a newer version
+
+Check CurseForge, or wherever you installed CORELink, for an update. Addons can't check the web, so CORELink learns about a newer version from guild members who already run it. If you find nothing newer there, the guild member may be testing a version that isn't published yet. You see the notice once per version.
+
 ## Read the report
 
 | Field | What it tells you |
 |---|---|
+| `CORELink` | Your version. `(newer seen: X)` after it means a guild member reported version X this session. Nothing after it means nobody online reported a newer one. |
 | `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
 | `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |
 | `lastSend` | `ok` means the local send call completed. `refused` means the server reported a refusal. `error` means the call itself failed. |

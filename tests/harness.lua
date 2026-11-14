@@ -960,5 +960,37 @@ do
   myRank = 3
 end
 
+---------------------------------------------------------------- a guildmate runs a newer release
+do
+  local newer = NS.IsNewerVersion or function() return false end   -- absent before this feature: fail, not crash
+  check("versions: releases compare by number, not as text", newer("0.10.0", "0.9.9") and newer("1.0.0", "0.9.9") and newer("0.2.1", "0.2.0") and not newer("0.2.0", "0.2.0") and not newer("0.1.9", "0.2.0"))
+  check("versions: a dev checkout and anything that is not N.N.N compare as not newer", not newer("0.3.0", "dev") and not newer("dev", "0.2.0") and not newer("9.9.9|cffff0000", "0.2.0") and not newer("9.9.9-rc1", "0.2.0") and not newer("999999999999999999.0.0", "0.2.0") and not newer(nil, "0.2.0"))
+  -- a PRESENT from a guildmate, then long enough for a delayed notice to print
+  check("versions: on a candidate, its own release and later ones are newer; other candidates and older releases are not", newer("0.3.0", "0.3.0-rc2") and newer("0.3.1", "0.3.0-rc2") and not newer("0.2.9", "0.3.0-rc2") and not newer("0.3.0-rc3", "0.3.0-rc2") and not newer("0.4.0-rc1", "0.3.0-rc2") and not newer("0.3.0", "0.3.0-rc") and not newer("0.3.0", "0.3.0-rc2-x"))
+  local function present(version, who)
+    return lines(function() H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~" .. version, "GUILD", who); advance(20) end)
+  end
+  local stampedMeta, wasEnabled = C_AddOns.GetAddOnMetadata, CORELinkDB.enabled
+  CORELinkDB.enabled = true
+  C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
+  check("update notice: a dev checkout is never told to update", present("9.0.0", "Tanner-Beta") == "" and NS.newest == nil)
+  C_AddOns.GetAddOnMetadata = function() return "0.2.0" end
+  check("update notice: the same, an older or a made-up version says nothing", present("0.2.0", "Tanner-Beta") .. present("0.1.9", "Tanner-Beta") .. present("9.9.9|cffff0000", "Tanner-Beta") == "" and NS.newest == nil)
+  check("update notice: the report names no newer version before one is seen", report():find("newer seen", 1, true) == nil)
+  CORELinkDB.enabled = false
+  check("update notice: nothing while the addon is switched off", present("0.3.0", "Tanner-Beta") == "" and NS.newest == nil)
+  CORELinkDB.enabled = true
+  CORELinkDB.updateTold = "0.3.0"
+  check("update notice: a release an earlier session announced is not announced again, but the report has it", present("0.3.0", "Tanner-Beta") == "" and report():find("CORELink 0.2.0 (newer seen: 0.3.0)", 1, true) ~= nil, report())
+  out = lines(function() H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.3.1", "GUILD", "Tanner-Beta") end)
+  check("update notice: the line waits for the login messages to pass", out == "", out)
+  out = lines(function() advance(20) end)
+  check("update notice: a guildmate on a newer release produces one line with their name and both versions", out:find("Tanner runs CORELink 0.3.1, newer than your 0.2.0", 1, true) ~= nil and not out:find("\n", 1, true), out)
+  check("update notice: it is said once per session, also when a still newer release shows up", present("0.3.1", "Aaron-Beta") .. present("0.3.2", "Aaron-Beta") == "")
+  check("update notice: the report carries the newest version seen; the saved one is the version announced", report():find("CORELink 0.2.0 (newer seen: 0.3.2)", 1, true) ~= nil and CORELinkDB.updateTold == "0.3.1", report())
+  C_AddOns.GetAddOnMetadata = stampedMeta
+  CORELinkDB.enabled, CORELinkDB.updateTold, NS.newest = wasEnabled, nil, nil
+end
+
 print(string.format("\n%d checks, %d failed", checks, failures))
 os.exit(failures == 0 and 0 or 1)
