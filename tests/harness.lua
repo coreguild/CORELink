@@ -960,5 +960,27 @@ do
   myRank = 3
 end
 
+---------------------------------------------------------------- a guildmate runs a newer release
+do
+  local newer = NS.IsNewerVersion
+  check("versions: finals compare by number, not as text", newer("0.10.0", "0.9.9") and newer("v1.0.0", "0.9.9") and not newer("0.2.0", "0.2.0") and not newer("0.1.9", "0.2.0"))
+  check("versions: a candidate is older than its final and newer than the previous final", newer("0.3.0", "0.3.0-rc2") and newer("0.3.0-rc2", "0.3.0-rc1") and newer("0.3.0-rc1", "0.2.0-rc9"))
+  check("versions: someone on a final is not told about a candidate", not newer("0.3.0-rc1", "0.2.0"))
+  check("versions: a dev checkout and made-up text compare as not newer", not newer("0.3.0", "dev") and not newer("dev", "0.2.0") and not newer("9.9.9|cffff0000", "0.2.0") and not newer("9.9.9-beta", "0.2.0") and not newer(nil, "0.2.0"))
+  local function present(version, who) return lines(function() H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~" .. version, "GUILD", who) end) end
+  local stampedMeta = C_AddOns.GetAddOnMetadata
+  C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
+  check("update notice: a dev checkout is never told to update", present("9.0.0", "Tanner-Beta") == "" and NS.newest == nil)
+  C_AddOns.GetAddOnMetadata = function() return "0.2.0" end
+  check("update notice: the same, an older, a candidate or a made-up version says nothing", present("0.2.0", "Tanner-Beta") .. present("0.1.9", "Tanner-Beta") .. present("0.3.0-rc1", "Tanner-Beta") .. present("9.9.9|cffff0000", "Tanner-Beta") == "" and NS.newest == nil)
+  check("update notice: the report names no newer version before one is seen", report():find("newer seen", 1, true) == nil)
+  out = present("0.3.0", "Tanner-Beta")
+  check("update notice: a guildmate on a newer release produces one line with both versions and their name", out:find("version 0.3.0 is available (Tanner runs it); you have 0.2.0", 1, true) ~= nil and not out:find("\n", 1, true), out)
+  check("update notice: it is said once per session, also when a still newer release shows up", present("0.3.0", "Aaron-Beta") .. present("0.3.1", "Aaron-Beta") == "")
+  check("update notice: the report carries the newest version seen", report():find("CORELink 0.2.0 (newer seen: 0.3.1)", 1, true) ~= nil, report())
+  C_AddOns.GetAddOnMetadata = stampedMeta
+  NS.newest = nil
+end
+
 print(string.format("\n%d checks, %d failed", checks, failures))
 os.exit(failures == 0 and 0 or 1)

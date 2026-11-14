@@ -13,11 +13,14 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 | "the server refused your line on <channel>" | The server rejected a send on the channel | Share `/cl report`; `lastSend refused` and the log say when. Linked guilds did not get that line |
 | Lines from one guild never arrive | `heard` in `/cl report` lists the guilds whose lines reached you in the last 10 minutes | If the guild is missing, its members' clients are not posting (wrong channel or password, or refused); if it is listed and nothing shows, share the report |
 | Nickname or officer tag missing on your own lines | Older build on WoW: Forever surnames | Update to 0.1.1 or later |
+| "version X is available (Name runs it)" | A guildmate's client reported a newer release than yours; addons cannot check the web, so this is the only way it is noticed | Update from CurseForge or wherever you installed it. Said once per login; release candidates are only announced to players already on one |
 | A line shows twice | Two clients relayed it inside the same back-off window, or a community copy was not matched | Rare and harmless; if it repeats, share `/cl report` from both clients |
 | "No player named X is currently playing" in chat | A whisper greeting reached someone who just logged off | Hidden by the addon when it is about a greeting of ours; otherwise it was a chat whisper of yours |
 
 ## Reading `/cl report`
 
+* `CORELink <version> (newer seen: <version>)`: a guildmate runs a newer release. Nothing in brackets means no
+  guildmate online this session reported one, not that none exists.
 * `channel <name> id <n>`: joined. `id not joined`: see the keypress row above and `lastNotice`.
 * `lastNotice`: the game's last answer about the channel. `NOT_ALLOWED_IN_CHANNEL` once, right after joining,
   is a send that beat the join and is harmless; repeated, it means the character may not speak there.
