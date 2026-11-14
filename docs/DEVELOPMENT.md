@@ -13,6 +13,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |
 | `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the download page on `gh-pages`. Run by the **release** workflow button, or locally. |
+| `scripts/release-names.sh` | The version a tag's build is stamped with and the names its zip may have; sourced by `release.sh` and `curseforge-upload.sh`, checked by `tests/release-names.sh`. |
 | `scripts/render-site.sh` | Renders `site/index.template.html` with the current channel versions and notes. |
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version. CI runs it on every PR and every 6 hours. |
 | `site/` | Template and stylesheet for the download page. Never edited on `gh-pages` by hand. |

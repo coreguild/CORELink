@@ -59,8 +59,11 @@ is "repair reports a release without a zip"     "$(fetch v0.4.0-rc1)" none
 mkdir -p "$box/pkg/scripts" "$box/pkg/tests"
 cp scripts/package.sh "$box/pkg/scripts/"; cp -R CORELink "$box/pkg/CORELink"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$box/pkg/tests/run.sh"; chmod +x "$box/pkg/tests/run.sh"
-for v in 0.3.0-rc1 0.3.0; do
-  VERSION=$v bash "$box/pkg/scripts/package.sh" > /dev/null 2>&1
+versions="0.3.0-rc1 0.3.0"
+command -v zip > /dev/null && command -v unzip > /dev/null || {
+  echo "note: zip or unzip not installed; the packaging checks are skipped here (CI runs them)"; versions=""; }
+for v in $versions; do
+  VERSION=$v bash "$box/pkg/scripts/package.sh" > "$box/pkg/log" 2>&1 || tail -5 "$box/pkg/log"
   zip="$box/pkg/dist/CORELink-$v.zip"
   if [ -f "$zip" ]; then pass "version $v builds CORELink-$v.zip"
   else flop "version $v builds CORELink-$v.zip"; continue; fi
@@ -72,10 +75,12 @@ done
 # ---- scripts/release.sh --dry-run in a throwaway repository: last release v0.2.0, branch release/0.3.0 --------
 repo="$box/repo"; mkdir -p "$repo/scripts"
 cp scripts/release.sh scripts/release-names.sh "$repo/scripts/"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1     # no hooks, templates or signing from this machine
 g() {
-  git -C "$repo" -c user.name=test -c user.email=test@example.test -c commit.gpgsign=false -c tag.gpgsign=false "$@"
+  git -C "$repo" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.test "$@"
 }
-g init -q && g symbolic-ref HEAD refs/heads/main && g add -A && g commit -q -m "chore: fixture"
+g init -q && g symbolic-ref HEAD refs/heads/main && g add -A && g commit -q -m "chore: fixture" \
+  || flop "the throwaway repository could not be made; the dry-run checks below will fail"
 g tag v0.2.0
 g checkout -q -b release/0.3.0 && g commit -q --allow-empty -m "feat: something new"
 dry() { (cd "$repo" && PATH="$box/bin:$PATH" bash scripts/release.sh "$@" --dry-run 2>&1); }

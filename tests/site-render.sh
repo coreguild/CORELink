@@ -39,4 +39,9 @@ card 0.3.0 0.3.0-rc2 hidden
 card 0.3.0 0.3.1-rc1 shown
 card 0.2.0 0.2.0     hidden
 card 0.2.0 0.3.0     shown
+card 0.3.1 0.3.0-rc2 hidden      # a hotfix without a candidate went out after 0.3.0
+card 0.10.0 0.9.1-rc1 hidden     # compared as versions, not as text
+rm "$T/latest/VERSION"; bash scripts/render-site.sh "$T" https://example.test/CORELink
+if grep -qF 'class="card rc show"' "$T/index.html"; then echo "PASS site: no stable yet: candidate card shown"
+else echo "FAIL site: no stable yet: candidate card shown"; fail=1; fi
 exit $fail
