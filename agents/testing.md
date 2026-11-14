@@ -11,6 +11,11 @@ globals; configuration and the list of allowed WoW globals in `.luacheckrc`), th
 loads the real addon files in TOC order and drives them through login, Guild Info parsing, channel join, outgoing relay, incoming packets (all protocol
 versions), filters, nicknames, GM-only commands and UTF-8 trimming. Exit code is non-zero on any failure.
 
+Then `tests/compat.sh` loads the oldest supported release from its tag next to the working copy and makes the two
+talk to each other (`tests/compat.lua`; "Frozen formats" in `docs/ARCHITECTURE.md`). If the tag is missing it says
+how to fetch it, skips locally and fails in CI. It has its own small fake client; when the addon calls a new game
+API, add it there too.
+
 When you add behaviour, add a `check(...)` to `tests/harness.lua`. Mock only what the addon calls; keep mocks
 in the harness, never in the addon.
 

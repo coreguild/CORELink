@@ -9,6 +9,7 @@ for f in CORELink/*.lua; do "$LUAC" -p "$f" && echo "syntax ok: $f"; done
 if command -v luacheck >/dev/null; then
   luacheck --no-color -q CORELink/
   luacheck --no-color -q --no-max-line-length tests/harness.lua   # one check per line, however long
+  luacheck --no-color -q tests/compat.lua
 elif [ "${CI:-}" = "true" ]; then
   echo "luacheck is required in CI"; exit 2
 else
@@ -17,6 +18,7 @@ fi
 bash tests/size.sh
 "$LUA" tests/load-order.lua
 "$LUA" tests/harness.lua
+bash tests/compat.sh   # the released baseline and this tree talk to each other
 bash tests/site-render.sh
 bash tests/secrets.sh
 bash tests/curseforge-args.sh
