@@ -190,6 +190,47 @@ end
 NS.events.WHO_LIST_UPDATE = OnWhoList
 
 ---------------------------------------------------------------- carrying a line
+local carriedTo = {}   -- whisper target -> the carried lines (WB~...) that left for them in the last few seconds
+
+-- A whisper left for this target (called by the queue drain in Channel.lua). Carried lines are kept for a few
+-- seconds: if the game answers that the target is not playing, they go to another peer of that guild.
+function NS.NoteWhispered(target, text)
+  local now = GetTime()
+  local last = NS.whisperedAt[target]
+  if not last or now - last > NOT_PLAYING_SECS then carriedTo[target] = nil end
+  NS.whisperedAt[target] = now
+  if text:sub(1, 3) == "WB" .. SEP then
+    carriedTo[target] = carriedTo[target] or {}
+    table.insert(carriedTo[target], text)
+  end
+end
+
+-- The freshest live peer of a guild, or nil.
+local function FreshestPeer(tag, now)
+  local best
+  for key, p in pairs(peers) do
+    if p.tag == tag and Live(p, now) and (not best or p.seen > peers[best].seen) then best = key end
+  end
+  return best
+end
+
+-- The peer `key` of guild `tag` is not playing: the carried lines that just left for them, and those still
+-- queued, go to that guild's next freshest peer. With no other live peer they are lost.
+local function Reroute(key, tag)
+  local lines, queue = carriedTo[key] or {}, NS.whisperQueue
+  carriedTo[key] = nil
+  for i = #queue, 1, -1 do
+    if queue[i].target == key then
+      local w = table.remove(queue, i)
+      if w.text:sub(1, 3) == "WB" .. SEP then table.insert(lines, w.text) end
+    end
+  end
+  local other = FreshestPeer(tag, GetTime())
+  if other then for _, text in ipairs(lines) do QueueWhisper(other, text) end end
+  Debug("%s is not playing: %d carried line(s) %s; no more to them until they are heard from again", key, #lines,
+    other and ("sent on to " .. PeerName(other)) or "lost, no other live peer in <" .. tostring(tag) .. ">")
+end
+
 -- The courier carries a guildmate's line: one whisper to the freshest live peer of every other guild.
 function NS.WhisperOut(id, tag, text)
   local db = NS.db
@@ -277,7 +318,9 @@ local function PeerUpkeep()
     end
   end
   for id, t in pairs(fanned) do if now - t > NS.FORGET_SECS then fanned[id] = nil end end
-  for key, t in pairs(NS.whisperedAt) do if now - t > NOT_PLAYING_SECS then NS.whisperedAt[key] = nil end end
+  for key, t in pairs(NS.whisperedAt) do
+    if now - t > NOT_PLAYING_SECS then NS.whisperedAt[key], carriedTo[key] = nil, nil end
+  end
   SavePeers()
   NS.ScheduleWho()
 end
@@ -286,8 +329,8 @@ C_Timer.NewTicker(60, PeerUpkeep)
 -- An addon whisper to someone who logged off makes the game answer the sender "No player named 'X' is
 -- currently playing.", once per whisper: a hello, or every line the courier carries to that peer. When it is
 -- about a name a whisper of ours left for in the last few seconds, the peer is marked gone (no more carried
--- lines; a hello now and then for an hour) until they are heard from again, whispers still queued for them are
--- dropped, and the chat filter keeps the line out of the chat windows.
+-- lines; a hello now and then for an hour) until they are heard from again, the lines that just left for them
+-- or are still queued go to their guild's next peer (Reroute), and the chat filter keeps the line out of chat.
 local notPlaying   -- the client's wording of that answer as a pattern, built on first use
 local function NotPlayingName(msg)
   if issecret(msg) or type(msg) ~= "string" then return nil end
@@ -314,9 +357,7 @@ NS.events.CHAT_MSG_SYSTEM = function(msg)
   local p = key and peers[key]
   if not p or p.gone then return end
   p.gone = GetTime()
-  local queue = NS.whisperQueue
-  for i = #queue, 1, -1 do if queue[i].target == key then table.remove(queue, i) end end
-  Debug("%s is not playing: no carried lines to them until they are heard from again", key)
+  Reroute(key, p.tag)
 end
 
 ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
