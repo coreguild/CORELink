@@ -13,6 +13,8 @@ local GM_ONLY = {
   officerrank = true, clear = true,
 }
 
+local RETIRED = { whisper = true, who = true, hello = true }
+
 local function IsGM()
   local _, _, rankIndex = GetGuildInfo("player")
   return rankIndex == 0
@@ -21,7 +23,9 @@ end
 -- "/cl a | b | c" built from the command table, so it cannot drift from the commands that exist.
 local function HelpLine(gm)
   local names = {}
-  for name in pairs(commands) do if gm or not GM_ONLY[name] then names[#names + 1] = name end end
+  for name in pairs(commands) do
+    if (gm or not GM_ONLY[name]) and not RETIRED[name] then names[#names + 1] = name end
+  end
   table.sort(names)
   return "/cl " .. table.concat(names, " | ")
 end
@@ -163,35 +167,13 @@ commands.mirror = function(arg)
   NS.FocusClubStream()
 end
 
-commands.whisper = function(arg)
-  NS.db.whisper = not IsOff(arg)
-  Print("whisper bridge: " .. OnOff(NS.db.whisper))
+-- /cl whisper, /cl who and /cl hello drove the whisper path between guilds, which 0.2.1 removed. They still
+-- answer, so a macro or an old habit gets an explanation, but they are left out of the help line.
+local function WhisperRetired()
+  Print("whispering between guilds was retired in 0.2.1."
+    .. " Members need the addon for their lines to reach other guilds.")
 end
-
-commands.who = function()
-  local db = NS.db
-  NS.ResetWhoTimer()
-  if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.")
-  elseif not NS.IsCourier() then
-    Print("a guildmate is the courier on " .. NS.MyRealm() .. "; only the courier queries.")
-  else NS.ScheduleWho(); Print("asking who is online in " .. #db.guilds .. " guild(s).") end
-end
-
--- Greet one player by hand: the smallest in-game test of whisper addon messages crossing realms (they show up
--- in /cl peers once they answer).
-commands.hello = function(arg)
-  local target = arg:match("^%s*(.-)%s*$")
-  if target == "" then
-    Print("usage: /cl hello <First Surname>  (an addon user in another guild, any realm;"
-      .. " /cl peers once they answer)")
-  elseif not NS.WhisperAvailable() then
-    Print("whispers are not available right now (chat lockdown or missing API).")
-  else
-    NS.ForgetHello(target)
-    NS.Hello(target)
-    Print("hello sent to " .. target .. "; run /cl peers in a few seconds.")
-  end
-end
+for name in pairs(RETIRED) do commands[name] = WhisperRetired end
 
 commands.echo = function(arg)
   local db = NS.db

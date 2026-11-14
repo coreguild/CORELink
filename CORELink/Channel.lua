@@ -1,6 +1,6 @@
 -- CORELink/Channel.lua: the hidden custom chat channel that carries addon users' own lines, as text.
--- Joining and hiding it, the game's notices about it (including a refusal), the text send that the chat hooks
--- call from inside a keypress, and the drain of the whisper queue.
+-- Joining and hiding it, the game's notices about it (including a refusal), and the text send that the chat
+-- hooks call from inside a keypress.
 -- Provides NS.conn (connection diagnostics), NS.ChannelId, NS.EnsureChannel, NS.LeaveLink, NS.IsLinkChannel,
 -- NS.SetConfig, NS.SendChannelText.
 local _, NS = ...
@@ -15,7 +15,6 @@ NS.conn = {
 }
 local conn = NS.conn
 local JOIN_BLOCK_SECS = 600   -- after WRONG_PASSWORD / BANNED, stop retrying for this long (or until /cl reload)
-local WHISPERS_PER_SECOND = 4
 
 local function HideChannel()
   if not Configured() then return end
@@ -150,14 +149,3 @@ for _, ev in ipairs({ "CHAT_MSG_CHANNEL", "CHAT_MSG_CHANNEL_NOTICE",
                       "CHAT_MSG_CHANNEL_JOIN", "CHAT_MSG_CHANNEL_LEAVE" }) do
   ChatFrame_AddMessageEventFilter(ev, ChannelFilter)
 end
-
----------------------------------------------------------------- whisper sender
--- A few whispers per second, so one line for seven guilds goes out in two ticks.
-C_Timer.NewTicker(1, function()
-  if not NS.db or Locked() or not C_ChatInfo or not C_ChatInfo.SendAddonMessage then return end
-  for _ = 1, WHISPERS_PER_SECOND do
-    local w = table.remove(NS.whisperQueue, 1)
-    if not w then return end
-    pcall(C_ChatInfo.SendAddonMessage, NS.PREFIX, w.text, "WHISPER", w.target)
-  end
-end)

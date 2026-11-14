@@ -83,6 +83,7 @@ GetPlayerInfoByGUID = function(guid) local map = { ["guid-bob"] = "WARRIOR", ["g
 math.randomseed(7)
 wipe = function(t) for k in pairs(t) do t[k] = nil end end
 local sentAddon = {}
+local whispersEver, whoEver = 0, 0   -- whispers (addon or chat) and /who queries over the whole run
 -- chat edit box + secure hooks (for the relay and the community mirror)
 local hooks = {}
 hooksecurefunc = function(a, b, c) if type(a) == "table" then hooks[a] = hooks[a] or {}; hooks[a][b] = c else hooks[a] = b end end
@@ -97,12 +98,11 @@ end
 -- every chat send: guild lines (echo), channel text (relay)
 local chatSends = {}
 SendChatMessage = function(msg, kind, lang, target) chatSends[#chatSends + 1] = { text = msg, kind = kind, target = target }
+  if kind == "WHISPER" then whispersEver = whispersEver + 1 end
   local hk = hooks["SendChatMessage"]; if hk then hk(msg, kind) end end   -- hooksecurefunc runs the hook after the call
 local function channelSends(from) local t = {} for i = (from or 0) + 1, #chatSends do if chatSends[i].kind == "CHANNEL" then t[#t + 1] = chatSends[i].text end end return t end
 local function guildSends(from, prefix) local t = {} for i = (from or 0) + 1, #sentAddon do if sentAddon[i].kind == "GUILD" and sentAddon[i].text:find(prefix, 1, true) == 1 then t[#t + 1] = sentAddon[i].text end end return t end
-local function whisperSends(from, prefix) local t = {} for i = (from or 0) + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" and sentAddon[i].text:find(prefix, 1, true) == 1 then t[#t + 1] = sentAddon[i] end end return t end
--- the same hash the addon uses for a line id
-local function hash(s) local h = 5381 for i = 1, #s do h = (h * 33 + s:byte(i)) % 4294967296 end return string.format("%08x", h) end
+local function whisperSends(from) local t = {} for i = (from or 0) + 1, #sentAddon do if sentAddon[i].kind == "WHISPER" then t[#t + 1] = sentAddon[i] end end return t end   -- of any packet kind
 -- Blizzard Communities
 local clubMember, clubPosts = true, {}
 local clubMessages = {}
@@ -130,17 +130,19 @@ C_Club = {
   FocusStream = function() return true end,
   GetMessageInfo = function(id, stream, mid) return clubMessages[mid] end,
 }
-local whoResults, whoSent = {}, {}
+-- 0.2.0 ran silent /who queries through this; the addon must never call it again
 C_FriendList = {
   SetWhoToUi = function() end,
-  SendWho = function(filter) whoSent[#whoSent + 1] = filter end,
-  GetNumWhoResults = function() return #whoResults end,
-  GetWhoInfo = function(i) return whoResults[i] end,
+  SendWho = function() whoEver = whoEver + 1 end,
+  GetNumWhoResults = function() return 0 end,
+  GetWhoInfo = function() end,
 }
 C_ChatInfo = {
   RegisterAddonMessagePrefix = function() end,
   SendChatMessage = function() end,
-  SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }; return 0 end,
+  SendAddonMessage = function(prefix, text, kind, target) sentAddon[#sentAddon + 1] = { prefix = prefix, text = text, kind = kind, target = target }
+    if kind == "WHISPER" then whispersEver = whispersEver + 1 end
+    return 0 end,
   GuildRoster = function() end,
 }
 C_AddOns = { GetAddOnMetadata = function(_, key) if key == "Version" then return "0.2.0-test" end end }
@@ -161,7 +163,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 14, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -171,10 +173,15 @@ end
 local function lines(fn) local start = #chatLines; fn(); local out = {}; for i = start + 1, #chatLines do out[#out + 1] = chatLines[i].text end; return table.concat(out, "\n") end
 local function last() return chatLines[#chatLines] and chatLines[#chatLines].text or "" end
 local function report() lastSetText = nil; slash("report"); return lastSetText or "" end
+-- a whisper addon message from another client, as the game delivers it; false when the addon raised an error
+local function whispered(text, sender) return (pcall(H, nil, "CHAT_MSG_ADDON", "CORELink", text, "WHISPER", sender)) end
+local RETIRED = "whispering between guilds was retired in 0.2.1. Members need the addon for their lines to reach other guilds."
 
 ---------------------------------------------------------------- login
 CORELinkDB = { debug = true,             -- left on by a previous session: must be off after login
-  peers = { ["Old Friend"] = { tag = "OLD", realm = "CAMWOWUS2Realm3PvE", guild = "Old Guild", seen = 0 } } }
+  -- as 0.2.0 saved them: one it only knew from gossip (seen 0), one it had heard from
+  peers = { ["Old Friend"] = { tag = "OLD", realm = "CAMWOWUS2Realm3PvE", guild = "Old Guild", seen = 0 },
+            ["Young Friend"] = { tag = "YNG", realm = "CAMWOWUS2Realm3PvE", guild = "Young Guild", seen = 990 } } }
 H(nil, "ADDON_LOADED", "CORELink")
 check("debug echo is off at login even if saved on", CORELinkDB.debug == false)
 H(nil, "PLAYER_LOGIN")
@@ -183,8 +190,9 @@ advance(8)                                   -- ReadGuildInfo (5s) then EnsureCh
 check("config read from Guild Info line", CORELinkDB.channel == "CORELink7100" and CORELinkDB.password == "pw1" and CORELinkDB.tag == "MAIN")
 check("joined the link channel with the password", #joinCalls >= 1 and joinCalls[1][1] == "CORELink7100" and joinCalls[1][2] == "pw1")
 local out = lines(function() slash("peers") end)
-check("peers saved by a previous session are listed after login", out:find("Old Friend - OLD (Old Guild) not yet answered", 1, true) ~= nil, out)
-check("a saved peer that never answered is not counted as live, even minutes after the game started", report():find("peers=0", 1, true) ~= nil)
+check("peers saved by a previous session (0.2.0) are loaded and listed after login", out:find("Old Friend - OLD (Old Guild) not heard from yet", 1, true) ~= nil and out:find("Young Friend - YNG (Young Guild) seen 18s ago", 1, true) ~= nil, out)
+check("/cl peers does not talk about a courier or about whispering", out:lower():find("courier", 1, true) == nil and out:lower():find("whisper", 1, true) == nil and out:find("answered", 1, true) == nil, out)
+check("the report counts the saved peers as known", report():find("carried read=on recv=0 fanned=0 peers=2", 1, true) ~= nil, report())
 advance(20)
 check("presence is announced to the guild shortly after login", #guildSends(0, "PRESENT~0.2.0-test") == 1, #guildSends(0, "PRESENT~"))
 
@@ -200,8 +208,8 @@ check("the second hook firing for the same line does not post it twice", #channe
 mark = #chatSends; local amark = #sentAddon
 H(nil, "CHAT_MSG_GUILD", "hello co-guilds", "Shockly-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
 advance(3)
-check("our own line arriving as a guild event is not relayed again or carried", #channelSends(mark) == 0 and #whisperSends(amark, "WB~") == 0)
-check("report counts the typed relay", report():find("relay typed=1 carried=0", 1, true) ~= nil, report())
+check("our own line arriving as a guild event is not relayed again", #channelSends(mark) == 0 and #whisperSends(amark) == 0)
+check("report counts the typed relay, and has no count of carried lines sent", report():find("relay typed=1 shown=0 |", 1, true) ~= nil, report())
 
 -- incoming: another guild's line on the channel shows in every GUILD-enabled window, class coloured, officer labelled
 local n0 = #chatLines
@@ -222,43 +230,24 @@ check("packet on another channel ignored", #chatLines == n0)
 channelLine("just some chat", "Someone")
 check("plain text on the link channel is ignored", #chatLines == n0)
 out = lines(function() slash("guilds") end)
-check("/cl guilds lists the guilds heard, their peers, and the courier", out:find("ALT - heard", 1, true) and out:find("1 peer(s) to whisper to", 1, true) and out:find("MAIN (your guild) - heard", 1, true) and out:find("courier for your guild: you", 1, true), out)
+check("/cl guilds lists the guilds heard", out:find("ALT - heard 0s ago", 1, true) and out:find("MAIN (your guild) - heard", 1, true), out)
+check("/cl guilds does not talk about peers to whisper to or a courier", out:find("peer", 1, true) == nil and out:find("whisper", 1, true) == nil and out:find("courier", 1, true) == nil, out)
 
--- the courier carries a line from a guildmate without the addon: whispered to one peer per other guild
-amark = #sentAddon
+-- 0.2.1: a line from a guildmate without the addon is not carried. Carol is a live peer of ALT here, so 0.2.0
+-- would have whispered WB to her after its back-off of at most 2.5 s.
+amark = #sentAddon; mark = #chatSends
 H(nil, "CHAT_MSG_GUILD", "officer speaking", "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob")
-advance(3)
-local wb = whisperSends(amark, "WB~")
-check("a guildmate's line is carried by whisper to the other guild's peer, with class and officer flag", #wb == 1 and wb[1].target == "Carol" and wb[1].text:match("^WB~CL4~%x+~MAIN~Bob~WARRIOR~OOfficer~~officer speaking$") ~= nil, wb[1] and (wb[1].target .. " " .. wb[1].text))
-check("report counts the carried line", report():find("relay typed=1 carried=1", 1, true) ~= nil and report():find("sent=1", 1, true) ~= nil, report())
-amark = #sentAddon
-H(nil, "CHAT_MSG_GUILD", "officer speaking", "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob")
-advance(3)
-check("the same guild line within the dedupe window is not carried twice", #whisperSends(amark, "WB~") == 0)
--- a guildmate who runs the addon but whose copy never shows up (addon switched off) is carried all the same
--- (Tanner sorts after Shockly, so we stay the courier)
-H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.2.0-test", "GUILD", "Tanner-Beta")
+advance(30)
+check("a guild line by a member without the addon produces no whisper", #whisperSends(amark) == 0, whisperSends(amark)[1] and whisperSends(amark)[1].text)
+check("a guild line by a member without the addon is not posted on the channel for them either", #channelSends(mark) == 0, #channelSends(mark))
+-- a guildmate who runs the addon (PRESENT) but whose own copy never reaches the channel is not carried either
+H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.2.0", "GUILD", "Tanner-Beta")
 amark = #sentAddon
 H(nil, "CHAT_MSG_GUILD", "tanner switched it off", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
-advance(1)
-check("the courier waits at least a second for the author's own copy", #whisperSends(amark, "WB~") == 0)
-advance(3)
-check("a line from an addon user whose own copy never arrives is carried after the wait", #whisperSends(amark, "WB~") == 1)
--- a copy arrives on the channel during the back-off: the courier stands down
-amark = #sentAddon
-H(nil, "CHAT_MSG_GUILD", "dora types", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-channelLine("CL4~" .. hash("MAINDoradora types") .. "~MAIN~Dora~PRIEST~~~dora types", "Dora")
-advance(3)
-check("a line that shows up on the channel during the back-off is not carried", #whisperSends(amark, "WB~") == 0)
--- the courier is the alphabetically first guildmate running the addon
-H(nil, "CHAT_MSG_ADDON", "CORELink", "PRESENT~0.2.0-test", "GUILD", "Aaron-Beta")
-check("a guildmate earlier in the alphabet becomes the courier", report():find("courier=Aaron", 1, true) ~= nil, report())
-amark = #sentAddon
-H(nil, "CHAT_MSG_GUILD", "not ours to carry", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-advance(3)
-check("a client that is not the courier carries nothing", #whisperSends(amark, "WB~") == 0)
-advance(400)
-check("the courier role returns when that guildmate goes quiet", report():find("courier=me", 1, true) ~= nil, report())
+advance(30)
+check("a guild line by an addon user whose own copy never arrives produces no whisper", #whisperSends(amark) == 0)
+local rep0 = report()
+check("the report names no courier and has no whisper section", rep0:find("courier", 1, true) == nil and rep0:find("whisper ", 1, true) == nil and rep0:find("hello=", 1, true) == nil and rep0:find("who=", 1, true) == nil and rep0:find("carried=", 1, true) == nil, rep0)
 
 -- inbound carried lines: shown once, fanned out to our guild once, never carried onward
 amark = #sentAddon; n0 = #chatLines
@@ -272,12 +261,12 @@ H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000f003~Trois~Zag Mathris~MAGE~~Za
 advance(3)
 local fan = guildSends(amark, "LINE~")
 check("a carried line for a guild we have heard is shown once and fanned out to our guild once", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fan == 1 and fan[1] == "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", (#chatLines - n0) .. " " .. #fan)
-check("a carried line is never whispered onward", #whisperSends(amark, "WB~") == 0)
+check("a carried line is never whispered onward", #whisperSends(amark) == 0)
 check("report counts both received copies and the one fan-out", report():find("recv=2 fanned=1", 1, true) ~= nil, report())
 n0 = #chatLines; amark = #sentAddon
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f004~Deux~Dee Vale~PRIEST~~~fanned by tanner", "GUILD", "Tanner-Beta")
 advance(3)
-check("a line fanned out by a guildmate is shown and goes no further", #chatLines == n0 + 2 and last():find("[Deux]", 1, true) ~= nil and #guildSends(amark, "LINE~") == 0 and #whisperSends(amark, "WB~") == 0, #chatLines - n0)
+check("a line fanned out by a guildmate is shown and goes no further", #chatLines == n0 + 2 and last():find("[Deux]", 1, true) ~= nil and #guildSends(amark, "LINE~") == 0 and #whisperSends(amark) == 0, #chatLines - n0)
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "GUILD", "Tanner-Beta")
 check("our own fan-out coming back from the guild channel is not shown again", #chatLines == n0 + 2)
 
@@ -516,15 +505,12 @@ do
   mark = #chatSends; typeLine("my own line")
   local own = channelSends(mark)[1]
   check("own typed line is relayed under the full name with the nickname", own ~= nil and own:find("~MAIN~Shockly Stormgale~MAGE~OMember~Jake~my own line", 1, true) ~= nil, own)
-  local am = #sentAddon
-  H(nil, "CHAT_MSG_GUILD", "my own line", "Shockly Stormgale-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
-  advance(3)
-  check("our own line arriving as a guild event under the full name is recognised as ours and not carried", #whisperSends(am, "WB~") == 0)
-  -- gossip naming ourselves is not greeted
-  am = #sentAddon
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Shockly Stormgale@PvE@MAIN@CORE Forever", "WHISPER", "Zag Mathris")
-  advance(2)
-  check("gossip that names ourselves does not make us greet ourselves", #whisperSends(am, "HELLO~") == 0 and lines(function() slash("peers") end):find("Shockly Stormgale", 1, true) == nil)
+  -- our own line in guild chat carries our guid: the author is the name chat uses for us, roster or no roster
+  H(nil, "CHAT_MSG_GUILD", "renamed", "Shockly Galestorm-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
+  check("forever names: our own guild line teaches the client the name chat uses for it", report():find("| me Shockly Galestorm |", 1, true) ~= nil, report())
+  H(nil, "CHAT_MSG_GUILD", "someone else", "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob")
+  check("forever names: a guildmate's line does not change our name", report():find("| me Shockly Galestorm |", 1, true) ~= nil, report())
+  H(nil, "CHAT_MSG_GUILD", "back", "Shockly Stormgale-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-me")
   myRank = 3; roster[1][1] = "Shockly-Beta"; slash("nickname clear")
 end
 
@@ -785,7 +771,7 @@ do
 end
 
 -- Echo: with echo=on in Guild Info, one addon user per guild re-posts other guilds' readable lines as real
--- guild messages for members without the addon; addon users hide them and never relay or carry them.
+-- guild messages for members without the addon; addon users hide them and never relay them.
 do
   CORELinkDB = {}; joined = {}; clubPosts = {}; clubMember = true; chatSends = {}
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 club=Guild echo=on\n"
@@ -811,7 +797,7 @@ do
   nSent = #sentAddon; mark = #chatSends
   H(nil, "CHAT_MSG_GUILD", "[ALT] Carol (Captain Cee): hi echo", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
   advance(3)
-  check("echo: an echoed line is not carried and is counted as hidden", #whisperSends(nSent, "WB~") == 0 and #channelSends(mark) == 0 and report():find("echo on me=on sent=1 hidden=1", 1, true) ~= nil, report())
+  check("echo: an echoed line is not relayed and is counted as hidden", #whisperSends(nSent) == 0 and #channelSends(mark) == 0 and report():find("echo on me=on sent=1 hidden=1", 1, true) ~= nil, report())
   slash("echo off")
   channelLine("CL4~0000e003~ALT~Carol~PRIEST~~~after opt out", "Carol")
   advance(2)
@@ -826,100 +812,84 @@ do
   guildInfoText = savedTextForRestore
 end
 
--- Whisper bridge: the courier's peers, greetings, the optional who round, routing to every other guild
+-- 0.2.1 sends no whispers, and still reads what 0.2.0 clients of other guilds whisper to it.
 do
-  CORELinkDB = { peers = {} }; joined = {}; clubPosts = {}; clubMember = true; whoSent = {}; whoResults = {}; sentAddon = {}
+  -- saved by 0.2.0: a peer it had exchanged greetings with (realm and guild filled in), and whisper left on
+  CORELinkDB = { peers = { ["Ivy Marsh"] = { tag = "Quat", realm = "CAMWOWUS2Realm3PvE", guild = "Quatre", seen = now - 5 } } }
+  joined = {}; clubPosts = {}; clubMember = true; sentAddon = {}; chatSends = {}
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux\n"
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
-  check("whisper: guilds= parsed from the end of the line, other tokens intact", CORELinkDB.guilds and #CORELinkDB.guilds == 2 and CORELinkDB.guilds[1] == "Trois Royaume" and CORELinkDB.guilds[2] == "Deux" and CORELinkDB.echo == true, CORELinkDB.guilds and table.concat(CORELinkDB.guilds, "|"))
+  check("guilds=: still parsed from the end of the line, other tokens intact", CORELinkDB.guilds and #CORELinkDB.guilds == 2 and CORELinkDB.guilds[1] == "Trois Royaume" and CORELinkDB.guilds[2] == "Deux" and CORELinkDB.echo == true and CORELinkDB.channel == "CORELink7100", CORELinkDB.guilds and table.concat(CORELinkDB.guilds, "|"))
   myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
-  check("whisper: /cl publish writes guilds= last", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
-  advance(400)                                                   -- earlier blocks' guildmates age out of the election
-  check("whisper: we are the courier when no guildmate runs the addon", report():find("courier=me guilds=2", 1, true) ~= nil, report())
-  -- who round: one silent query per listed guild; results are names without realms; exact guild only
-  advance(60); whoSent = {}
-  slash("who")
-  check("whisper: a who round queries the first listed guild", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Sgt Mayo", fullGuildName = "Molten Trois Royaume" }, { fullName = "Orla Finch", fullGuildName = "Trois Royaume" },
-                 { fullName = "Shockly", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  check("whisper: the next guild is queried after the results arrive", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local hellos = {}
-  for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
-  check("whisper: who results are greeted over whisper addon messages, three per guild, exact guild only, not ourselves",
-    hellos["Nia Thorn"] and hellos["Cosmo Vale"] and hellos["Orla Finch"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
-  out = lines(function() slash("guilds") end)
-  check("whisper: /cl guilds counts the exact guild's online members from the last round", out:find("Trois Royaume - 5 online (asked", 1, true) ~= nil, out)
-  advance(616); whoSent = {}                                     -- the automatic round at +600 runs and times out
-  slash("who")
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Orla Finch", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  local nSent0 = #sentAddon
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local round2 = whisperSends(nSent0, "HELLO~")
-  check("whisper: the next round greets the names not tried yet, not the same three again", #round2 == 1 and round2[1].target == "Ash Vale", #round2)
-  -- a player without the addon never answers; one with it answers PEER and becomes a peer
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~CAMWOWUS2Realm1PvE~Trois Royaume", "WHISPER", "Zag Mathris")
-  check("whisper: a PEER answer is remembered with its guild", CORELinkDB.peers["Zag Mathris"] and CORELinkDB.peers["Zag Mathris"].tag == "Trois" and CORELinkDB.peers["Zag Mathris"].guild == "Trois Royaume" and report():find("peers=1", 1, true) ~= nil, report())
-  -- someone greets us: we answer PEER and share our directory
-  local nSent = #sentAddon
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "HELLO~Deux~CAMWOWUS2Realm1PvE~Deux", "WHISPER", "Dee Vale"); advance(3)
-  local gotPeer, gotDir = false, false
-  for i = nSent + 1, #sentAddon do
-    if sentAddon[i].kind == "WHISPER" and sentAddon[i].target == "Dee Vale" then
-      if sentAddon[i].text == "PEER~MAIN~PvE~CORE Forever" then gotPeer = true end
-      if sentAddon[i].text:find("^DIR~.*Zag Mathris@CAMWOWUS2Realm1PvE@Trois@Trois Royaume") then gotDir = true end
-    end
+  check("guilds=: /cl publish still writes it last, so a guild master's line survives a republish", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
+  -- 0.2.0 ran a who round 45 s after login and every ten minutes, and greeted its peers every ten minutes
+  local who0 = whoEver
+  advance(1300)
+  check("guilds=: no /who query is sent after login or on any timer", whoEver == who0, whoEver - who0)
+  check("no whisper goes out on a timer: no greeting, no ping of a saved peer", #whisperSends(0) == 0, whisperSends(0)[1] and whisperSends(0)[1].text)
+
+  -- the three retired commands answer with one line and send nothing
+  for _, cmd in ipairs({ "who", "hello Ivy Marsh", "hello", "whisper off", "whisper on" }) do
+    local nSent, nChat = #sentAddon, #chatSends
+    out = lines(function() slash(cmd) end); advance(3)
+    check("/cl " .. cmd .. " says whispering between guilds was retired, in one line, and sends nothing",
+      out == "|cff33ff99CORELink:|r " .. RETIRED and #sentAddon == nSent and #chatSends == nChat and whoEver == who0, out)
   end
-  check("whisper: a HELLO is answered with PEER and a directory of live peers", gotPeer and gotDir)
-  -- routing: a guildmate without the addon types; the courier whispers the line once to every other guild
+  check("/cl whisper off no longer changes the saved setting", CORELinkDB.whisper == nil, tostring(CORELinkDB.whisper))
+
+  -- greetings and gossip from 0.2.0 clients: no answer, no chat line, no error, nobody learned
+  for _, packet in ipairs({ "HELLO~Deux~CAMWOWUS2Realm1PvE~Deux", "PEER~Deux~CAMWOWUS2Realm1PvE~Deux",
+                            "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux;Shockly@PvE@MAIN@CORE Forever", "DIR~", "HELLO" }) do
+    local nSent, nChat = #sentAddon, #chatSends; n0 = #chatLines
+    local ok = whispered(packet, "Dee Vale"); advance(700)
+    check("a " .. packet:match("^%a+") .. " whispered by a 0.2.0 client (" .. packet .. ") causes no error, no answer and no chat line",
+      ok and #whisperSends(nSent) == 0 and #chatSends == nChat and #chatLines == n0, tostring(ok) .. " " .. #whisperSends(nSent) .. " " .. (#chatLines - n0))
+  end
+  check("greetings and gossip teach no peers: only a line on the channel does", CORELinkDB.peers["Dee Vale"] == nil and CORELinkDB.peers["Rook Hale"] == nil and CORELinkDB.peers["Shockly"] == nil)
+
+  channelLine("CL4~0000f101~Trois~Zag Mathris~MAGE~~Zaggy~zag is on the link", "Zag Mathris")
+  check("the author of a line on the channel is saved as a peer of that guild", CORELinkDB.peers["Zag Mathris"] and CORELinkDB.peers["Zag Mathris"].tag == "Trois" and CORELinkDB.peers["Zag Mathris"].seen == now)
+  -- inbound: a line carried by a 0.2.0 courier we know as a peer (saved by 0.2.0; its guild never heard on the channel)
+  local nSent = #sentAddon; n0 = #chatLines
+  local carriedLine = "CL4~0000f103~Quat~Lou Reed~MAGE~~Louie~from across"
+  local ok = whispered("WB~" .. carriedLine, "Ivy Marsh")
+  local fanned = guildSends(nSent, "LINE~")
+  check("a WB from a known peer is shown once and fanned out to the guild once as LINE~<the same packet>",
+    ok and #chatLines == n0 + 2 and chatLines[n0 + 1].text:find("[Quat] |Hplayer:Lou Reed|h", 1, true) ~= nil and chatLines[n0 + 1].text:find("(Louie) from across", 1, true) ~= nil
+    and #fanned == 1 and fanned[1] == "LINE~" .. carriedLine, (#chatLines - n0) .. " " .. #fanned)
+  whispered("WB~" .. carriedLine, "Ivy Marsh"); advance(4)
+  check("the same WB delivered again is not shown again and not fanned out again", #chatLines == n0 + 2 and #guildSends(nSent, "LINE~") == 1, (#chatLines - n0) .. " " .. #guildSends(nSent, "LINE~"))
+  check("a carried line is fanned out on the guild addon channel only: no whisper", #whisperSends(nSent) == 0)
+  nSent = #sentAddon; n0 = #chatLines
+  ok = whispered("WB~CL4~0000f104~Cinq~Sam Stone~MAGE~~~from a stranger", "Sam Stone"); advance(4)
+  check("a WB from a stranger for a guild never heard is dropped: not shown, not fanned out", ok and #chatLines == n0 and #guildSends(nSent, "LINE~") == 0, #chatLines - n0)
+  nSent = #sentAddon; n0 = #chatLines
+  whispered("WB~CL4~0000f105~Trois~Nia Thorn~MAGE~~~heard guild", "Nia Thorn"); advance(4)
+  check("a WB from a stranger for a guild heard on the channel in the last ten minutes is shown and fanned out", #chatLines == n0 + 2 and #guildSends(nSent, "LINE~") == 1, #chatLines - n0)
+  ok = whispered("WB~not a packet", "Ivy Marsh") and whispered("WB", "Ivy Marsh") and whispered("", "Ivy Marsh")
+  check("a malformed WB from a peer causes no error and no chat line", ok and #chatLines == n0 + 2)
+  local rep2 = report()
+  check("the report counts carried lines received and fanned out, and the known peers", rep2:find("| carried read=on recv=7 fanned=3 peers=2 |", 1, true) ~= nil, rep2)
+  out = lines(function() slash("peers") end)
+  check("/cl peers lists the peer 0.2.0 saved and the one learned from the channel, with tag, guild and state", out:find("Ivy Marsh - Quat (Quatre) seen ", 1, true) ~= nil and out:find("Zag Mathris - Trois (?) seen ", 1, true) ~= nil, out)
+
+  -- a guildmate without the addon speaks while we know a live peer in two other guilds: nothing is carried
   nSent = #sentAddon
   H(nil, "CHAT_MSG_GUILD", "over the water", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
-  advance(3)
-  local carried = whisperSends(nSent, "WB~")
-  local targets = {}
-  for _, w in ipairs(carried) do targets[w.target] = w.text end
-  check("whisper: the line is carried once to each other guild, to its freshest peer",
-    #carried == 2 and targets["Zag Mathris"] and targets["Dee Vale"] and targets["Zag Mathris"]:match("^WB~CL4~%x+~MAIN~Dora~~~~over the water$") ~= nil, #carried)
-  check("whisper: report counts the carried line per guild", report():find("sent=4", 1, true) ~= nil, report())
-  -- inbound: a carried line from a peer is shown once and fanned out to our guild once; never carried onward
+  advance(30)
+  check("a guild line by a member without the addon produces no whisper, with live peers in two other guilds", #whisperSends(nSent) == 0, #whisperSends(nSent))
+
+  -- a player who turned the whisper bridge off under 0.2.0 keeps not seeing carried lines
+  CORELinkDB.whisper = false
   nSent = #sentAddon; n0 = #chatLines
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "WHISPER", "Zag Mathris")
-  advance(4)
-  local fanned = guildSends(nSent, "LINE~")
-  check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
-    #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=3 fanned=2", 1, true) ~= nil, report())
-  -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
-  nSent = #sentAddon
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)
-  local greeted = whisperSends(nSent, "HELLO~")
-  check("whisper: a name learned from gossip is greeted, not trusted", #greeted == 1 and greeted[1].target == "Rook Hale" and CORELinkDB.peers["Rook Hale"].seen == 0 and CORELinkDB.peers["Rook Hale"].tag == "Deux")
-  local sf = filters["CHAT_MSG_SYSTEM"]
-  check("whisper: the game's 'not playing' line for our own hello is hidden", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Rook Hale' is currently playing.") == true)
-  check("whisper: other 'not playing' lines are left alone", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Someone Else' is currently playing.") ~= true)
-  out = lines(function() slash("peers") end)
-  check("whisper: /cl peers lists peers with tag, guild and state", out:find("Zag Mathris - Trois (Trois Royaume) seen", 1, true) ~= nil and out:find("Rook Hale - Deux (Deux) not yet answered", 1, true) ~= nil, out)
-  slash("whisper off")
-  nSent = #sentAddon
-  H(nil, "CHAT_MSG_GUILD", "while off", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora"); advance(3)
-  check("whisper: /cl whisper off stops carrying lines", #whisperSends(nSent, "WB~") == 0)
-  slash("whisper on")
-  -- /cl hello: greet one player by hand
-  nSent = #sentAddon
-  slash("hello Ivy Marsh"); advance(2)
-  local manual = whisperSends(nSent, "HELLO~")
-  check("whisper: /cl hello <name> whispers a HELLO to that player", #manual == 1 and manual[1].target == "Ivy Marsh" and manual[1].text == "HELLO~MAIN~PvE~CORE Forever" and last():find("hello sent to Ivy Marsh", 1, true) ~= nil, #manual)
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Quat~CAMWOWUS2Realm3PvE~Quatre", "WHISPER", "Ivy Marsh")
-  check("whisper: the answer to a manual hello becomes a peer", CORELinkDB.peers["Ivy Marsh"] and CORELinkDB.peers["Ivy Marsh"].tag == "Quat")
-  nSent = #sentAddon
-  slash("hello Ivy Marsh"); advance(2)
-  check("whisper: a repeated /cl hello is sent again despite the 10 min throttle", #whisperSends(nSent, "HELLO~") == 1)
-  slash("hello")
-  check("whisper: /cl hello without a name prints usage", last():find("usage: /cl hello", 1, true) ~= nil, last())
+  whispered("WB~CL4~0000f106~Quat~Lou Reed~MAGE~~Louie~while off", "Ivy Marsh"); advance(4)
+  local quiet = #chatLines == n0 and #guildSends(nSent, "LINE~") == 0   -- before report(), which prints a line itself
+  check("a saved whisper=false still stops carried lines from being shown or fanned out", quiet and report():find("carried read=off", 1, true) ~= nil, #chatLines - n0)
+  CORELinkDB.whisper = nil
+
+  -- peers are forgotten a week after they were last heard
+  now = now + 7 * 86400; advance(120)
+  check("a peer not heard for a week is forgotten", CORELinkDB.peers["Ivy Marsh"] == nil and CORELinkDB.peers["Zag Mathris"] == nil and lines(function() slash("peers") end):find("no peers yet", 1, true) ~= nil)
   guildInfoText = savedTextForRestore
 end
 
@@ -930,6 +900,7 @@ do
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
   out = lines(function() slash("") end)
   check("commands: plain /cl prints the status line and the member command list", out:find("NOT CONFIGURED", 1, true) and out:find("/cl classcolor | debug | echo", 1, true) and not out:find("| channel |", 1, true), out)
+  check("commands: the retired /cl hello, who and whisper are not offered in the command list", not out:find(" hello", 1, true) and not out:find(" who", 1, true) and not out:find(" whisper", 1, true) and out:find("| peers |", 1, true) ~= nil, out)
   slash("setup chan pw TAG")
   check("commands: /cl setup is refused for a member", last():find("only the guild master", 1, true) ~= nil, last())
   myRank = 0
@@ -959,6 +930,10 @@ do
   slash("clear"); check("commands: /cl clear forgets the configuration", CORELinkDB.channel == nil and joined.other == nil)
   myRank = 3
 end
+
+-- Over everything above: logins, guild lines, greetings from 0.2.0 clients, commands, a week of timers.
+check("over the whole run not one whisper was sent, as an addon message or as chat", whispersEver == 0, whispersEver)
+check("over the whole run not one /who query was sent", whoEver == 0, whoEver)
 
 print(string.format("\n%d checks, %d failed", checks, failures))
 os.exit(failures == 0 and 0 or 1)

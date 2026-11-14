@@ -1,7 +1,7 @@
 -- CORELink/Echo.lua: re-post other guilds' lines into real guild chat for members without the addon.
 -- With "echo=on" on the Guild Info line, one addon user per guild re-posts other guilds' readable lines (relay
 -- and bridge; community text cannot be read) as real guild messages. The first client to claim a line
--- (ECHO~id over the guild addon channel) posts it. Addon users hide the echoed line and never relay, carry or
+-- (ECHO~id over the guild addon channel) posts it. Addon users hide the echoed line and never relay or
 -- mirror it, so nothing loops.
 -- Provides NS.MaybeEcho, NS.IsEchoLine, NS.echoStats (sent, hidden, active).
 local _, NS = ...
@@ -37,7 +37,7 @@ local function SendEcho(id, tag, author, msg, label, nick)
 end
 
 -- One client per guild re-posts the line into real guild chat for members without the addon. Random back-off
--- then a claim, like the relay courier, so two addon users rarely echo the same line.
+-- then a claim, so two addon users rarely echo the same line.
 function NS.MaybeEcho(id, tag, author, msg, label, nick)
   local db = NS.db
   if not db.echo or db.echoer == false or not IsInGuild() or echoed[id] or not SendChatMessage then return end

@@ -81,7 +81,6 @@ NS.events.PLAYER_LOGIN = function()
     if NS.db.nicks[NS.MyName()] then NS.BroadcastNick() end
     NS.SendGuildAddon("NREQ")
   end)
-  C_Timer.After(45, NS.ScheduleWho)
   C_Timer.After(20, function()
     if not Configured() and not warned then
       warned = true
@@ -91,8 +90,8 @@ NS.events.PLAYER_LOGIN = function()
 end
 
 ---------------------------------------------------------------- messages
--- CORELink packets arrive on two addon channels, GUILD (our guildmates, every realm) and WHISPER (peers in
--- other guilds), and as text on the link channel (addon users' own lines).
+-- CORELink packets arrive on two addon channels, GUILD (our guildmates, every realm) and WHISPER (0.2.0
+-- clients of other guilds; we send none), and as text on the link channel (addon users' own lines).
 NS.events.CHAT_MSG_ADDON = function(prefix, text, chatType, sender)
   if prefix ~= NS.PREFIX then return end
   if chatType == "GUILD" then

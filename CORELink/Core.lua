@@ -11,8 +11,9 @@
      realm and its text is readable by addons, but addon messages on it are refused, and chat text can only be
      sent from inside the player's own keypress. So an addon user's own guild line is posted into the hidden
      channel as text from the chat send hooks, where every other addon user reads it. A line from a member
-     without the addon is whispered by the guild's courier to one addon user in every other guild (whisper
-     addon messages need no keypress), who hands it to their guildmates over the guild addon channel.
+     without the addon is not bridged: nobody else's client can post it. Up to 0.2.0 a courier whispered such
+     lines to the other guilds. From 0.2.1 the addon sends no whispers; it still shows a line a 0.2.0 client
+     carries to it and hands it to its guildmates over the guild addon channel (Whisper.lua).
 
      Midnight/Forever restriction: in M+, PvP and encounters chat arrives as secret values and addons cannot
      send chat; CORELink pauses there.
@@ -27,7 +28,7 @@ local _, NS = ...
 
 ---------------------------------------------------------------- constants
 NS.ADDON, NS.PROTO, NS.SEP = "CORELink", "CL4", "~"
-NS.PREFIX = "CORELink"                 -- addon message prefix on the guild and whisper channels
+NS.PREFIX = "CORELink"                 -- addon message prefix (guild sends; guild and whisper receives)
 NS.MAX_MSG, NS.DEDUPE_SECS = 200, 10
 NS.HEARD_SECS = 600                    -- a guild or a player counts as present this long after it was last heard
 NS.FORGET_SECS = 60                    -- packet ids are remembered this long
@@ -36,18 +37,16 @@ NS.DEFAULT_OFFICER_COLOR = "e8c63e"
 ---------------------------------------------------------------- shared state
 -- NS.db is the saved-variables table (CORELinkDB, per character), set at ADDON_LOADED; nil before that.
 NS.db = nil
-NS.seen = {}        -- packet id -> time it was seen (relayed by us, read from the channel, whispered, fanned out)
-NS.pending = {}     -- packet id -> true while a back-off decides whether the courier carries it
+NS.seen = {}        -- packet id -> time it was seen (relayed by us, read from the channel, a whisper or a fan-out)
 NS.displayed = {}   -- packet id -> time it was shown in guild chat
 NS.heard = {}       -- guild tag -> last time one of its lines reached us by any path
-NS.whisperQueue = {}   -- { target=, text= } waiting for the whisper addon channel
 -- What we know about authors from relay packets: class token and officer label, keyed by chat name.
 -- Community lines carry neither, so this is how they get class and officer colours.
 NS.authorClass, NS.authorOfficer, NS.authorNick, NS.authorSeen = {}, {}, {}, {}
 -- Registries later files fill in; the events file and the packet dispatchers read them.
 NS.events = {}          -- game event -> handler(...)
 NS.guildPackets = {}    -- "PRESENT", "NICK", "LINE", ... -> handler(rest, sender) for the guild addon channel
-NS.whisperPackets = {}  -- "HELLO", "WB", ...  -> handler(rest, sender) for whisper addon messages
+NS.whisperPackets = {}  -- "WB" -> handler(rest, sender) for whisper addon messages from 0.2.0 clients
 NS.commands = {}        -- "/cl <name>" -> handler(arg)
 
 ---------------------------------------------------------------- helpers

@@ -19,15 +19,6 @@ local function RecentTags()
   return #tags > 0 and table.concat(tags, ",") or "none"
 end
 
--- live peers in total, and per guild tag
-local function LivePeers()
-  local n, perTag, now = 0, {}, GetTime()
-  for _, p in pairs(NS.peers) do
-    if NS.LivePeer(p, now) then n = n + 1; perTag[p.tag] = (perTag[p.tag] or 0) + 1 end
-  end
-  return n, perTag
-end
-
 local function StreamSummary()
   local sid = NS.db.club and NS.ClubStream()
   if not sid then return "nil" end
@@ -46,14 +37,15 @@ end
 
 local function RelaySummary()
   local s = NS.relayStats
-  return string.format("relay typed=%d carried=%d shown=%d", s.typed, s.carried, s.shown)
+  return string.format("relay typed=%d shown=%d", s.typed, s.shown)
 end
 
-local function WhisperSummary()
+-- Lines 0.2.0 couriers carried to us by whisper: whether this client reads them (a saved /cl whisper off
+-- still holds), how many came in, how many we handed on to our guild, and the peers we know.
+local function CarriedSummary()
   local db, s = NS.db, NS.whisperStats
-  return string.format("whisper %s courier=%s guilds=%d peers=%d who=%d hello=%d answered=%d sent=%d recv=%d fanned=%d",
-    OnOff(db.whisper ~= false), NS.IsCourier() and "me" or NS.Courier(), db.guilds and #db.guilds or 0, (LivePeers()),
-    s.who, s.hello, s.answered, s.sent, s.recv, s.fanned)
+  return string.format("carried read=%s recv=%d fanned=%d peers=%d",
+    OnOff(db.whisper ~= false), s.recv, s.fanned, CountKeys(NS.peers))
 end
 
 local function EchoSummary()
@@ -86,7 +78,7 @@ local function BuildReport()
       CountKeys(NS.seen), CountKeys(NS.displayed), CountKeys(db.nicks), CountKeys(NS.addonUsers)),
     MirrorSummary(),
     RelaySummary(),
-    WhisperSummary(),
+    CarriedSummary(),
     EchoSummary(),
     "debug " .. tostring(db.debug == true),
     "log: " .. (#NS.debugLog > 0 and table.concat(NS.debugLog, " / ") or "empty"),
@@ -101,35 +93,22 @@ NS.commands.report = function()
 end
 
 ---------------------------------------------------------------- /cl guilds
--- "TAG - heard 12s ago, 2 peers" for each guild heard in the last 10 minutes, then the courier and the
--- counts from the last who round.
+-- "TAG - heard 12s ago" for each guild heard in the last 10 minutes.
 NS.commands.guilds = function()
-  local now, n = GetTime(), 0
-  local _, perTag = LivePeers()
-  local tags = {}
+  local now, tags = GetTime(), {}
   for tag, t in pairs(NS.heard) do if now - t <= NS.HEARD_SECS then tags[#tags + 1] = tag end end
   table.sort(tags)
   for _, tag in ipairs(tags) do
-    n = n + 1
     local ours = tag == GetTag() and " (your guild)" or ""
-    local peersText = tag == GetTag() and "" or string.format(", %d peer(s) to whisper to", perTag[tag] or 0)
-    Print(string.format("%s%s - heard %ds ago%s", tag, ours, math.floor(now - NS.heard[tag]), peersText))
+    Print(string.format("%s%s - heard %ds ago", tag, ours, math.floor(now - NS.heard[tag])))
   end
-  if n == 0 then Print("no guilds heard on the link in the last 10 minutes.") end
-  Print("courier for your guild: " .. (NS.IsCourier() and "you" or NS.Courier())
-    .. " (" .. CountKeys(NS.addonUsers) .. " guildmate(s) seen running the addon)")
-  local names = {}
-  for g in pairs(NS.guildOnline) do names[#names + 1] = g end
-  table.sort(names)
-  for _, g in ipairs(names) do
-    local e = NS.guildOnline[g]
-    Print(string.format("%s - %d online (asked %ds ago)", g, e.n, math.floor(now - e.t)))
-  end
+  if #tags == 0 then Print("no guilds heard on the link in the last 10 minutes.") end
 end
 
 ---------------------------------------------------------------- /cl peers
+-- The addon users of other guilds this client knows: learned from their lines on the channel, kept a week.
 local function PeerState(p, now)
-  if p.seen == 0 then return "not yet answered" end
+  if p.seen == 0 then return "not heard from yet" end
   if NS.LivePeer(p, now) then return "seen " .. math.floor(now - p.seen) .. "s ago" end
   return "offline"
 end
@@ -145,5 +124,4 @@ NS.commands.peers = function()
   if #keys == 0 then
     Print("no peers yet. They appear as soon as another guild's addon user says something in guild chat.")
   end
-  Print("courier for your guild: " .. (NS.IsCourier() and "you" or NS.Courier()))
 end

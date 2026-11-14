@@ -1,18 +1,17 @@
 -- CORELink/Relay.lua: guild lines out to other guilds, and other guilds' lines in to guild chat.
--- Out, two ways: an addon user's own typed line goes into the hidden channel as text from the chat send hooks
--- (RelayTyped), which every addon user in every guild reads. A line from a member without the addon is carried
--- by the guild's courier: whispered to one peer per other guild (Whisper.lua), who fans it out to their
--- guildmates over the guild addon channel (LINE). In: whatever path a packet arrives by, ShowPacket displays
--- it once.
+-- Out: an addon user's own typed line goes into the hidden channel as text from the chat send hooks
+-- (RelayTyped), which every addon user in every guild reads. Nothing else goes out: a line from a member
+-- without the addon is not bridged (up to 0.2.0 a courier whispered it; Whisper.lua has the story).
+-- In: whatever path a packet arrives by (the channel, a 0.2.0 courier's whisper, a guildmate's LINE),
+-- ShowPacket displays it once.
 -- Packet: CL4~id~tag~author~class~flags~nick~text (flags "O<rank>" for officers).
 -- Provides NS.RelayTyped, NS.OnGuildMessage, NS.OnLinkMessage, NS.ShowPacket, NS.relayStats.
 local _, NS = ...
 local Debug, Configured, Locked, IsMe, GetTag = NS.Debug, NS.Configured, NS.Locked, NS.IsMe, NS.GetTag
 local issecret, SEP, PROTO = NS.issecret, NS.SEP, NS.PROTO
-local seen, pending, displayed = NS.seen, NS.pending, NS.displayed
+local seen, displayed = NS.seen, NS.displayed
 
-NS.relayStats = { typed = 0, carried = 0, shown = 0 }
-local COURIER_WAIT = 1          -- seconds the courier gives the author's own client before carrying a line
+NS.relayStats = { typed = 0, shown = 0 }
 local stats = NS.relayStats
 
 local function Packet(id, tag, author, msg, class, flags, nick)
@@ -43,33 +42,12 @@ function NS.RelayTyped(text)
   end
 end
 
----------------------------------------------------------------- out: the courier carries a guildmate's line
--- A line in our guild chat by someone else: if the author runs the addon, their own keypress posts it into the
--- channel and the copy arrives within a moment. The courier waits for that, and carries the line by whisper
--- when no copy came, whoever the author is (no addon, addon switched off, addon broken). A late copy costs
--- one redundant whisper; receivers drop the duplicate by id.
-function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
-  local db = NS.db
-  if not db.enabled or not Configured() or Locked() then return end
-  if issecret(msg) or issecret(author) or not msg or msg == "" then return end
-  local tag = GetTag()
-  if not tag then return end
-  author = Ambiguate(author, "none")
-  if IsMe(author, guid) then return end           -- RelayTyped did it (and learned our chat-format name)
-  if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours
-  if not NS.IsCourier() then return end
-  local id = LineId(tag, author, msg)
-  if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
-  pending[id] = true
-  local rn = NS.OfficerRankName(author)
-  local packet = Packet(id, tag, author, msg, NS.ClassOf(author, guid), rn and ("O" .. rn) or "", db.nicks[author])
-  C_Timer.After(COURIER_WAIT + math.random() * 1.5, function()
-    pending[id] = nil
-    if seen[id] then return end                   -- their own client relayed it
-    seen[id] = GetTime()
-    stats.carried = stats.carried + 1
-    NS.WhisperOut(id, tag, packet)
-  end)
+---------------------------------------------------------------- our guild's chat
+-- A line in our guild chat. Nobody's line is carried for them, so the only thing to take from it is our own
+-- name: on our own line the guid is ours, and the author is the name chat and the roster use for us.
+function NS.OnGuildMessage(_, author, _, _, _, _, _, _, _, _, _, guid)
+  if issecret(author) or type(author) ~= "string" then return end
+  IsMe(Ambiguate(author, "none"), guid)
 end
 NS.events.CHAT_MSG_GUILD = function(...) NS.OnGuildMessage(...) end
 
@@ -131,5 +109,5 @@ function NS.OnLinkMessage(text, author)
   if tag == GetTag() then NS.addonUsers[author] = GetTime() else NS.NotePeer(author, tag) end
 end
 
--- LINE~<packet>: a guildmate fans out a line it received by whisper from another guild's courier.
+-- LINE~<packet>: a guildmate fans out a line it received by whisper from a 0.2.0 courier of another guild.
 NS.guildPackets.LINE = function(rest) NS.ShowPacket(rest, "guild") end

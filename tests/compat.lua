@@ -2,6 +2,8 @@
 -- game client, talk to each other. Released clients never change, so every format they read or write is frozen:
 -- the CL4 channel line and its id, the whisper packets (HELLO, PEER, DIR, WB), the guild addon packets (PRESENT,
 -- NICK, LINE, ECHO), the Guild Info line and the saved variables. docs/ARCHITECTURE.md, "Frozen formats".
+-- From 0.2.1 the working copy sends no whisper of any kind. It still reads a WB the release carries to it, and
+-- it must take the release's HELLO, PEER and DIR without an error and without an answer.
 --   lua tests/compat.lua <dir of the released addon> <dir of the working copy> [label of the release]
 -- tests/compat.sh extracts the release from its tag and calls this. Runs on Lua 5.1 to 5.5.
 -- Each check prints PASS/FAIL; the script exits non-zero if any check fails.
@@ -155,7 +157,7 @@ local function describeClient(w, c, env)
   end
   env.C_AddOns = { GetAddOnMetadata = function(_, key) if key == "Version" then return c.build.version end end }
   env.C_Club = { GetSubscribedClubs = function() return {} end }
-  env.C_FriendList = { SetWhoToUi = function() end, SendWho = function() end,
+  env.C_FriendList = { SetWhoToUi = function() end, SendWho = function() c.whoQueries = c.whoQueries + 1 end,
                        GetNumWhoResults = function() return 0 end, GetWhoInfo = function() end }
 end
 
@@ -191,6 +193,8 @@ local function wireClient(w, c, env)
       if name and record("CHANNEL", text, nil, name) then w.channelText(c.name, name, text) end
     elseif kind == "GUILD" and record("GUILDCHAT", text) then
       w.guildSay(c.guild, c.name, text)
+    elseif kind == "WHISPER" then
+      record("WHISPERCHAT", text, target)
     end
     if c.hooks.SendChatMessage then c.hooks.SendChatMessage(text, kind) end   -- a secure hook runs after the call
   end
@@ -286,12 +290,14 @@ function Client:saved(field)
   return type(t) == "table" and t or {}
 end
 
+local everyClient = {}   -- of every scenario, for the checks at the end
+
 -- spec: build (OLD or NEW), name, guild, optional realm, rand (what math.random() returns here) and db (the
 -- saved variables from an earlier session).
 local function join(w, spec)
   local c = setmetatable({ world = w, build = spec.build, name = spec.name, guild = spec.guild,
     realm = spec.realm or "CAMWOWUS1Realm1PvE", chat = {}, sent = {}, errors = {}, joined = {}, hooks = {},
-    registered = {}, prefixes = {}, editText = "" }, Client)
+    registered = {}, prefixes = {}, editText = "", whoQueries = 0 }, Client)
   local env = setmetatable({}, { __index = _G })
   env._G, env.unpack, env.SlashCmdList, env.CORELinkDB = env, unpack, {}, spec.db
   env.wipe = function(t) for k in pairs(t) do t[k] = nil end end
@@ -303,6 +309,7 @@ local function join(w, spec)
   local ok, err = pcall(loadAddon, spec.build.dir, env)
   if not ok then c.errors[#c.errors + 1] = "while loading: " .. tostring(err) end
   w.clients[#w.clients + 1] = c
+  everyClient[#everyClient + 1] = c
   return c
 end
 
@@ -325,6 +332,11 @@ local function count(clients, mark, kind, prefix)
   for _, c in ipairs(clients) do n = n + #c:sends(mark, kind, prefix) end
   return n
 end
+
+-- Whispers of any kind (addon message or chat) the client sent since the mark.
+local function whispers(c, mark) return #c:sends(mark, "WHISPER") + #c:sends(mark, "WHISPERCHAT") end
+
+local RETIRED = "whispering between guilds was retired in 0.2.1"
 
 local function noErrors(what, clients)
   for _, c in ipairs(clients) do
@@ -360,8 +372,10 @@ local WAIT = 15   -- seconds given to a back-off before a check says "carried" o
 local function frozen(pattern) return (pattern:gsub("%-", "%%-")) end
 
 ---------------------------------------------------------------- two guilds, each with a released and a new client
--- ALFA: Abe (release, the courier), Mia (working copy, officer), Dora (no addon).
--- BRAV: Bo (working copy, the courier), Ned (release, officer), Cora (no addon).
+-- ALFA: Abe (release, and its courier: the alphabetically first addon user), Mia (working copy, officer),
+--       Dora (no addon).
+-- BRAV: Bo (working copy), Ned (release, officer), Cora (no addon). Ned takes Bo for the courier, because Bo
+--       comes first in the alphabet and announces himself with PRESENT; Bo carries nothing.
 local function twoGuilds()
   local w = newWorld()
   w.guilds["Alpha Guild"] = { info = "Welcome!\nCORELink: CompatLink pw1 ALFA 1\n",
@@ -391,33 +405,27 @@ check("presence: the release announces itself as PRESENT~version",
   #abe:sends(0, "GUILD", "PRESENT~" .. OLD.version) >= 1)
 check("presence: the working copy announces itself as PRESENT~version", #mia:sends(0, "GUILD", "PRESENT~") >= 1)
 
--- HELLO and PEER, before any line has made anyone a peer
+-- greetings, before any line has made anyone a peer: the release still sends HELLO, the working copy never
+-- answers and never greets
 local mark = w.tick()
 abe:slash("hello Bo Birch"); w.advance(4)
-local hello, peer = abe:sends(mark, "WHISPER", "HELLO~")[1], bo:sends(mark, "WHISPER", "PEER~")[1]
+local hello = abe:sends(mark, "WHISPER", "HELLO~")[1]
 check("hello: the release greets with HELLO~tag~realm~guild",
-  hello and hello.text == "HELLO~ALFA~CAMWOWUS1Realm1PvE~Alpha Guild", hello and hello.text)
-check("hello: the working copy answers the release's HELLO with PEER~tag~realm~guild",
-  peer and peer.target == "Abe Alder" and peer.text == "PEER~BRAV~CAMWOWUS2Realm5PvE~Bravo Guild", peer and peer.text)
-local p = bo:saved("peers")["Abe Alder"]
-check("hello: the working copy remembers the release's client as a peer", p and p.tag == "ALFA"
-  and p.guild == "Alpha Guild" and p.seen > 0, p and p.tag)
-p = abe:saved("peers")["Bo Birch"]
-check("hello: the release remembers the working copy's client as a peer", p and p.tag == "BRAV"
-  and p.guild == "Bravo Guild" and p.seen > 0, p and p.tag)
+  hello and hello.target == "Bo Birch" and hello.text == "HELLO~ALFA~CAMWOWUS1Realm1PvE~Alpha Guild",
+  hello and hello.text)
+check("hello: the working copy does not answer the release's HELLO: no PEER, no DIR, nothing whispered",
+  whispers(bo, mark) == 0, whispers(bo, mark))
+check("hello: the release's HELLO draws no chat line on the working copy and teaches it no peer",
+  #bo:drawn(mark, "") == 0 and bo:saved("peers")["Abe Alder"] == nil, bo:drawn(mark, "")[1])
+check("hello: the release's HELLO causes no error on either side", #abe.errors == 0 and #bo.errors == 0,
+  abe.errors[1] or bo.errors[1])
 mark = w.tick()
-mia:slash("hello Ned Nash"); w.advance(4)
-hello, peer = mia:sends(mark, "WHISPER", "HELLO~")[1], ned:sends(mark, "WHISPER", "PEER~")[1]
-check("hello: the working copy greets with HELLO~tag~realm~guild",
-  hello and hello.text == "HELLO~ALFA~CAMWOWUS1Realm1PvE~Alpha Guild", hello and hello.text)
-check("hello: the release answers the working copy's HELLO with PEER", peer and peer.target == "Mia Moss"
-  and peer.text == "PEER~BRAV~CAMWOWUS2Realm5PvE~Bravo Guild", peer and peer.text)
-p = ned:saved("peers")["Mia Moss"]
-check("hello: the release remembers the working copy's client as a peer (from its HELLO)", p and p.tag == "ALFA"
-  and p.guild == "Alpha Guild" and p.seen > 0, p and p.tag)
-p = mia:saved("peers")["Ned Nash"]
-check("hello: the working copy remembers the release's client as a peer (from its PEER)", p and p.tag == "BRAV"
-  and p.guild == "Bravo Guild" and p.seen > 0, p and p.tag)
+mia:slash("hello Ned Nash"); mia:slash("who"); mia:slash("whisper on"); w.advance(4)
+check("hello: /cl hello, /cl who and /cl whisper on the working copy each say whispering was retired",
+  times(mia, mark, RETIRED) == 3, times(mia, mark, RETIRED))
+check("hello: the working copy's retired commands send nothing, and the release hears nothing",
+  whispers(mia, mark) == 0 and mia.whoQueries == 0 and ned:saved("peers")["Mia Moss"] == nil
+  and #ned:drawn(mark, "") == 0, whispers(mia, mark))
 
 -- typed lines: channel text, read by every addon user of the other guild
 mark = w.tick()
@@ -480,20 +488,20 @@ check("typed: the release's officer line carries O<rank> and the nickname",
   line and line.text)
 check("typed: the working copy shows the release's officer rank and nickname",
   shownOnce(mia, mark, said, "BRAV", "Ned Nash", "Officer", "Nedder"))
-check("same id: the working copy's courier does not carry a line the release already posted",
+check("same id: nobody carries a line the release already posted",
   count(everyone, mark, "WHISPER", "WB~") == 0, count(everyone, mark, "WHISPER", "WB~"))
 check("same id: the other guild saw that line once on each version",
   times(abe, mark, said) == 1 and times(mia, mark, said) == 1,
   times(abe, mark, said) .. " and " .. times(mia, mark, said))
 
--- carried lines: a member without the addon speaks, the guild's courier whispers WB to the freshest peer of the
--- other guild, who shows it and fans it out to its guild as LINE
+-- carried lines, from a guild still on 0.2.0: a member without the addon speaks, the release's courier whispers
+-- WB to the freshest peer of the other guild, who shows it and fans it out to its guild as LINE
 bo:type("bo is the freshest peer now"); w.advance(2)
 mark = w.tick()
 said = "dora has no addon"
 w.say("Alpha Guild", "Dora Dunn", said); w.advance(WAIT)
 local carried = abe:sends(mark, "WHISPER", "WB~")[1]
-check("carried: the release's courier whispers WB~<CL4 packet> to one peer", carried
+check("carried: the release's courier whispers WB~<CL4 packet> to one peer, a working-copy client", carried
   and count(everyone, mark, "WHISPER", "WB~") == 1 and carried.target == "Bo Birch"
   and carried.text:match(frozen("^WB~CL4~%x+~ALFA~Dora Dunn~WARRIOR~~~dora has no addon$")), carried and carried.text)
 check("carried: the working copy accepts the release's WB and shows the line, once",
@@ -501,28 +509,43 @@ check("carried: the working copy accepts the release's WB and shows the line, on
 local fan = bo:sends(mark, "GUILD", "LINE~")
 check("carried: the working copy fans it out to its guild as LINE~<the same packet>, once",
   carried and #fan == 1 and fan[1].text == "LINE~" .. carried.text:sub(4), fan[1] and fan[1].text)
-check("carried: the release shows the working copy's LINE, once", shownOnce(ned, mark, said, "ALFA", "Dora Dunn"))
+check("carried: a release guildmate shows the working copy's LINE, once",
+  shownOnce(ned, mark, said, "ALFA", "Dora Dunn"))
+check("carried: the working copy whispers nothing while it takes the line and fans it out",
+  whispers(bo, mark) == 0 and whispers(mia, mark) == 0)
 if carried then w.replay(carried) end
 check("carried: the same WB delivered twice is shown once and fanned out once",
   times(bo, mark, said) == 1 and times(ned, mark, said) == 1 and #bo:sends(mark, "GUILD", "LINE~") == 1)
 
+-- the same, with a release client as the freshest peer: it fans the line out and its working-copy guildmate shows it
+ned:type("ned is the freshest peer now"); w.advance(2)
+mark = w.tick()
+said = "dora speaks again"
+w.say("Alpha Guild", "Dora Dunn", said); w.advance(WAIT)
+carried = abe:sends(mark, "WHISPER", "WB~")[1]
+check("carried: the release's courier whispers WB to a release client when that is the freshest peer",
+  carried and count(everyone, mark, "WHISPER", "WB~") == 1 and carried.target == "Ned Nash", carried and carried.target)
+fan = ned:sends(mark, "GUILD", "LINE~")
+check("carried: the release fans it out to its guild as LINE~<the same packet>, once",
+  carried and #fan == 1 and fan[1].text == "LINE~" .. carried.text:sub(4), fan[1] and fan[1].text)
+check("carried: a working-copy guildmate shows the release's LINE, once",
+  shownOnce(bo, mark, said, "ALFA", "Dora Dunn"))
+check("carried: the working copy does not fan out or whisper on a line that reached it as LINE",
+  #bo:sends(mark, "GUILD", "LINE~") == 0 and whispers(bo, mark) == 0)
+if fan[1] then w.replay(fan[1]) end
+check("carried: the same LINE delivered twice is shown once",
+  times(bo, mark, said) == 1 and times(ned, mark, said) == 1)
+
+-- A mixed guild. The release leaves carrying to the alphabetically first addon user of its guild. In BRAV that
+-- is Bo, on the working copy, which carries nothing: Cora's line stays in her guild.
 abe:type("abe is the freshest peer now"); w.advance(2)
 mark = w.tick()
 said = "cora has no addon"
-w.say("Bravo Guild", "Cora Cole", said); w.advance(WAIT)
-carried = bo:sends(mark, "WHISPER", "WB~")[1]
-check("carried: the working copy's courier whispers WB~<CL4 packet> to one peer", carried
-  and count(everyone, mark, "WHISPER", "WB~") == 1 and carried.target == "Abe Alder"
-  and carried.text:match(frozen("^WB~CL4~%x+~BRAV~Cora Cole~MAGE~~~cora has no addon$")), carried and carried.text)
-check("carried: the release accepts the working copy's WB and shows the line, once",
-  shownOnce(abe, mark, said, "BRAV", "Cora Cole"))
-fan = abe:sends(mark, "GUILD", "LINE~")
-check("carried: the release fans it out to its guild as LINE~<the same packet>, once",
-  carried and #fan == 1 and fan[1].text == "LINE~" .. carried.text:sub(4), fan[1] and fan[1].text)
-check("carried: the working copy shows the release's LINE, once", shownOnce(mia, mark, said, "BRAV", "Cora Cole"))
-if carried then w.replay(carried) end
-check("carried: the same WB delivered twice is shown once and fanned out once",
-  times(abe, mark, said) == 1 and times(mia, mark, said) == 1 and #abe:sends(mark, "GUILD", "LINE~") == 1)
+w.say("Bravo Guild", "Cora Cole", said); w.advance(4 * WAIT)
+check("0.2.1 as intended: a member without the addon is not bridged when the guild's first addon user runs"
+  .. " the working copy (nobody whispers, the other guild does not see the line)",
+  count(everyone, mark, "WHISPER") == 0 and times(abe, mark, said) == 0 and times(mia, mark, said) == 0,
+  count(everyone, mark, "WHISPER") .. " whisper(s)")
 
 -- The longest lines the game lets a player type. Every packet made from one must stay within the game's 255
 -- bytes (noErrors below fails on any that does not) and still arrive, cut, on both versions of the other guild.
@@ -538,15 +561,14 @@ check("long: a 250-byte line typed by an officer with a nickname on the working 
 ned:type(longLine("ned. ")); w.advance(WAIT)
 check("long: a 250-byte line typed by an officer with a nickname on the release arrives once",
   arrives({ abe, mia }, mark, longLine("ned. ")))
+bo:type("bo is the freshest peer again"); w.advance(2)
+local longMark = w.tick()
 w.say("Alpha Guild", "Dora Dunn", longLine("dora ")); w.advance(WAIT)
-check("long: a 250-byte line carried by the release's courier arrives once",
-  arrives({ bo, ned }, mark, longLine("dora ")))
-w.say("Bravo Guild", "Cora Cole", longLine("cora ")); w.advance(WAIT)
-check("long: a 250-byte line carried by the working copy's courier arrives once",
-  arrives({ abe, mia }, mark, longLine("cora ")))
-check("long: every long line went out as one copy (two typed, two carried, two fanned out)",
-  count(everyone, mark, "CHANNEL") == 2 and count(everyone, mark, "WHISPER", "WB~") == 2
-  and count(everyone, mark, "GUILD", "LINE~") == 2)
+check("long: a 250-byte line carried by the release's courier arrives once, through the working copy's fan-out",
+  arrives({ bo, ned }, longMark, longLine("dora ")))
+check("long: the long lines went out as one copy each (two typed, one carried, one fanned out)",
+  count(everyone, mark, "CHANNEL", "CL4~") == 3 and count(everyone, longMark, "WHISPER", "WB~") == 1
+  and count(everyone, longMark, "GUILD", "LINE~") == 1 and #bo:sends(longMark, "GUILD", "LINE~") == 1)
 
 -- New data travels in new packet kinds. A kind the release has never heard of (letters only) must leave it alone.
 local before = { nicks = copy(abe:saved("nicks")), chat = #abe.chat }
@@ -561,38 +583,84 @@ abe:slash("nickname Abby"); abe:slash("mute zulu"); abe:slash("officercolor aabb
 noErrors("two guilds", everyone)
 local savedByRelease = copy(abe:db())
 
----------------------------------------------------------------- gossip: DIR needs three guilds
--- Ann and Ben know each other. Cy greets Ben, Ben answers with PEER and a DIR naming Ann, Cy greets Ann.
-local function gossip(reader, writer)
+---------------------------------------------------------------- 0.2.1: a guild with no 0.2.0 client
+-- A member without the addon is not bridged from such a guild.
+-- ALFA's addon users all run the working copy. Everyone has typed, so every client knows peers in the other
+-- guild, which is all 0.2.0 needed to carry Dora's line.
+local function unbridged()
+  local u = newWorld()
+  u.guilds["Alpha Guild"] = { info = "CORELink: CompatLink pw1 ALFA 1",
+    roster = roster({ "Max Marsh", MEMBER, "MAGE" }, { "Mia Moss", MEMBER, "PRIEST" },
+      { "Dora Dunn", MEMBER, "WARRIOR" }) }
+  u.guilds["Bravo Guild"] = { info = "CORELink: CompatLink pw1 BRAV 1",
+    roster = roster({ "Bo Birch", MEMBER, "WARRIOR" }, { "Ned Nash", MEMBER, "PRIEST" }) }
+  local max = join(u, { build = NEW, name = "Max Marsh", guild = "Alpha Guild" })
+  local mia2 = join(u, { build = NEW, name = "Mia Moss", guild = "Alpha Guild" })
+  local bo2 = join(u, { build = NEW, name = "Bo Birch", guild = "Bravo Guild" })
+  local ned2 = join(u, { build = OLD, name = "Ned Nash", guild = "Bravo Guild" })
+  local four = { max, mia2, bo2, ned2 }
+  for _, c in ipairs(four) do c:login() end
+  u.advance(40)
+  for _, c in ipairs(four) do c:type(c.name .. " is here"); u.advance(2) end
+  check("0.2.1 as intended: typed lines still cross both ways before the member without the addon speaks",
+    times(ned2, 0, "Max Marsh is here") == 1 and times(bo2, 0, "Mia Moss is here") == 1
+    and times(max, 0, "Ned Nash is here") == 1 and times(mia2, 0, "Bo Birch is here") == 1)
+  local from = u.tick()
+  u.say("Alpha Guild", "Dora Dunn", "dora in a guild of working copies"); u.advance(4 * WAIT)
+  check("0.2.1 as intended: a line from a member without the addon, in a guild whose only addon users run the"
+    .. " working copy, does NOT reach the other guild",
+    times(ned2, from, "dora in a guild") == 0 and times(bo2, from, "dora in a guild") == 0,
+    times(ned2, from, "dora in a guild") + times(bo2, from, "dora in a guild"))
+  check("0.2.1 as intended: nobody whispered that line, and nothing was fanned out",
+    count(four, from, "WHISPER", "WB~") == 0 and count(four, from, "GUILD", "LINE~") == 0
+    and whispers(max, 0) + whispers(mia2, 0) + whispers(bo2, 0) == 0)
+  noErrors("a guild of working copies", four)
+end
+unbridged()
+
+---------------------------------------------------------------- gossip: the release's PEER and DIR
+-- Ann and Ben know each other. Cy greets Ben, and Ben answers with PEER and a DIR naming Ann: all three on the
+-- release, which is the only way a DIR is ever written (it answers a HELLO, and the working copy sends none).
+-- The same PEER and DIR are then delivered to Dee, on the working copy: it must take them without an error,
+-- answer nothing, show nothing and learn nobody.
+local function gossip()
   local g = newWorld()
-  for _, name in ipairs({ "Alpha", "Bravo", "Gamma" }) do
-    local member = ({ Alpha = "Ann Ash", Bravo = "Ben Bay", Gamma = "Cy Cole" })[name]
+  local members = { Alpha = "Ann Ash", Bravo = "Ben Bay", Gamma = "Cy Cole", Delta = "Dee Dale" }
+  local c = {}
+  for _, name in ipairs({ "Alpha", "Bravo", "Gamma", "Delta" }) do
     g.guilds[name .. " Guild"] = { info = "CORELink: CompatLink pw1 " .. name:sub(1, 4):upper(),
-      roster = roster({ member, MEMBER, "MAGE" }) }
+      roster = roster({ members[name], MEMBER, "MAGE" }) }
+    c[name] = join(g, { build = name == "Delta" and NEW or OLD, name = members[name], guild = name .. " Guild" })
   end
-  local ann = join(g, { build = reader, name = "Ann Ash", guild = "Alpha Guild" })
-  local ben = join(g, { build = writer, name = "Ben Bay", guild = "Bravo Guild" })
-  local cy = join(g, { build = reader, name = "Cy Cole", guild = "Gamma Guild" })
-  for _, c in ipairs({ ann, ben, cy }) do c:login() end
+  local ann, ben, cy, dee = c.Alpha, c.Bravo, c.Gamma, c.Delta
+  for _, x in ipairs({ ann, ben, cy, dee }) do x:login() end
   g.advance(40)
   ann:slash("hello Ben Bay"); g.advance(4)
   local from = g.tick()
   cy:slash("hello Ben Bay"); g.advance(8)
-  local what = string.format("gossip: DIR written by %s, read by %s", writer.label, reader.label)
-  local dir = ben:sends(from, "WHISPER", "DIR~")[1]
-  check(what .. ": name@realm@tag@guild", dir and dir.target == "Cy Cole" and all(";" .. dir.text:sub(5) .. ";",
-    ";Ann Ash@CAMWOWUS1Realm1PvE@ALPH@Alpha Guild;"), dir and dir.text)
-  local learned = cy:saved("peers")["Ann Ash"]
-  check(what .. ": the reader greets the named player and gains a live peer", learned and learned.tag == "ALPH"
-    and learned.guild == "Alpha Guild" and learned.seen > 0, learned and learned.seen)
-  noErrors(what, { ann, ben, cy })
+  local answer, dir = ben:sends(from, "WHISPER", "PEER~")[1], ben:sends(from, "WHISPER", "DIR~")[1]
+  check("gossip: the release still writes DIR~name@realm@tag@guild", dir and dir.target == "Cy Cole"
+    and all(";" .. dir.text:sub(5) .. ";", ";Ann Ash@CAMWOWUS1Realm1PvE@ALPH@Alpha Guild;"), dir and dir.text)
+  from = g.tick()
+  if answer then g.addon(ben, answer.prefix, answer.text, "WHISPER", "Dee Dale") end
+  if dir then g.addon(ben, dir.prefix, dir.text, "WHISPER", "Dee Dale") end
+  g.addon(ben, "CORELink", "DIR~", "WHISPER", "Dee Dale")
+  g.addon(ben, "CORELink", "DIR~Dee Dale@CAMWOWUS1Realm1PvE@DELT@Delta Guild;x@@@;;@", "WHISPER", "Dee Dale")
+  g.flush(); g.advance(700)                -- past the release's ten-minute greeting throttle
+  check("gossip: the release's PEER and DIR are ignored by the working copy without error",
+    answer and dir and #dee.errors == 0, dee.errors[1])
+  check("gossip: the working copy answers none of it and greets nobody it names", whispers(dee, 0) == 0
+    and #dee:sends(from, "GUILD", "LINE~") == 0, whispers(dee, 0))
+  check("gossip: the working copy shows nothing for it and learns no peer from it", #dee:drawn(from, "") == 0
+    and dee:saved("peers")["Ann Ash"] == nil and dee:saved("peers")["Ben Bay"] == nil, dee:drawn(from, "")[1])
+  noErrors("gossip", { ann, ben, cy, dee })
 end
-gossip(NEW, OLD)
-gossip(OLD, NEW)
+gossip()
 
 ---------------------------------------------------------------- echo: one client per guild claims a line with ECHO~id
--- Mia draws the shorter back-off and claims the line; Abe, the courier, must stand down on her ECHO and must not
--- carry her echoed guild line back out as if a member had typed it.
+-- Mia draws the shorter back-off and claims the line; Abe must stand down on her ECHO. Abe is also the one the
+-- release takes for the courier: on the release he must not carry her echoed guild line back out as if a member
+-- had typed it, and on the working copy he carries nothing at all.
 local function echo(claimer, other)
   local e = newWorld()
   e.guilds["Alpha Guild"] = { info = "CORELink: CompatLink pw1 ALFA 1 echo=on",
@@ -682,13 +750,44 @@ local function update()
   end
   check("saved variables: the peers the release saved are still known",
     #lost == 0 and me:saved("peers")["Bo Birch"] ~= nil, "lost: " .. table.concat(lost, ", "))
+  local listed = u.tick()
+  me:slash("peers")
+  check("saved variables: /cl peers on the working copy lists a peer the release saved, with its tag",
+    shownOnce(me, listed, "Bo Birch", "BRAV"))
+  -- and that saved peer is still trusted: a line it carries is shown, for a guild not heard since the update
+  local carriedAt = u.tick()
+  u.addon({ name = "Bo Birch" }, "CORELink", "WB~CL4~0000abcd~BRAV~Cora Cole~MAGE~~~carried by a saved peer",
+    "WHISPER", "Abe Alder")
+  u.flush(); u.advance(2)
+  check("saved variables: a line carried by a peer the release saved is shown on the working copy, once",
+    shownOnce(me, carriedAt, "carried by a saved peer", "BRAV", "Cora Cole"))
   local from = u.tick()
   me:type("after the update"); u.advance(1)
   check("saved variables: a line typed after the update reaches the release with the saved nickname",
     shownOnce(far, from, "after the update", "ALFA", "Abe Alder", "Abby"))
+  u.advance(1300)                          -- the release pinged its saved peers every ten minutes
+  check("saved variables: the working copy whispers to none of the peers the release saved", whispers(me, 0) == 0,
+    whispers(me, 0))
   noErrors("saved variables", { me, far })
 end
 update()
+
+---------------------------------------------------------------- every scenario above: the working copy never whispers
+local newClients, whispered, queried, oldWhispered = 0, 0, 0, 0
+for _, c in ipairs(everyClient) do
+  if c.build == NEW then
+    newClients = newClients + 1
+    whispered = whispered + whispers(c, 0)
+    queried = queried + c.whoQueries
+  else
+    oldWhispered = oldWhispered + whispers(c, 0)
+  end
+end
+check(string.format("no whispers: the %d working-copy clients of every scenario sent zero WHISPER addon messages"
+  .. " and zero chat whispers", newClients), newClients >= 10 and whispered == 0, whispered)
+check("no whispers: no working-copy client sent a /who query", queried == 0, queried)
+check("no whispers: the count above can see a whisper (the release's clients sent some)", oldWhispered > 0,
+  oldWhispered)
 
 print(string.format("\n%d compatibility checks against %s, %d failed", checks, baseline, failures))
 os.exit(failures == 0 and 0 or 1)

@@ -1,6 +1,6 @@
 -- CORELink/Roster.lua: our own guild's members and the guild addon channel.
 -- The roster (ranks, guids, our own full name), officer rank labels, nickname sharing, presence (who in the
--- guild runs the addon, which elects the courier), and the dispatcher for packets on the guild addon channel
+-- guild runs the addon), and the dispatcher for packets on the guild addon channel
 -- (NICK, NREQ, PRESENT here; LINE registers from Relay.lua). Guild addon messages cross realms.
 -- Provides NS.RefreshRoster, NS.LearnMyNameFromRoster, NS.IsGuildmate, NS.OfficerRankName, NS.ClassOf,
 -- NS.SendGuildAddon, NS.BroadcastNick, NS.SendPresence, NS.IsAddonUser, NS.OnGuildAddon, NS.addonUsers.
@@ -86,7 +86,7 @@ function NS.BroadcastNick()
   SendGuildAddon("NICK" .. SEP .. (NS.db.nicks[MyName()] or ""))
 end
 
--- PRESENT~<version>: I run the addon. Sent at login and every two minutes; it is what elects the courier.
+-- PRESENT~<version>: I run the addon. Sent at login and every two minutes (0.2.0 elects its courier from it).
 function NS.SendPresence()
   if not NS.db or not NS.db.enabled then return end
   SendGuildAddon("PRESENT" .. SEP .. NS.Version())
