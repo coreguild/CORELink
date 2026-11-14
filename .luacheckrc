@@ -32,3 +32,6 @@ files["tests/harness.lua"] = {
   allow_defined_top = true,
   ignore = { "1.." },             -- setting mocks as globals is the point of the harness
 }
+files["tests/compat.lua"] = {
+  std = "+lua53",                 -- runs on the host Lua (5.1 to 5.5); defines no globals
+}
