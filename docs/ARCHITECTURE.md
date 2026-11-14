@@ -129,6 +129,24 @@ Addon messages carry the prefix `CORELink`; fields are separated by `~`.
 Changing the CL4 field order or separator is a protocol change: bump the version and keep old versions
 readable.
 
+## Frozen formats
+
+0.2.0 is released and those clients will never change. What they read and write is frozen:
+
+* the channel line `CL4~id~tag~author~class~flags~nick~text`: exactly `CL4`, seven fields, text takes the rest;
+* the line id, `NS.Hash(tag .. author .. msg)`: both sides must compute the same id or duplicates get through;
+* the whisper packets `HELLO~tag~realm~guild`, `PEER~tag~realm~guild`, `DIR~name@realm@tag@guild;...`, `WB~<packet>`;
+* the guild packets `PRESENT~version`, `NICK~name`, `NREQ`, `LINE~<packet>`, `ECHO~id`;
+* the Guild Info line `CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [guilds=a, b]`;
+* the saved variables `CORELinkDB` as 0.2.0 wrote them.
+
+New data travels in a new packet kind (old clients ignore a kind they do not know) or in a new `key=value`
+field on the Guild Info line, placed before `guilds=`. Never inside an existing format.
+
+`tests/compat.sh` holds this: it loads the addon from the tag `v0.2.0` and from the working tree into two
+fake clients each and passes lines, greetings, settings and saved variables between them. The tag is the
+oldest release that must keep working, not the previous release.
+
 ## Peers and the courier
 
 A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line

@@ -15,6 +15,8 @@ in the harness; this review is about what it does to a player's client at 8 PM o
    (guard with `if X then`), or a secret value (`issecretvalue`) in instanced content.
 4. **Protocol breakage.** Changing `PROTO`, field order or `~` separator without keeping older versions readable
    on receive, or without bumping the version. Players update at different times.
+   `tests/compat.sh` runs the released 0.2.0 against the branch; a PR that makes it fail, or edits it to pass, is
+   a blocker. The frozen formats are listed in `docs/ARCHITECTURE.md`.
 5. **Guild Info line format changes** that stop existing lines from parsing. The GM should never have to repaste.
 6. **Chat spam to the player.** New `Print` calls on timers, on every roster update, or on every incoming packet.
    Diagnostics belong behind `/cl` status, not in the chat stream.
