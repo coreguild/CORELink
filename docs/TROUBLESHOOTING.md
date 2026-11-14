@@ -21,7 +21,7 @@ Start with `/cl report`. It prints one line and opens it in a copy box; paste it
 * `channel <name> id <n>`: joined. `id not joined`: see the keypress row above and `lastNotice`.
 * `lastNotice`: the game's last answer about the channel. `NOT_ALLOWED_IN_CHANNEL` once, right after joining,
   is a send that beat the join and is harmless; repeated, it means the character may not speak there.
-* `lastSend 0`: the last packet was accepted. Anything else and the addon prints a warning once a minute.
+* `lastSend ok`: the last packet was accepted. Anything else and the addon prints a warning once a minute.
 * `me`: your name as the addon knows it. On Forever it must be `First Surname`; `short:` means the roster has
   not been read yet, and nicknames and courier duty may be off until it is.
 * `heard`: guild tags whose lines reached you in the last 10 minutes, by any path.

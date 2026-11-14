@@ -48,7 +48,7 @@ are left alone. Members read linked guilds in their guild chat; they do not need
 | `/cl mirror on/off`, `read off`, `post off`, `hide off` | all | Post your typed guild lines into the community named by `club=`, and show the community's lines in guild chat. Default both on. `hide off` shows the raw community channel lines again if you keep the community in a chat tab. |
 | `/cl echo on/off` | all | Whether this client may be the one that re-posts other guilds' lines into real guild chat (needs `echo=on` on the Guild Info line). Default on. |
 | `/cl whisper on/off` | all | Whether this client carries lines as courier and passes on carried lines it receives. Default on. |
-| `/cl who` | all | Run the who round now: ask who is online in each `guilds=` guild and greet new names. Only your guild's courier runs it; anyone else is told `<name> is the courier for this guild; only the courier runs /cl who.` |
+| `/cl who` | all | Run the who round now: ask who is online in each `guilds=` guild and greet new names. Only your guild's courier runs it; anyone else is told who the courier is. |
 | `/cl peers` | all | Known peers (other guilds' addon users), their tag and guild, and when they were last heard from. |
 | `/cl hello <First Surname>` | all | Greet one addon user of another guild directly, on any realm (Forever names are unique across realms and need no realm suffix). They appear in `/cl peers` once they answer. |
 | `/cl report` | all | One pasteable line: version, channel and id, last send result, lockdown, your full name as the addon knows it, guilds heard, mirror, relay, whisper and echo counters, and the last 20 debug events. |
