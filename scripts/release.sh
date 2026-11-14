@@ -7,7 +7,9 @@
 #                                             when a run died after tagging (works from any branch)
 #
 # Nobody edits a version number. The TOCs in git carry "@project-version@"; the version is computed from the
-# existing tags and stamped into the zip at build time (scripts/package.sh):
+# existing tags and stamped into the zip at build time (scripts/package.sh). A candidate is stamped with its rc
+# number (0.3.0-rc1 in the TOC, CORELink-0.3.0-rc1.zip, its own v/ path on the site); the final is rebuilt from
+# the same addon files with the plain version (0.3.0, CORELink-0.3.0.zip). scripts/release-names.sh has the names.
 #   rc    : runs on a release branch, never on main. release/<version> (release/0.2.0) pins the version and the
 #           next rc number of that series. Any other release/<name> computes it: the next rc of an open
 #           series (v0.2.0-rc2), else bump the last final (--bump, default patch) and start rc1.
@@ -23,6 +25,7 @@
 # clean, pushed branch.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/release-names.sh
 MODE="${1:-}"; shift || true
 NOTES=""; NO_RC=0; BUMP=auto; DRY=0
 while [ $# -gt 0 ]; do
@@ -34,7 +37,7 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument $1"; exit 2 ;;
   esac
 done
-case "$MODE" in rc|final|site) ;; *) sed -n '2,16p' "$0"; exit 2 ;; esac
+case "$MODE" in rc|final|site) ;; *) sed -n '2,18p' "$0"; exit 2 ;; esac
 case "$BUMP" in auto|patch|minor|major) ;; *) echo "--bump must be auto, patch, minor or major"; exit 2 ;; esac
 
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
@@ -77,8 +80,8 @@ preflight() {
   git fetch -q origin
   [ "$(git rev-parse "origin/$BRANCH" 2>/dev/null)" = "$HEAD_SHA" ] || { echo "local $BRANCH differs from origin/$BRANCH; pull or push first"; exit 2; }
   scripts/check-game-version.sh
-  VERSION="$VER" scripts/package.sh
-  [ -f "dist/CORELink-$VER.zip" ] || { echo "dist/CORELink-$VER.zip missing"; exit 2; }
+  VERSION="$STAMP" scripts/package.sh
+  [ -f "dist/CORELink-$STAMP.zip" ] || { echo "dist/CORELink-$STAMP.zip missing"; exit 2; }
 }
 
 # ---- repair a channel from the GitHub release (a local run that died after tagging, see #27) ----------
@@ -86,6 +89,8 @@ preflight() {
 # zip, notes and changelog section are written exactly as the rc/final run would have written them. A channel
 # that already serves the release's zip keeps it; its notes follow the release's body, which can be edited on
 # GitHub after publishing (a notes paragraph that did not make it through the button, a correction).
+# The asset's name says what is stamped inside it: a candidate from before #19 is CORELink-<ver>.zip and says
+# <ver>, a later one is CORELink-<ver>-rcN.zip and says <ver>-rcN; VERSION and the v/ path follow the asset found.
 SYNCED=""
 refresh_notes() {  # $1 = rc|latest, $2 = tag ; the channel's notes follow the GitHub release body
   local body; body=$(gh release view "$2" --json body -q .body 2>/dev/null) || return 0
@@ -96,18 +101,19 @@ refresh_notes() {  # $1 = rc|latest, $2 = tag ; the channel's notes follow the G
   printf '%s\n' "$body" > "$wt/$1/NOTES.md"
 }
 sync_channel() {  # $1 = rc|latest, $2 = tag (vX.Y.Z or vX.Y.Z-rcN), $3 = previous tag for the changelog ("" none)
-  local channel="$1" tag="$2" prev="$3" ver; ver=${tag#v}; ver=${ver%-rc*}
+  local channel="$1" tag="$2" prev="$3" name
   local tmp; tmp=$(mktemp -d)
-  if ! gh release download "$tag" --pattern "CORELink-$ver.zip" --dir "$tmp" >/dev/null 2>&1; then
-    echo "site: $tag has no GitHub release with CORELink-$ver.zip; $channel left as is"; rm -rf "$tmp"; return 0
+  if ! name=$(fetch_asset "$tag" "$tmp"); then
+    echo "site: $tag has no GitHub release with $(asset_names "$tag" | paste -sd' ' -); $channel left as is"
+    rm -rf "$tmp"; return 0
   fi
-  if cmp -s "$tmp/CORELink-$ver.zip" "$wt/$channel/CORELink.zip"; then
+  if cmp -s "$tmp/$name" "$wt/$channel/CORELink.zip"; then
     rm -rf "$tmp"; refresh_notes "$channel" "$tag"; return 0
   fi
   echo "site: $channel <- $tag (recovered from the GitHub release)"
-  cp "$tmp/CORELink-$ver.zip" "$wt/$channel/CORELink.zip"
-  cp "$tmp/CORELink-$ver.zip" "$wt/v/CORELink-$ver.zip"
-  echo "$ver" > "$wt/$channel/VERSION"
+  cp "$tmp/$name" "$wt/$channel/CORELink.zip"
+  cp "$tmp/$name" "$wt/v/$name"
+  asset_stamp "$name" > "$wt/$channel/VERSION"
   git log -1 --format=%cs "$tag" > "$wt/$channel/DATE"
   gh release view "$tag" --json body -q .body > "$wt/notes/${tag#v}.md"
   cp "$wt/notes/${tag#v}.md" "$wt/$channel/NOTES.md"
@@ -148,15 +154,15 @@ publish_site() {   # $1 = channel to update (rc|latest|none), $2 = zip to copy f
   if [ "$channel" = none ]; then sync_channels; fi
   if [ "$channel" != none ]; then
     cp "$zip" "$wt/$channel/CORELink.zip"
-    echo "$VER" > "$wt/$channel/VERSION"
+    echo "$STAMP" > "$wt/$channel/VERSION"
     date -u +%Y-%m-%d > "$wt/$channel/DATE"
-    cp "$zip" "$wt/v/CORELink-$VER.zip"
+    cp "$zip" "$wt/v/CORELink-$STAMP.zip"
     printf '%s\n' "$RELEASE_NOTES" > "$wt/notes/${TAG#v}.md"
     printf '%s\n' "$RELEASE_NOTES" > "$wt/$channel/NOTES.md"
     prepend_changelog "$wt/CHANGELOG.md" "$CHANGELOG_SECTION"
   fi
   bash scripts/render-site.sh "$wt" "$PAGES_URL"
-  (cd "$wt" && git add -A && { git diff --cached --quiet && echo "site: nothing to publish" || { git commit -q -m "site: $channel -> $VER${SYNCED:+ (recovered$SYNCED)}" && git push -q origin HEAD:gh-pages; }; })
+  (cd "$wt" && git add -A && { git diff --cached --quiet && echo "site: nothing to publish" || { git commit -q -m "site: $channel -> $STAMP${SYNCED:+ (recovered$SYNCED)}" && git push -q origin HEAD:gh-pages; }; })
   echo "site published: $PAGES_URL  (stable $(cat "$wt/latest/VERSION" 2>/dev/null || echo none), rc $(cat "$wt/rc/VERSION" 2>/dev/null || echo none)${SYNCED:+; recovered$SYNCED})"
   git worktree remove --force "$wt"
 }
@@ -223,8 +229,9 @@ case "$MODE" in
       VER=$(bump "$LAST_FINAL" "$([ "$BUMP" = auto ] && echo patch || echo "$BUMP")"); N=1
       if [ -n "$RC_SERIES" ] && ! ver_gt "$VER" "$RC_SERIES"; then VER="$RC_SERIES"; N=$((RC_N + 1)); fi
     fi
-    TAG="v$VER-rc$N"
+    TAG="v$VER-rc$N"; STAMP=$(stamp_of "$TAG")
     echo "branch: $BRANCH | last final: $LAST_FINAL | open rc series: ${RC_SERIES:-none} | this: $TAG"
+    echo "stamped version: $STAMP | zip: CORELink-$STAMP.zip"
     PREV_TAG="v$VER-rc$((N-1))"; [ "$N" -gt 1 ] || PREV_TAG="v$LAST_FINAL"
     git rev-parse -q --verify "refs/tags/$PREV_TAG" >/dev/null || PREV_TAG=""
     CHANGELOG_SECTION=$(changelog_section "$TAG" "$PREV_TAG")
@@ -233,9 +240,9 @@ case "$MODE" in
     [ $DRY -eq 1 ] || preflight
     run git tag -a "$TAG" -m "CORELink $VER release candidate $N"
     run git push -q origin "$TAG"
-    run gh release create "$TAG" "dist/CORELink-$VER.zip" --prerelease --title "CORELink $VER rc$N" --notes "$RELEASE_NOTES"
+    run gh release create "$TAG" "dist/CORELink-$STAMP.zip" --prerelease --title "CORELink $VER rc$N" --notes "$RELEASE_NOTES"
     [ $DRY -eq 1 ] || printf '%s\n' "$TAG" > dist/TAG     # for scripts/curseforge-upload.sh
-    publish_site rc "dist/CORELink-$VER.zip"
+    publish_site rc "dist/CORELink-$STAMP.zip"
     echo "RC published: $TAG"
     ;;
   final)
@@ -258,9 +265,10 @@ case "$MODE" in
     else
       echo "no unreleased rc tag is merged into main. Cut an rc from a release branch, test it, merge the branch, then final (or --no-rc for a small hotfix)."; exit 2
     fi
-    TAG="v$VER"
+    TAG="v$VER"; STAMP=$(stamp_of "$TAG")
     git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && { echo "$TAG already exists; nothing to do"; exit 2; }
     echo "last final: $LAST_FINAL | promoting ${RC_HERE:-(no rc)} -> $TAG"
+    echo "stamped version: $STAMP | zip: CORELink-$STAMP.zip"
     PREV_TAG="v$LAST_FINAL"; git rev-parse -q --verify "refs/tags/$PREV_TAG" >/dev/null || PREV_TAG=""
     CHANGELOG_SECTION=$(changelog_section "$TAG" "$PREV_TAG")
     RELEASE_NOTES=$(build_notes "$TAG" "$PREV_TAG" "stable" latest)
@@ -268,14 +276,14 @@ case "$MODE" in
     [ $DRY -eq 1 ] || preflight
     run git tag -a "$TAG" -m "CORELink $VER"
     run git push -q origin "$TAG"
-    run gh release create "$TAG" "dist/CORELink-$VER.zip" --latest --title "CORELink $VER" --notes "$RELEASE_NOTES"
+    run gh release create "$TAG" "dist/CORELink-$STAMP.zip" --latest --title "CORELink $VER" --notes "$RELEASE_NOTES"
     [ $DRY -eq 1 ] || printf '%s\n' "$TAG" > dist/TAG     # for scripts/curseforge-upload.sh
-    publish_site latest "dist/CORELink-$VER.zip"
+    publish_site latest "dist/CORELink-$STAMP.zip"
     echo "Release published: $TAG"
     ;;
   site)
     check_branch
-    VER="$LAST_FINAL"; TAG="v$VER"; RELEASE_NOTES=""; CHANGELOG_SECTION=""
+    VER="$LAST_FINAL"; TAG="v$VER"; STAMP="$VER"; RELEASE_NOTES=""; CHANGELOG_SECTION=""
     publish_site none
     ;;
 esac

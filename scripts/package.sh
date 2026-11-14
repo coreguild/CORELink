@@ -3,7 +3,7 @@
 # the version is stamped in at build time. Run tests first.
 #
 #   scripts/package.sh                 # version "dev" (local builds)
-#   VERSION=0.2.0 scripts/package.sh   # what scripts/release.sh does
+#   VERSION=0.2.0 scripts/package.sh   # what scripts/release.sh does (VERSION=0.2.0-rc1 for a candidate)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 VERSION="${VERSION:-dev}"

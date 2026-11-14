@@ -31,7 +31,9 @@ user-visible change.
 ## Versioning and releases
 
 * Nobody edits a version number. Both TOCs say `## Version: @project-version@` and CI keeps it that way. The
-  release job computes the version from the existing git tags and stamps it into the zip it builds.
+  release job computes the version from the existing git tags and stamps it into the zip it builds. A candidate
+  carries its number: `/cl report` says `CORELink 0.3.0-rc1` and the zip is `CORELink-0.3.0-rc1.zip`; the final
+  is rebuilt from the same addon files as `0.3.0`.
 * Two channels, two presses of the **release** workflow (Actions tab -> release -> Run workflow). A person presses
   the button; agents never run `final`. `scripts/release.sh` is the same code for local use; `--dry-run` previews.
   * **Release candidate** (`rc`): run on a `release/*` branch, never on `main`. `release/0.2.0` pins the version
@@ -51,7 +53,8 @@ user-visible change.
   * stable: https://coreguild.github.io/CORELink/latest/CORELink.zip
   * release candidate: https://coreguild.github.io/CORELink/rc/CORELink.zip
   * landing page with both: https://coreguild.github.io/CORELink/
-  Served from the `gh-pages` branch, which only the release job writes to. Older builds stay at `v/CORELink-<version>.zip`.
+  Served from the `gh-pages` branch, which only the release job writes to. Every build stays at `v/CORELink-<version>.zip`
+  (`v/CORELink-0.3.0-rc1.zip` for a candidate; candidates up to 0.2.0 shared their version's path).
 
 ## Commit messages
 

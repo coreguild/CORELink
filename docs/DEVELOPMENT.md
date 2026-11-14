@@ -13,6 +13,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |
 | `scripts/release.sh` | `rc` / `final` / `site`: tags, GitHub pre-release or release, and the download page on `gh-pages`. Run by the **release** workflow button, or locally. |
+| `scripts/release-names.sh` | The version a tag's build is stamped with and the names its zip may have; sourced by `release.sh` and `curseforge-upload.sh`, checked by `tests/release-names.sh`. |
 | `scripts/render-site.sh` | Renders `site/index.template.html` with the current channel versions and notes. |
 | `scripts/check-game-version.sh` | Compares the TOC `## Interface:` numbers with the live client version. CI runs it on every PR and every 6 hours. |
 | `site/` | Template and stylesheet for the download page. Never edited on `gh-pages` by hand. |
@@ -96,9 +97,10 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
    each feature branch that belongs to that release, merged into `main` or not. Release branches are protected
    like `main`: green checks on each PR, no required approval. Then GitHub -> Actions -> **release** ->
    **Run workflow**, pick the release branch, `rc`. The job re-runs the checks, takes the version from the branch
-   name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it into the TOCs inside the zip, creates the
+   name (`release/0.2.0` -> `v0.2.0-rcN`, N counting up), stamps it with the rc number into the TOCs inside the
+   zip (`0.2.0-rcN`, which is what `/cl report` then says; the zip is `CORELink-0.2.0-rcN.zip`), creates the
    tag, publishes a GitHub pre-release with the changelog section for that tag, and pushes `rc/CORELink.zip`,
-   `v/CORELink-<ver>.zip`, the notes, `CHANGELOG.md` and the re-rendered page to `gh-pages`. Testers run the RC
+   `v/CORELink-<ver>-rcN.zip`, the notes, `CHANGELOG.md` and the re-rendered page to `gh-pages`. Testers run the RC
    for a day on two clients in two guilds, with one client left on the previous stable to prove the protocol
    still interoperates. Fixes are PRs into the release branch, and `rc` again gives `rcN+1`. `rc` is refused on
    `main`.
@@ -116,9 +118,11 @@ feat/y ──┴─merge──▶ release/0.2.0 ──[release: rc]──▶ v0.
 5. **Release.** Open a PR from the release branch into `main` and merge it, then the same button on `main` with
    `final`. It finds the newest unreleased rc tag merged into `main` and refuses unless the addon files on
    `main` are identical to that rc, so what ships is what was tested (`no_rc` exists for a small hotfix that
-   touches neither the relay path nor the protocol). It tags `v<ver>`, publishes the GitHub release as latest,
+   touches neither the relay path nor the protocol). It rebuilds the zip from those files with the plain version
+   (`CORELink-<ver>.zip`, `/cl report` says `<ver>`), tags `v<ver>`, publishes the GitHub release as latest,
    and updates `latest/CORELink.zip` and the page. Everyone in every linked guild should run the same version.
 
 Permanent download URLs: `latest/CORELink.zip` (stable), `rc/CORELink.zip` (candidate), `v/CORELink-<ver>.zip`
-(every build), `channels.json` (`{"stable","rc","updated"}` for bots). Only the release job writes to
+and `v/CORELink-<ver>-rcN.zip` (every build; a candidate keeps its own, the ones up to 0.2.0 shared their
+version's), `channels.json` (`{"stable","rc","updated"}` for bots). Only the release job writes to
 `gh-pages`. GitHub Pages serves that branch publicly even though the source is private.

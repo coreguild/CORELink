@@ -27,7 +27,7 @@ expect 2 --bogus
 # hands out release notes with a semicolon in them, as real notes have.
 box=$(mktemp -d); trap 'rm -rf "$box"' EXIT
 mkdir -p "$box/bin" "$box/scripts" "$box/dist"
-cp scripts/curseforge-upload.sh "$box/scripts/"
+cp scripts/curseforge-upload.sh scripts/release-names.sh "$box/scripts/"
 printf 'v9.9.9\n' > "$box/dist/TAG"; printf 'zip' > "$box/dist/CORELink-9.9.9.zip"
 cat > "$box/bin/curl" <<'STUB'
 #!/usr/bin/env bash
@@ -66,10 +66,10 @@ esac
 STUB
 chmod +x "$box/bin/curl" "$box/bin/gh"
 upload() {   # upload <expected exit> <status> <body> <expected message>: run an upload against the stand-ins
-  local want=$1 out got
+  local want=$1 out got   # UPLOAD_ARGS: arguments for the script, unquoted (--tag v1.2.3-rc4)
   out=$(cd "$box" && PATH="$box/bin:$PATH" FAKE_STATUS=$2 FAKE_BODY=$3 FAKE_VERSIONS=${FAKE_VERSIONS:-} \
         FAKE_NOTES=${FAKE_NOTES:-} CURSEFORGE_API_KEY=fake \
-        CURSEFORGE_PROJECT_ID=1 CURSEFORGE_GAME_VERSIONS=1.60.1 scripts/curseforge-upload.sh 2>&1); got=$?
+        CURSEFORGE_PROJECT_ID=1 CURSEFORGE_GAME_VERSIONS=1.60.1 scripts/curseforge-upload.sh ${UPLOAD_ARGS:-} 2>&1); got=$?
   if [ "$got" -eq "$want" ] && printf '%s' "$out" | grep -q "$4"; then echo "PASS curseforge upload: HTTP $2 '$3' exits $want, says '$4'"
   else echo "FAIL curseforge upload: HTTP $2 '$3' exits $got, expected $want saying '$4':"; printf '%s\n' "$out" | tail -3; fail=1; fi
 }
@@ -93,4 +93,18 @@ upload 2 503 '<html>busy</html>'    'HTTP 503. The file may still have landed'
 FAKE_NOTES=empty upload 0 200 '{"id":44}' 'as file 44'      # a release without notes still sends a changelog
 FAKE_NOTES=long  upload 0 200 '{"id":45}' 'as file 45'      # notes longer than one argument may be
 FAKE_VERSIONS=page upload 2 200 '{"id":1}' 'could not list game versions (HTTP 200'
+# A candidate's zip carries its rc number (#19): the release run uploads that file and no other, as a beta.
+printf 'v9.9.9-rc2\n' > "$box/dist/TAG"
+upload 2 200 '{"id":46}' 'dist/CORELink-9.9.9-rc2.zip missing'   # the final's zip in dist/ is not the candidate
+printf 'zip' > "$box/dist/CORELink-9.9.9-rc2.zip"
+upload 0 200 '{"id":46}' 'uploaded dist/CORELink-9.9.9-rc2.zip as file 46'
+upload 0 200 '{"id":46}' 'CORELink 9.9.9 rc2 (beta)'
+# --tag fetches an existing release (the stand-in gh downloads nothing; the zips below are "its assets"): a
+# candidate from before #19 has the bare version in its asset's name, a later one has the rc number.
+printf 'zip' > "$box/dist/CORELink-8.8.8.zip"
+UPLOAD_ARGS='--tag v8.8.8-rc3' upload 0 200 '{"id":47}' 'uploaded dist/CORELink-8.8.8.zip as file 47'
+UPLOAD_ARGS='--tag v8.8.8-rc3' upload 0 200 '{"id":47}' 'CORELink 8.8.8 rc3 (beta)'
+UPLOAD_ARGS='--tag v9.9.9-rc2' upload 0 200 '{"id":48}' 'uploaded dist/CORELink-9.9.9-rc2.zip as file 48'
+UPLOAD_ARGS='--tag v9.9.9'     upload 0 200 '{"id":49}' 'uploaded dist/CORELink-9.9.9.zip as file 49'
+UPLOAD_ARGS='--tag v9.9.9'     upload 0 200 '{"id":49}' 'CORELink 9.9.9 (release)'
 exit $fail

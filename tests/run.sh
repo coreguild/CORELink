@@ -20,3 +20,4 @@ bash tests/size.sh
 bash tests/site-render.sh
 bash tests/secrets.sh
 bash tests/curseforge-args.sh
+bash tests/release-names.sh
