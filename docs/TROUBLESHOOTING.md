@@ -34,6 +34,8 @@ Type `/cl report` and check the version at the start. If it's older than 0.2.0, 
 
 ## The same message appears twice
 
+Before 0.2.3, a message with a quest link could show more than once in the linked guild, because the game writes the link differently for each player. Update the addon in both guilds.
+
 If it keeps happening, ask the sender and receiver to run `/cl report`. Share both reports and mention whether your guilds also share chat through a WoW Community.
 
 ## WoW says "No player named X is currently playing"

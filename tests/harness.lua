@@ -244,6 +244,25 @@ advance(1)
 check("the courier waits at least a second for the author's own copy", #whisperSends(amark, "WB~") == 0)
 advance(3)
 check("a line from an addon user whose own copy never arrives is carried after the wait", #whisperSends(amark, "WB~") == 1)
+-- a quest link reaches each client with its own colour and level, so the author's packet id is not the id the
+-- courier computes from guild chat: the copy is recognised by what it says
+do
+  local function stat(name) return tonumber(report():match("relay typed=.- " .. name .. "=(%d+)")) end
+  local c0 = stat("carried")
+  H(nil, "CHAT_MSG_GUILD", "need |cffffff00|Hquest:123:20|h[Wanted]|h|r help", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
+  channelLine("CL4~0badf00d~MAIN~Tanner~PRIEST~~~need |cff40c040|Hquest:123:24|h[Wanted]|h|r help", "Tanner")
+  advance(3)
+  check("a quest link line whose own copy has another colour, level and id is not carried", stat("carried") == c0, stat("carried") - c0)
+  H(nil, "CHAT_MSG_GUILD", "need |cffffff00|Hquest:124:20|h[Other]|h|r help", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
+  advance(3)
+  check("a line linking a different quest is still carried", stat("carried") == c0 + 1, stat("carried") - c0)
+  local s0 = stat("shown")
+  channelLine("CL4~0badf001~ALT~Carol~PRIEST~~~see |cffffff00|Hquest:77:20|h[Lost]|h|r", "Carol")
+  channelLine("CL4~0badf002~ALT~Carol~PRIEST~~~see |cffff8040|Hquest:77:31|h[Lost]|h|r", "Carol")
+  check("a second copy of another guild's quest link line under another id is shown once", stat("shown") == s0 + 1, stat("shown") - s0)
+  channelLine("CL4~0badf003~ALT~Carol~PRIEST~~~see |cffffff00|Hquest:78:20|h[Found]|h|r", "Carol")
+  check("a line linking a different quest is shown", stat("shown") == s0 + 2, stat("shown") - s0)
+end
 -- a copy arrives on the channel during the back-off: the courier stands down
 amark = #sentAddon
 H(nil, "CHAT_MSG_GUILD", "dora types", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
@@ -952,7 +971,7 @@ do
   for _, w in ipairs(carried) do targets[w.target] = w.text end
   check("whisper: the line is carried once to each other guild, to its freshest peer",
     #carried == 2 and targets["Zag Mathris"] and targets["Dee Vale"] and targets["Zag Mathris"]:match("^WB~CL4~%x+~MAIN~Dora~~~~over the water$") ~= nil, #carried)
-  check("whisper: report counts the carried line per guild", report():find("sent=4", 1, true) ~= nil, report())
+  check("whisper: report counts the carried line per guild", report():find("sent=5", 1, true) ~= nil, report())
   -- inbound: a carried line from a peer is shown once and fanned out to our guild once; never carried onward
   nSent = #sentAddon; n0 = #chatLines
   H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "WHISPER", "Zag Mathris")
@@ -960,7 +979,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=3 fanned=2", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=5 recv=3 fanned=2", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)
