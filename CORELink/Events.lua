@@ -32,7 +32,7 @@ local function LoginSync()
   loginAttempts = loginAttempts + 1
   NS.db.lastGI = nil                  -- nothing is "unchanged" at login: always re-read Guild Info
   NS.RefreshRoster()
-  NS.ReadGuildInfo()
+  NS.ReadGuildInfo(true)
   NS.EnsureChannel()
   Debug("login sync %d: configured=%s joined=%s", loginAttempts, tostring(Configured() and true or false),
     tostring(NS.ChannelId() ~= nil))
@@ -121,7 +121,8 @@ f:SetScript("OnEvent", function(_, event, ...)
 end)
 
 ---------------------------------------------------------------- housekeeping
--- Once a minute: forget old ids, re-read Guild Info, rejoin the channel if dropped, refresh the roster.
+-- Once a minute: forget old ids, re-read Guild Info when it is due, rejoin the channel if dropped, refresh
+-- the roster.
 local function Housekeeping()
   if not NS.db then return end
   local now = GetTime()
