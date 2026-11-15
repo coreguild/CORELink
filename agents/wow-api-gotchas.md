@@ -51,3 +51,11 @@ Read before changing anything in the relay, channel or chat code.
     `C_Club.GetMemberInfo`; our own and guildmates' posts are recognised by guid against the roster. Put anything
     readers must see (tag, rank, nickname) in the posted text itself. Measured 2026-10-13 with the probe
     `print(#i.content, i.content:byte(1, 12))`.
+13. **`C_FriendList.SendWho` is blocked outside a keypress.** From a timer or an event handler the game blocks it
+    and shows the player "Interface action failed because of an AddOn" (`ADDON_ACTION_BLOCKED`, function
+    `SendWho()`; through `pcall` the function is reported as `UNKNOWN()`). `pcall` still returns true, so the
+    call looks like it worked. Measured 2026-11-14 with
+    `/run C_Timer.After(1, function() C_FriendList.SendWho('g-"X"') end)`. The addon's lookup of `guilds=`
+    guilds was removed for this in 0.2.1; whether the call works from an addon's slash command was not tested.
+    To see what the game blocked:
+    `/run local f=CreateFrame("Frame");f:RegisterEvent("ADDON_ACTION_BLOCKED");f:SetScript("OnEvent",print)`.
