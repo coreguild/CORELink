@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 16, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 14, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -836,59 +836,15 @@ do
   check("whisper: /cl publish writes guilds= last", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
   advance(400)                                                   -- earlier blocks' guildmates age out of the election
   check("whisper: we are the courier when no guildmate runs the addon", report():find("courier=me guilds=2", 1, true) ~= nil, report())
-  -- who lookup: the game allows the query only inside a keypress, so nothing asks by itself; each /cl who
-  -- asks about the next listed guild. Results are names without realms; exact guild only.
-  check("whisper: no who lookup runs by itself after login", #whoSent == 0, #whoSent)
-  advance(60); whoSent = {}
+  -- there is no who lookup: the game blocks it outside a keypress and tells the player an addon failed.
+  -- guilds= is still read from the line (above); nothing asks the game who is online.
+  advance(700)
   out = lines(function() slash("who") end)
-  check("whisper: /cl who asks about the first listed guild and says how to ask about the next", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"' and out:find("asking who is online in Trois Royaume. The game allows one lookup per command: run /cl who again", 1, true) ~= nil, tostring(whoSent[1]) .. " " .. out)
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Sgt Mayo", fullGuildName = "Molten Trois Royaume" }, { fullName = "Orla Finch", fullGuildName = "Trois Royaume" },
-                 { fullName = "Shockly", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  check("whisper: the results do not start another lookup (outside a keypress the game blocks it)", #whoSent == 1, #whoSent)
-  FriendsFrame = { IsShown = function() return true end }
-  out = lines(function() slash("who") end)
-  check("whisper: /cl who with the Friends window open asks nothing and says why", #whoSent == 1 and out:find("close the Friends window", 1, true) ~= nil, out)
-  FriendsFrame = nil
-  slash("who")
-  check("whisper: the next /cl who asks about the next listed guild", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local hellos = {}
-  for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
-  check("whisper: who results are greeted over whisper addon messages, three per guild, exact guild only, not ourselves",
-    hellos["Nia Thorn"] and hellos["Cosmo Vale"] and hellos["Orla Finch"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
+  check("whisper: nothing asks the game who is online: not after login, not on a timer, not from /cl who", #whoSent == 0, #whoSent)
+  check("whisper: /cl who says the lookup was removed, in one line", out:find("the who lookup was removed in 0.2.1", 1, true) ~= nil and not out:find("\n", 1, true), out)
+  check("whisper: the addon does not listen for who results", not registered["WHO_LIST_UPDATE"])
   out = lines(function() slash("guilds") end)
-  check("whisper: /cl guilds counts the exact guild's online members from the last round", out:find("Trois Royaume - 5 online (asked", 1, true) ~= nil, out)
-  whoSent = {}; advance(616)
-  check("whisper: no who lookup runs by itself, however long the session", #whoSent == 0, #whoSent)
-  -- a lookup that gets no answer: a second command at once is refused, late results are not taken for the
-  -- answer, and the same guild is asked again
-  slash("who")
-  out = lines(function() slash("who") end)
-  check("whisper: a second /cl who while the first waits for its answer asks nothing", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"' and out:find("still waiting for the answer about Trois Royaume", 1, true) ~= nil, out)
-  advance(10)
-  whoResults = { { fullName = "Late Comer", fullGuildName = "Trois Royaume" } }; local nLate = #sentAddon
-  H(nil, "WHO_LIST_UPDATE"); advance(4)                          -- the player's own /who, after ours went unanswered
-  check("whisper: who results long after our lookup are not taken for its answer", #whisperSends(nLate, "HELLO~") == 0)
-  whoSent = {}; slash("who")
-  check("whisper: a guild whose lookup got no answer is asked again", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Orla Finch", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  local nSent0 = #sentAddon
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local round2 = whisperSends(nSent0, "HELLO~")
-  check("whisper: the next round greets the names not tried yet, not the same three again", #round2 == 1 and round2[1].target == "Ash Vale", #round2)
-  -- the game blocks the lookup even from the command (pcall does not see it; the game reports it by event):
-  -- the player is told once and /cl who stops asking. Kept last among the who checks: it lasts the session.
-  H(nil, "ADDON_ACTION_BLOCKED", "SomeOtherAddon", "SendWho()")
-  whoSent = {}; slash("who")
-  check("whisper: a block reported for another addon, or with no lookup of ours waiting, changes nothing", #whoSent == 1)
-  out = lines(function() H(nil, "ADDON_ACTION_BLOCKED", "CORELink", "UNKNOWN()") end)
-  check("whisper: when the game blocks the lookup from /cl who, the player is told", out:find("the game refused the who lookup", 1, true) ~= nil, out)
-  whoSent = {}; out = lines(function() slash("who") end)
-  check("whisper: after that, /cl who asks nothing and says why", #whoSent == 0 and out:find("refuses the who lookup", 1, true) ~= nil, out)
+  check("whisper: /cl guilds lists no online counts", out:find(" online (asked", 1, true) == nil and out:find("courier for your guild", 1, true) ~= nil, out)
   -- a player without the addon never answers; one with it answers PEER and becomes a peer
   H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~CAMWOWUS2Realm1PvE~Trois Royaume", "WHISPER", "Zag Mathris")
   check("whisper: a PEER answer is remembered with its guild", CORELinkDB.peers["Zag Mathris"] and CORELinkDB.peers["Zag Mathris"].tag == "Trois" and CORELinkDB.peers["Zag Mathris"].guild == "Trois Royaume" and report():find("peers=1", 1, true) ~= nil, report())

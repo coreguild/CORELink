@@ -34,16 +34,16 @@ For example, CORE and CORE Deux might use the following lines. Each guild saves 
 **CORE**
 
 ```text
-CORELink: corelink7100 hearth CORE 1 guilds=CORE Deux
+CORELink: corelink7100 hearth CORE 1
 ```
 
 **CORE Deux**
 
 ```text
-CORELink: corelink7100 hearth DEUX 1 guilds=CORE
+CORELink: corelink7100 hearth DEUX 1
 ```
 
-The `1` means ranks 0 and 1 are shown as officers. Rank 0 is the guild master. Increase that number if more ranks should be shown as officers. You can add `guilds=` to the line before saving it; your courier's `/cl who` then looks up a guild CORELink hasn't heard from yet. List the other guilds by their exact names, separate them with commas, and put the list last.
+The `1` means ranks 0 and 1 are shown as officers. Rank 0 is the guild master. Increase that number if more ranks should be shown as officers.
 
 Members who are already online can type `/cl reload` after you save the line. See the [Guild Information settings](docs/COMMANDS.md#guild-information-settings) for the full format and options such as mirroring into a WoW Community.
 

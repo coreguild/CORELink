@@ -42,7 +42,7 @@ If the notice keeps appearing while you use CORELink, share a report. WoW can sh
 
 ## WoW says "Interface action failed because of an AddOn"
 
-If your Guild Information line has a `guilds=` list, update CORELink. Version 0.2.0 looked up the listed guilds by itself after login and every ten minutes, and WoW refuses that lookup unless you typed a command. From 0.2.1 the lookup only runs when the courier types `/cl who`. If the notice still appears on a newer version, another addon may be the cause.
+If your Guild Information line has a `guilds=` list, update CORELink, or ask your guild master to delete `guilds=` and the names after it from the line. Version 0.2.0 looked up the listed guilds after login and every ten minutes, and WoW refuses that lookup from an addon. Version 0.2.1 no longer does the lookup. If the notice still appears, another addon may be the cause.
 
 ## Read the report
 
