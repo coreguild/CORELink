@@ -44,6 +44,10 @@ WoW shows this notice when someone logs off before a whisper reaches them. COREL
 
 If your Guild Information line has a `guilds=` list, update CORELink, or ask your guild master to delete `guilds=` and the names after it from the line. Version 0.2.0 looked up the listed guilds after login and every ten minutes, and WoW refuses that lookup from an addon. Version 0.2.1 no longer does the lookup. If the notice still appears, another addon may be the cause.
 
+## I type a `/cl` command and nothing appears
+
+Update CORELink. Versions up to 0.2.1 print their replies in the first chat tab, usually named General, so you don't see them if you've closed that tab or are reading another one. Until you update, click the first tab after typing the command, or use `/cl report`, which also opens a copy box. Newer versions reply in the tab you're looking at.
+
 ## Read the report
 
 | Field | What it tells you |

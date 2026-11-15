@@ -63,8 +63,13 @@ function NS.Locked()
   return false
 end
 
+-- The addon's own messages go to the chat tab the player is looking at: a player who has closed the first
+-- tab, or lives in another one, would not see them in the default window. The combat log tab cannot show them.
 function NS.Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
+  local frame = SELECTED_CHAT_FRAME
+  local usable = type(frame) == "table" and frame.AddMessage and not (IsCombatLog and IsCombatLog(frame))
+  if not usable then frame = DEFAULT_CHAT_FRAME end
+  frame:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
 end
 
 -- Debug log: always recorded (last DEBUG_MAX lines, shown by /cl report), echoed to chat when /cl debug on.

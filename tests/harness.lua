@@ -341,6 +341,18 @@ n0 = #chatLines; local rep = report()
 check("/cl report fills the copy box", rep ~= "")
 check("report has version, channel id, last send result and log", rep:find("CORELink 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. rep)
+-- the addon's own messages go to the chat tab the player is looking at, not always to the first one
+do
+  local function printedIn() local at = #chatLines; slash(""); return chatLines[at + 1] and chatLines[at + 1].frame end
+  check("own messages go to the default chat window when no tab is known to be selected", printedIn() == 1, printedIn())
+  SELECTED_CHAT_FRAME = ChatFrame3
+  check("own messages go to the chat tab the player has selected", printedIn() == 3, printedIn())
+  IsCombatLog = function(f) return f == ChatFrame3 end
+  check("own messages go to the default window when the selected tab is the combat log", printedIn() == 1, printedIn())
+  IsCombatLog = nil; SELECTED_CHAT_FRAME = { id = 9 }
+  check("own messages go to the default window when the selected tab cannot take them", printedIn() == 1, printedIn())
+  SELECTED_CHAT_FRAME = nil
+end
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
