@@ -39,7 +39,7 @@ NS.db = nil
 NS.seen = {}        -- packet id -> time it was seen (relayed by us, read from the channel, whispered, fanned out)
 NS.pending = {}     -- packet id -> true while a back-off decides whether the courier carries it
 NS.displayed = {}   -- packet id -> time it was shown in guild chat
-NS.seenText = {}    -- NS.TextKey of a line -> time it was relayed, carried or received (a second, looser dedupe)
+NS.seenText = {}    -- NS.TextKey of a line -> time it reached us in a packet or a community post
 NS.heard = {}       -- guild tag -> last time one of its lines reached us by any path
 NS.whisperQueue = {}   -- { target=, text= } waiting for the whisper addon channel
 NS.whisperedAt = {}    -- whisper target -> when an addon whisper last left for them (hello or carried line)
@@ -104,12 +104,15 @@ function NS.Hash(s)
   return string.format("%08x", h)
 end
 
--- One line can reach two clients as different text: the game writes a link's colour and details (a quest's
--- level) for each viewer. Packet ids hash the raw text, so they differ. This key keeps only what the line says:
--- each link becomes its type, first id and shown name, colour codes go.
+-- One line can reach two clients as different text: the game writes a quest link's colour and level for each
+-- viewer. Packet ids hash the raw text, so they differ. This key keeps only what the line says: a quest link
+-- becomes its quest id, colour codes go. Other links keep their data: two pins or two variants of an item are
+-- two lines. A line without "|" has the key its packet id has.
 function NS.TextKey(tag, author, msg)
-  msg = msg:gsub("|H(%a+):([^:|]*)[^|]*|h(.-)|h", "{%1:%2:%3}")
-  msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
+  if msg:find("|", 1, true) then
+    msg = msg:gsub("|Hquest:(%d+)[^|]*|h.-|h", "{quest:%1}")
+    msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
+  end
   return NS.Hash(tag .. author .. msg)
 end
 

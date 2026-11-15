@@ -262,9 +262,22 @@ do
   check("a second copy of another guild's quest link line under another id is shown once", stat("shown") == s0 + 1, stat("shown") - s0)
   channelLine("CL4~0badf003~ALT~Carol~PRIEST~~~see |cffffff00|Hquest:78:20|h[Found]|h|r", "Carol")
   check("a line linking a different quest is shown", stat("shown") == s0 + 2, stat("shown") - s0)
-  channelLine("CL4~0badf004~ALT~Carol~PRIEST~~~|cff1eff00|Hitem:9:0:0:0:0:0:851|h[Ring of the Bear]|h|r", "Carol")
-  channelLine("CL4~0badf005~ALT~Carol~PRIEST~~~|cff1eff00|Hitem:9:0:0:0:0:0:852|h[Ring of the Eagle]|h|r", "Carol")
-  check("two variants of one item, linked one after the other, are both shown", stat("shown") == s0 + 4, stat("shown") - s0)
+  channelLine("CL4~0badf004~ALT~Carol~PRIEST~~~|cffffff00|Hworldmap:84:7222:5550|h[Map Pin Location]|h|r", "Carol")
+  channelLine("CL4~0badf005~ALT~Carol~PRIEST~~~|cffffff00|Hworldmap:84:1200:9000|h[Map Pin Location]|h|r", "Carol")
+  check("two map pins with one name, linked one after the other, are both shown", stat("shown") == s0 + 4, stat("shown") - s0)
+  channelLine("CL4~0badf006~ALT~Carol~PRIEST~~~see |cffffff00|Hquest:78:20|h[Trouve]|h|r", "Carol")
+  check("the same quest under another client's name for it is still one line", stat("shown") == s0 + 4, stat("shown") - s0)
+  -- the author's copy can also arrive before the guild chat event
+  c0 = stat("carried")
+  channelLine("CL4~0badf007~MAIN~Tanner~PRIEST~~~early |cff40c040|Hquest:125:24|h[First]|h|r", "Tanner")
+  H(nil, "CHAT_MSG_GUILD", "early |cffffff00|Hquest:125:20|h[First]|h|r", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
+  advance(3)
+  check("a quest link line whose own copy arrived first is not carried", stat("carried") == c0, stat("carried") - c0)
+  advance(20)   -- said again later: the new copy is the one that counts
+  channelLine("CL4~0badf008~MAIN~Tanner~PRIEST~~~early |cff40c040|Hquest:125:24|h[First]|h|r", "Tanner")
+  H(nil, "CHAT_MSG_GUILD", "early |cffffff00|Hquest:125:20|h[First]|h|r", "Tanner-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-tanner")
+  advance(3)
+  check("the same quest link line said again later is not carried either", stat("carried") == c0, stat("carried") - c0)
 end
 -- a copy arrives on the channel during the back-off: the courier stands down
 amark = #sentAddon
@@ -835,6 +848,13 @@ do
   H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 209); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 210); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 211)
   check("wow club: readable [TAG] text lines keep tag filtering", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil, last())
   slash("unmute QUIET")
+  -- a readable copy of a relay line whose quest link was written for another viewer is not a second line
+  advance(10)
+  channelLine("CL4~0badf010~Trois~Zag Mathris~MAGE~~~go |cffffff00|Hquest:300:20|h[Deep]|h|r", "Zag Mathris")
+  advance(8); n0 = #chatLines
+  clubMessages[213] = { messageId = 213, content = "[Trois] go |cff40c040|Hquest:300:27|h[Deep]|h|r", author = { memberId = 7 } }
+  H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 213); advance(2)
+  check("wow club: a readable copy of a relay quest link line is not shown again", #chatLines == n0, #chatLines - n0)
   guildInfoText = savedTextForRestore
 end
 

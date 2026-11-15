@@ -22,7 +22,7 @@ end
 
 local function LineId(tag, author, msg) return NS.Hash(tag .. author .. msg) end
 
--- Was a line saying the same thing (NS.TextKey) relayed, carried or received in the dedupe window?
+-- Did a line saying the same thing (NS.TextKey) reach us in the dedupe window?
 local function SameLine(key)
   local t = seenText[key]
   return t ~= nil and GetTime() - t < NS.DEDUPE_SECS
@@ -40,7 +40,6 @@ function NS.RelayTyped(text)
   local now = GetTime()
   if seen[id] and now - seen[id] < NS.DEDUPE_SECS then return end   -- two hooks fire for one line
   seen[id] = now
-  seenText[NS.TextKey(tag, author, text)] = now
   local rn = NS.OfficerRankName(author)
   local class = NS.ClassOf(author, NS.me.guid)
   local packet = Packet(id, tag, author, text, class, rn and ("O" .. rn) or "", db.nicks[author])
@@ -67,14 +66,14 @@ function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours
   if not NS.IsCourier() then return end
   local id, key = LineId(tag, author, msg), NS.TextKey(tag, author, msg)
-  if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] or SameLine(key) then return end
+  if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
   pending[id] = true
   local rn = NS.OfficerRankName(author)
   local packet = Packet(id, tag, author, msg, NS.ClassOf(author, guid), rn and ("O" .. rn) or "", db.nicks[author])
   C_Timer.After(COURIER_WAIT + math.random() * 1.5, function()
     pending[id] = nil
     if seen[id] or SameLine(key) then return end   -- their own client relayed it
-    seen[id] = GetTime(); seenText[key] = seen[id]
+    seen[id] = GetTime()
     stats.carried = stats.carried + 1
     NS.WhisperOut(id, tag, packet)
   end)
@@ -115,8 +114,8 @@ function NS.ShowPacket(text, via)
   seen[id] = now
   NS.heard[tag] = now
   local key = NS.TextKey(tag, author, msg or "")
-  local again = displayed[id] or SameLine(key)     -- the same packet, or the same line under another id
-  seenText[key] = now
+  local again = displayed[id] or seenText[key]     -- the same packet, or the same line under another id
+  if tag == GetTag() or not again then seenText[key] = now end   -- our guild's: the courier times the latest copy
   if again then return tag end
   displayed[id] = now
   if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag end
