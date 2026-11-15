@@ -118,9 +118,10 @@ commands.officercolor = function(arg)
   if a:match("^%x%x%x%x%x%x$") then
     NS.db.officerColorHex = a; Print("officer colour set to #" .. a)
   elseif a == "reset" then
-    NS.db.officerColorHex = nil; Print("officer colour reset to the default (#e8c63e).")
+    NS.db.officerColorHex = nil; Print("officer colour reset to the default (#" .. NS.DEFAULT_OFFICER_COLOR .. ").")
   elseif not pcall(OpenColorPicker) then
-    Print("couldn't open the colour picker. Use /cl officercolor RRGGBB instead (e.g. e8c63e).")
+    Print("couldn't open the colour picker. Use /cl officercolor RRGGBB instead (e.g. "
+      .. NS.DEFAULT_OFFICER_COLOR .. ").")
   end
 end
 

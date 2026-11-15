@@ -604,7 +604,7 @@ do
   clubMessages[111] = { messageId = 111, content = "[ALT] Gus Pine: now via the community", author = { name = "Gus Pine", isSelf = false } }
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 111)
   local cl = chatLines[#chatLines]
-  check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and cl.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and cl.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(cl.r * 255 + 0.5) == 0xe8, cl.text .. " r=" .. tostring(cl.r))
+  check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and cl.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and cl.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(cl.g * 255 + 0.5) == 0xdb, cl.text .. " g=" .. tostring(cl.g))
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 104); advance(2)
   check("mirror read: plain community chat shows under the author's name only", #chatLines > n0 and last():find("[Dana Reed]|h: just chatting", 1, true) ~= nil and last():find("Core Test", 1, true) == nil, last())
   slash("mirror read off"); n0 = #chatLines
@@ -690,13 +690,13 @@ do
   check("wow club: it is shown once the member record loads", #chatLines == n0 + 2 and last():find("[Cosmo Vale]", 1, true) ~= nil, last())
   local cl = chatLines[#chatLines]
   check("wow club: a community Moderator never heard on the relay gets the officer colour, text prefix untouched",
-    math.floor(cl.r * 255 + 0.5) == 0xe8 and cl.text:find("|h: [Trois] late author", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
+    math.floor(cl.g * 255 + 0.5) == 0xdb and cl.text:find("|h: [Trois] late author", 1, true) ~= nil, cl.text .. " g=" .. tostring(cl.g))
   clubMessages[212] = { messageId = 212, content = sealed("[Trois] (Captain Zaggy) ranked"), author = { memberId = 7 } }
   channelLine("CL4~00000b01~Trois~Zag Mathris~MAGE~~Zaggy~plain member", "Zag Mathris")
   advance(10); n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 212); advance(2)
   cl = chatLines[#chatLines]
   check("wow club: relay knowledge wins: a non-officer's sealed line is not officer-coloured and the prefix is not doubled",
-    #chatLines == n0 + 2 and math.floor(cl.r * 255 + 0.5) ~= 0xe8 and cl.text:find("|h: [Trois] (Captain Zaggy) ranked", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
+    #chatLines == n0 + 2 and math.floor(cl.g * 255 + 0.5) ~= 0xdb and cl.text:find("|h: [Trois] (Captain Zaggy) ranked", 1, true) ~= nil, cl.text .. " g=" .. tostring(cl.g))
   -- relay first, community copy within 5 s: shown once
   advance(10); n0 = #chatLines
   channelLine("CL4~0000cafe~Trois~Zag Mathris~MAGE~~Zaggy~both ways", "Zag Mathris")
@@ -989,7 +989,7 @@ do
   slash("window 3"); check("commands: /cl window 3 pins the window", CORELinkDB.window == 3 and last():find("window 3", 1, true) ~= nil)
   slash("window"); check("commands: /cl window alone unpins it", CORELinkDB.window == nil)
   slash("officercolor e8c63e"); check("commands: /cl officercolor RRGGBB sets the colour", CORELinkDB.officerColorHex == "e8c63e")
-  slash("officercolor reset"); check("commands: /cl officercolor reset clears it", CORELinkDB.officerColorHex == nil)
+  slash("officercolor reset"); check("commands: /cl officercolor reset clears it and names the default", CORELinkDB.officerColorHex == nil and last():find("(#40db27)", 1, true) ~= nil, last())
   slash("officercolor"); check("commands: /cl officercolor without a picker explains the fallback", last():find("couldn't open the colour picker", 1, true) ~= nil, last())
   CORELinkDB.nicks[UnitName("player")] = "Shocky"; sentAddon = {}
   H(nil, "CHAT_MSG_ADDON", "CORELink", "NREQ", "GUILD", "Bob-Beta"); advance(8)
