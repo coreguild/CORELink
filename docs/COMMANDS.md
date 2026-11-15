@@ -29,7 +29,7 @@ Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat chan
 | `/cl nicknames on/off` | Shows or hides other people's nicknames. |
 | `/cl classcolor on/off` | Turns class colours for player names on or off. |
 | `/cl officer on/off` | Turns highlighting for officers' messages on or off. |
-| `/cl officercolor [RRGGBB\|reset]` | Sets the colour for officers' messages or restores the default. Type `/cl officercolor` on its own to open the colour picker. |
+| `/cl officercolor [RRGGBB\|reset]` | Sets the colour for officers' messages or restores the default, `40db27`: the guild green a shade darker. Type `/cl officercolor` on its own to open the colour picker. |
 | `/cl window <n>` | Shows linked messages in the chat window you specify. Type `/cl window` on its own to show them in windows that already display guild chat. |
 
 ## Help relay messages

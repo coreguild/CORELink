@@ -31,7 +31,7 @@ NS.PREFIX = "CORELink"                 -- addon message prefix on the guild and 
 NS.MAX_MSG, NS.DEDUPE_SECS = 200, 10
 NS.HEARD_SECS = 600                    -- a guild or a player counts as present this long after it was last heard
 NS.FORGET_SECS = 60                    -- packet ids are remembered this long
-NS.DEFAULT_OFFICER_COLOR = "e8c63e"
+NS.DEFAULT_OFFICER_COLOR = "40db27"   -- the default guild green, a shade darker
 
 ---------------------------------------------------------------- shared state
 -- NS.db is the saved-variables table (CORELinkDB, per character), set at ADDON_LOADED; nil before that.
