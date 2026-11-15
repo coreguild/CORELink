@@ -7,21 +7,19 @@
 -- Packets (whisper addon channel): HELLO~tag~realm~guild, PEER~tag~realm~guild (the answer),
 -- DIR~name@realm@tag@guild;... (gossip), WB~<packet> (a carried line).
 -- Provides NS.peers, NS.LoadPeers, NS.LivePeer, NS.NotePeer, NS.IsCourier, NS.Courier, NS.Hello, NS.ForgetHello,
--- NS.WhisperAvailable, NS.ScheduleWho, NS.ResetWhoTimer, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName,
--- NS.whisperStats, NS.guildOnline, NS.PEER_ONLINE_SECS.
+-- NS.WhisperAvailable, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName, NS.whisperStats, NS.PEER_ONLINE_SECS.
+-- There is no /who lookup of other guilds: the game blocks C_FriendList.SendWho outside a keypress.
 local _, NS = ...
 local Debug, Locked, IsMe, MyName, MyRealm, GetTag = NS.Debug, NS.Locked, NS.IsMe, NS.MyName, NS.MyRealm, NS.GetTag
 local issecret, SEP = NS.issecret, NS.SEP
 
 local peers = {}             -- name (as the game gives it) -> { tag=, realm=, guild=, seen= }  (saved in db.peers)
 NS.peers = peers
-NS.guildOnline = {}          -- guild name -> { n = online count, t = time }  (from /who)
 local helloAt = {}           -- whisper target -> last hello time
 local fanned = {}            -- packet id -> time we fanned it out to our guild
-NS.whisperStats = { who = 0, hello = 0, answered = 0, sent = 0, recv = 0, fanned = 0 }
+NS.whisperStats = { hello = 0, answered = 0, sent = 0, recv = 0, fanned = 0 }
 local stats = NS.whisperStats
-local whoQueue, whoPending, whoNext = {}, nil, 0
-local WHO_EVERY, HELLO_EVERY, HELLO_PER_GUILD = 600, 600, 3
+local HELLO_EVERY = 600
 local COURIER_SECS = 360      -- a guildmate silent this long is not a courier candidate
 NS.PEER_ONLINE_SECS = 1200    -- a peer silent this long is not whispered to
 local PEER_ONLINE_SECS, PEER_KEEP_SECS = NS.PEER_ONLINE_SECS, 7 * 86400
@@ -112,82 +110,6 @@ local function Directory()
   end
   return table.concat(out, ";")
 end
-
----------------------------------------------------------------- who rounds (optional bootstrap)
--- With guilds= on the Guild Info line, the courier asks who is online in each listed guild and greets a few,
--- so a guild nobody has heard from yet still gets a peer. Silent, one guild at a time, never while the
--- player's Who window is open.
-local function WhoAvailable()
-  return C_FriendList and C_FriendList.SendWho and C_FriendList.GetNumWhoResults and C_FriendList.GetWhoInfo
-end
-
-local function RunWho()
-  if whoPending or #whoQueue == 0 or not WhoAvailable() then return end
-  if FriendsFrame and FriendsFrame.IsShown and FriendsFrame:IsShown() then C_Timer.After(30, RunWho) return end
-  local g = table.remove(whoQueue, 1)
-  whoPending = { guild = g, at = GetTime() }
-  if C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, true) end
-  local ok = pcall(C_FriendList.SendWho, 'g-"' .. g .. '"')
-  if not ok then whoPending = nil return end
-  stats.who = stats.who + 1
-  C_Timer.After(6, function() if whoPending and whoPending.guild == g then whoPending = nil; RunWho() end end)
-end
-
-function NS.ScheduleWho()
-  local db = NS.db
-  if not db or not db.guilds or #db.guilds == 0 or not IsCourier() then return end
-  if GetTime() < whoNext then return end
-  whoNext = GetTime() + WHO_EVERY
-  wipe(whoQueue)
-  local mineName = GetGuildInfo("player")
-  for _, g in ipairs(db.guilds) do if g ~= mineName then whoQueue[#whoQueue + 1] = g end end
-  RunWho()
-end
-
-function NS.ResetWhoTimer() whoNext = 0 end
-
--- The names in the Who results that are really in guild g, and how many there are. The server's g-"Name"
--- filter is a substring match (g-"CORE" also returns Molten Soft Core), so the guild name is checked exactly.
-local function WhoResults(g)
-  local n = C_FriendList.GetNumWhoResults() or 0
-  local online, names = 0, {}
-  for i = 1, n do
-    local okw, info = pcall(C_FriendList.GetWhoInfo, i)
-    local full = okw and type(info) == "table" and info.fullName
-    local guild = okw and type(info) == "table" and info.fullGuildName
-    local inGuild = type(guild) ~= "string" or issecret(guild) or guild == g
-    if type(full) == "string" and not issecret(full) and full ~= "" and inGuild then
-      online = online + 1
-      if not IsMe(PeerName(full)) then names[#names + 1] = full end
-    end
-  end
-  Debug("who %s: %d in that guild of %d results", g, online, n)
-  return online, names
-end
-
--- Greet a few names we have not heard from, rotating through the list over the rounds (a name waits 30 min
--- between hellos). Known peers are pinged by PeerUpkeep instead.
-local function GreetSome(names)
-  local now, greeted = GetTime(), 0
-  for _, key in ipairs(names) do
-    if greeted >= HELLO_PER_GUILD then break end
-    local p = peers[key]
-    local known = p and p.seen > 0
-    local rested = not helloAt[key] or now - helloAt[key] >= 3 * HELLO_EVERY
-    if not known and rested and Hello(key) then greeted = greeted + 1 end
-  end
-end
-
-local function OnWhoList()
-  if not whoPending then return end
-  local g = whoPending.guild
-  whoPending = nil
-  local online, names = WhoResults(g)
-  NS.guildOnline[g] = { n = online, t = GetTime() }
-  GreetSome(names)
-  C_Timer.After(3, RunWho)
-end
-NS.events.WHO_LIST_UPDATE = OnWhoList
 
 ---------------------------------------------------------------- carrying a line
 local carriedTo = {}   -- whisper target -> the carried lines (WB~...) that left for them in the last few seconds
@@ -306,7 +228,7 @@ function NS.OnWhisperAddon(text, sender)
 end
 
 -- Keep live peers fresh: the courier pings known peers every 10 minutes; anyone answers. Forget peers silent
--- for a week and fanned ids after a minute. Then run the who round if it is due.
+-- for a week and fanned ids after a minute.
 local function PeerUpkeep()
   if not NS.db then return end
   local now = GetTime()
@@ -322,7 +244,6 @@ local function PeerUpkeep()
     if now - t > NOT_PLAYING_SECS then NS.whisperedAt[key], carriedTo[key] = nil, nil end
   end
   SavePeers()
-  NS.ScheduleWho()
 end
 C_Timer.NewTicker(60, PeerUpkeep)
 

@@ -7,7 +7,7 @@ Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat chan
 | Command | What it does |
 |---|---|
 | `/cl` | Shows whether CORELink is on, your guild tag, which channel you are connected to, where your settings came from, and which commands you can run. |
-| `/cl guilds` | Lists guilds heard in the last 10 minutes. It also shows who is carrying chat for your guild and any online counts from the latest guild lookup. |
+| `/cl guilds` | Lists guilds heard in the last 10 minutes. It also shows who is carrying chat for your guild. |
 | `/cl report` | Opens a copy box with your addon version, connection status, and recent events. Share it when asking for help. |
 | `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. |
 
@@ -41,7 +41,7 @@ The courier is the addon user who carries messages from guildmates without COREL
 | `/cl whisper on/off` | Controls whether your client can act as courier and pass along messages it receives from another courier. This is on by default. |
 | `/cl echo on/off` | Controls whether your client can re-post linked messages into guild chat. This is on by default and only takes effect if your guild master adds `echo=on` to the CORELink line. |
 | `/cl peers` | Lists known peers, their guilds and tags, and when CORELink last heard from them. |
-| `/cl who` | Looks up who is online in each guild listed in `guilds=` and contacts new names. Only the courier runs the lookup. |
+| `/cl who` | Removed in 0.2.1. It only says so. |
 | `/cl hello <First Surname>` | Contacts an addon user in another guild by character name. They appear in `/cl peers` once they answer. |
 
 ## Control Community mirroring
@@ -85,7 +85,7 @@ CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] 
 - Give each guild a distinct tag of up to eight characters. Use `-` or omit the tag to let CORELink make one from the guild name.
 - The officer rank cutoff defaults to 1, so ranks 0 and 1 are shown as officers.
 - Add `echo=on` if you want one addon user to re-post linked messages into guild chat for members without CORELink. Try this in a test guild before using it on the live Forever servers.
-- Add `guilds=` followed by the other guilds' exact names, separated by commas, to help CORELink find guilds it hasn't heard from. Put this setting last so guild names can contain spaces.
+- `guilds=` followed by guild names is still accepted at the end of the line, and does nothing since 0.2.1. You can leave it or delete it.
 
 ### Mirror chat into a WoW Community
 

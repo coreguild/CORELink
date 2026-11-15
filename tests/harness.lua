@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 16, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -826,7 +826,7 @@ do
   guildInfoText = savedTextForRestore
 end
 
--- Whisper bridge: the courier's peers, greetings, the optional who round, routing to every other guild
+-- Whisper bridge: the courier's peers, greetings, the /cl who lookup, routing to every other guild
 do
   CORELinkDB = { peers = {} }; joined = {}; clubPosts = {}; clubMember = true; whoSent = {}; whoResults = {}; sentAddon = {}
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux\n"
@@ -836,31 +836,15 @@ do
   check("whisper: /cl publish writes guilds= last", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
   advance(400)                                                   -- earlier blocks' guildmates age out of the election
   check("whisper: we are the courier when no guildmate runs the addon", report():find("courier=me guilds=2", 1, true) ~= nil, report())
-  -- who round: one silent query per listed guild; results are names without realms; exact guild only
-  advance(60); whoSent = {}
-  slash("who")
-  check("whisper: a who round queries the first listed guild", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Sgt Mayo", fullGuildName = "Molten Trois Royaume" }, { fullName = "Orla Finch", fullGuildName = "Trois Royaume" },
-                 { fullName = "Shockly", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  check("whisper: the next guild is queried after the results arrive", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local hellos = {}
-  for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
-  check("whisper: who results are greeted over whisper addon messages, three per guild, exact guild only, not ourselves",
-    hellos["Nia Thorn"] and hellos["Cosmo Vale"] and hellos["Orla Finch"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
+  -- there is no who lookup: the game blocks it outside a keypress and tells the player an addon failed.
+  -- guilds= is still read from the line (above); nothing asks the game who is online.
+  advance(700)
+  out = lines(function() slash("who") end)
+  check("whisper: nothing asks the game who is online: not after login, not on a timer, not from /cl who", #whoSent == 0, #whoSent)
+  check("whisper: /cl who says the lookup was removed, in one line", out:find("the who lookup was removed in 0.2.1", 1, true) ~= nil and not out:find("\n", 1, true), out)
+  check("whisper: the addon does not listen for who results", not registered["WHO_LIST_UPDATE"])
   out = lines(function() slash("guilds") end)
-  check("whisper: /cl guilds counts the exact guild's online members from the last round", out:find("Trois Royaume - 5 online (asked", 1, true) ~= nil, out)
-  advance(616); whoSent = {}                                     -- the automatic round at +600 runs and times out
-  slash("who")
-  whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
-                 { fullName = "Orla Finch", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
-  local nSent0 = #sentAddon
-  H(nil, "WHO_LIST_UPDATE"); advance(4)
-  whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
-  local round2 = whisperSends(nSent0, "HELLO~")
-  check("whisper: the next round greets the names not tried yet, not the same three again", #round2 == 1 and round2[1].target == "Ash Vale", #round2)
+  check("whisper: /cl guilds lists no online counts", out:find(" online (asked", 1, true) == nil and out:find("courier for your guild", 1, true) ~= nil, out)
   -- a player without the addon never answers; one with it answers PEER and becomes a peer
   H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~CAMWOWUS2Realm1PvE~Trois Royaume", "WHISPER", "Zag Mathris")
   check("whisper: a PEER answer is remembered with its guild", CORELinkDB.peers["Zag Mathris"] and CORELinkDB.peers["Zag Mathris"].tag == "Trois" and CORELinkDB.peers["Zag Mathris"].guild == "Trois Royaume" and report():find("peers=1", 1, true) ~= nil, report())
