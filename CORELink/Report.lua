@@ -102,7 +102,7 @@ end
 
 ---------------------------------------------------------------- /cl guilds
 -- "TAG - heard 12s ago, 2 peers" for each guild heard in the last 10 minutes, then the courier and the
--- counts from the last who round.
+-- counts from the last /cl who lookups.
 NS.commands.guilds = function()
   local now, n = GetTime(), 0
   local _, perTag = LivePeers()

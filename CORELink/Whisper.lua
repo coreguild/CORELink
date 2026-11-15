@@ -115,25 +115,50 @@ end
 -- player's own keypress (from a timer it is blocked with "Interface action failed because of an AddOn"), so
 -- nothing here runs by itself: each /cl who asks about the next guild on the list.
 local WHO_ANSWER_SECS = 6     -- results arriving later than this are someone else's lookup, not ours
-local whoIndex = 0
+local whoIndex = 0            -- the listed guild last answered; a lookup that got no answer is asked again
+local whoRefused = false      -- the game blocked the lookup even from the command: stop offering it
+
+local function WhoToUi(on)
+  if C_FriendList and C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, on) end
+end
+
+-- Why no lookup can be sent right now, or nil.
+local function WhoBusy()
+  local C = C_FriendList
+  if whoRefused then return "the game refuses the who lookup from an addon on this client." end
+  if not (C and C.SendWho and C.GetNumWhoResults and C.GetWhoInfo) then return "this client has no who lookup." end
+  if whoPending and GetTime() - whoPending.at <= WHO_ANSWER_SECS then
+    return "still waiting for the answer about " .. whoPending.guild .. "; try again in a few seconds."
+  end
+  if FriendsFrame and FriendsFrame.IsShown and FriendsFrame:IsShown() then
+    return "close the Friends window (the Who list is part of it), then run /cl who again."
+  end
+end
 
 -- Ask about the next listed guild. Returns its name and how many guilds are listed, or nil and the reason.
 function NS.WhoNext()
-  local C = C_FriendList
-  if not (C and C.SendWho and C.GetNumWhoResults and C.GetWhoInfo) then return nil, "this client has no who lookup." end
-  if FriendsFrame and FriendsFrame.IsShown and FriendsFrame:IsShown() then
-    return nil, "close the Who window, then run /cl who again."
-  end
+  local busy = WhoBusy()
+  if busy then return nil, busy end
   local mine, others = GetGuildInfo("player"), {}
   for _, g in ipairs(NS.db.guilds or {}) do if g ~= mine then others[#others + 1] = g end end
   if #others == 0 then return nil, "no other guild on the guilds= list." end
-  whoIndex = whoIndex % #others + 1
-  local g = others[whoIndex]
-  if C.SetWhoToUi then pcall(C.SetWhoToUi, true) end
-  if not pcall(C.SendWho, 'g-"' .. g .. '"') then return nil, "the who lookup failed." end
-  whoPending = { guild = g, at = GetTime() }
+  local index = whoIndex % #others + 1
+  local g = others[index]
+  WhoToUi(true)                 -- results as an event, not as lines in the chat window
+  whoPending = { guild = g, at = GetTime(), index = index }
+  if not pcall(C_FriendList.SendWho, 'g-"' .. g .. '"') then whoPending = nil return nil, "the who lookup failed." end
   stats.who = stats.who + 1
+  C_Timer.After(WHO_ANSWER_SECS, function() if not whoPending or whoPending.guild == g then WhoToUi(false) end end)
   return g, #others
+end
+
+-- pcall does not see a blocked call: the game reports it with this event. If it names us while a lookup of ours
+-- is waiting, even the command's keypress is not enough on this client; say so once and stop offering it.
+NS.events.ADDON_ACTION_BLOCKED = function(addon)
+  if addon ~= NS.ADDON or not whoPending or GetTime() - whoPending.at > 1 then return end
+  whoPending, whoRefused = nil, true
+  Debug("the game blocked the who lookup from /cl who")
+  NS.Print("the game refused the who lookup. /cl who does not work on this client.")
 end
 
 -- The names in the Who results that are really in guild g, and how many there are. The server's g-"Name"
@@ -155,7 +180,7 @@ local function WhoResults(g)
   return online, names
 end
 
--- Greet a few names we have not heard from, rotating through the list over the rounds (a name waits 30 min
+-- Greet a few names we have not heard from, rotating through the list over the lookups (a name waits 30 min
 -- between hellos). Known peers are pinged by PeerUpkeep instead.
 local function GreetSome(names)
   local now, greeted = GetTime(), 0
@@ -172,7 +197,9 @@ local function OnWhoList()
   local asked = whoPending
   whoPending = nil
   if not asked or GetTime() - asked.at > WHO_ANSWER_SECS then return end
+  WhoToUi(false)
   local g = asked.guild
+  whoIndex = asked.index
   local online, names = WhoResults(g)
   NS.guildOnline[g] = { n = online, t = GetTime() }
   GreetSome(names)
@@ -255,7 +282,7 @@ function NS.OnWhisperAddon(text, sender)
 end
 
 -- Keep live peers fresh: the courier pings known peers every 10 minutes; anyone answers. Forget peers silent
--- for a week and fanned ids after a minute. Then run the who round if it is due.
+-- for a week and fanned ids after a minute.
 local function PeerUpkeep()
   if not NS.db then return end
   local now = GetTime()
