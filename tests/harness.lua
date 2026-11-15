@@ -486,6 +486,36 @@ do
   JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
 end
 
+-- Reading Guild Info is a call the game blocks at times and reports to the player as an addon failure: it is
+-- not made in combat or chat lockdown, and once configured only every five minutes, unless the player asks.
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  local reads, realRead = 0, GetGuildInfoText
+  GetGuildInfoText = function() reads = reads + 1; return realRead() end
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  check("guild info: read at login", reads >= 1 and CORELinkDB.channel == "CORELink7100", reads)
+  advance(300); reads = 0
+  for _ = 1, 4 do advance(60); H(nil, "GUILD_ROSTER_UPDATE") end
+  check("guild info: once configured, roster updates and the minute tick do not read it more than once in five minutes", reads <= 1, reads)
+  reads = 0; slash("reload")
+  check("guild info: /cl reload reads it at once", reads == 1, reads)
+  InCombatLockdown = function() return true end
+  guildInfoText = "CORELink: CORELink7100 pw1 OTHER 1\n"
+  reads = 0; advance(400); H(nil, "GUILD_ROSTER_UPDATE"); slash("reload")
+  check("guild info: never read in combat, not even on /cl reload", reads == 0 and CORELinkDB.tag == "MAIN", reads)
+  check("guild info: the report says why it was not read", report():find("guildInfo not read: in combat or chat lockdown", 1, true) ~= nil, report())
+  InCombatLockdown = nil
+  advance(60)
+  check("guild info: read again after combat, and the changed line is picked up", reads >= 1 and CORELinkDB.tag == "OTHER", reads .. " " .. tostring(CORELinkDB.tag))
+  local inLockdown = C_ChatInfo.InChatMessagingLockdown
+  C_ChatInfo.InChatMessagingLockdown = function() return true end
+  reads = 0; advance(400); slash("reload")
+  check("guild info: never read in chat lockdown", reads == 0, reads)
+  C_ChatInfo.InChatMessagingLockdown = inLockdown
+  GetGuildInfoText = realRead
+end
+
 -- A character that moves to a guild without a CORELink line does not keep the old guild's settings
 do
   CORELinkDB = {}; joined = {}; joinCalls = {}
@@ -493,7 +523,7 @@ do
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
   check("settings came from Guild Info", CORELinkDB.channel == "CORELink7100" and CORELinkDB.source == "Guild Info")
   guildInfoText = "A different guild, no link here\n"
-  advance(60)
+  advance(400)                                          -- past the next background read; they are five minutes apart
   check("a guild with no CORELink line clears settings inherited from Guild Info and leaves the channel",
     CORELinkDB.channel == nil and joined["CORELink7100"] == nil and last():find("settings from the previous guild were cleared", 1, true) ~= nil, last())
   guildInfoText = savedTextForRestore

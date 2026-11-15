@@ -15,7 +15,7 @@ globals = {
 -- the code must guard it with `if X then`; luacheck only proves we spelled it right.
 read_globals = {
   -- frames / UI
-  "CreateFrame", "UIParent", "DEFAULT_CHAT_FRAME", "NUM_CHAT_WINDOWS", "ChatTypeInfo", "RAID_CLASS_COLORS",
+  "CreateFrame", "UIParent", "InCombatLockdown", "DEFAULT_CHAT_FRAME", "NUM_CHAT_WINDOWS", "ChatTypeInfo", "RAID_CLASS_COLORS",
   "ChatFrame_AddMessageEventFilter", "ChatFrame_RemoveChannel", "StaticPopup_Show", "C_AddOns", "GetAddOnMetadata",
   "GetChatWindowMessages", "GetChatWindowChannels", "ChatFrame1EditBox", "ChatEdit_ParseText", "hooksecurefunc",
   -- chat / channels

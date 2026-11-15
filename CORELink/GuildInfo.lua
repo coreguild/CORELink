@@ -24,6 +24,22 @@ local function GIState(state)
   end
 end
 
+-- The game blocks GetGuildInfoText for addons at times (seen in the live guild as ADDON_ACTION_BLOCKED, which
+-- the player gets as "Interface action failed because of an AddOn"; pcall does not catch it). So the text is
+-- not asked for in combat or chat lockdown, and once the settings are loaded only every few minutes: the line
+-- changes rarely. force: the player asked (/cl reload) or we are logging in.
+local READ_EVERY = 300
+local nextRead = 0
+local function MayRead(force)
+  if (InCombatLockdown and InCombatLockdown()) or NS.Locked() then
+    GIState("not read: in combat or chat lockdown")
+    return false
+  end
+  if not force and Configured() and GetTime() < nextRead then return false end
+  nextRead = GetTime() + READ_EVERY
+  return true
+end
+
 -- The CORELink line out of the Guild Info text, or nil with the reason recorded in conn.giState.
 local function FindLine()
   if not IsInGuild() then GIState("not in a guild") return nil end
@@ -62,9 +78,9 @@ local function ReadFlag(value)
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
-function NS.ReadGuildInfo()
+function NS.ReadGuildInfo(force)
   local db = NS.db
-  if not db then return end
+  if not db or not MayRead(force) then return end
   local line = FindLine()
   if not line then return end
   if line == db.lastGI then GIState("line unchanged") return end   -- keep any local override

@@ -218,7 +218,7 @@ end
 commands.reload = function()
   local conn = NS.conn
   NS.db.lastGI = nil; conn.blockedUntil = 0; conn.blockedWhy = nil
-  NS.ReadGuildInfo(); NS.EnsureChannel(); Print("re-read Guild Info and retried the channel.")
+  NS.ReadGuildInfo(true); NS.EnsureChannel(); Print("re-read Guild Info and retried the channel.")
 end
 
 commands.on = function() NS.db.enabled = true; NS.EnsureChannel(); Print("enabled.") end
