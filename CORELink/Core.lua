@@ -63,11 +63,13 @@ function NS.Locked()
   return false
 end
 
--- The addon's own messages go to the chat tab the player is looking at: a player who has closed the first
--- tab, or lives in another one, would not see them in the default window. The combat log tab cannot show them.
+-- The addon's own messages go to the default chat window. While a /cl command runs, NS.replyFrame is the chat
+-- window it was typed in (set by the slash handler), so the reply shows where the player is looking even if
+-- they never open the first tab. A hidden window or the combat log cannot show a reply: the default it is.
 function NS.Print(msg)
-  local frame = SELECTED_CHAT_FRAME
-  local usable = type(frame) == "table" and frame.AddMessage and not (IsCombatLog and IsCombatLog(frame))
+  local frame = NS.replyFrame
+  local usable = type(frame) == "table" and frame.AddMessage and frame ~= ChatFrame2
+    and not (frame.IsShown and not frame:IsShown())
   if not usable then frame = DEFAULT_CHAT_FRAME end
   frame:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
 end

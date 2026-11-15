@@ -235,7 +235,7 @@ commands.unmute = function(arg)
 end
 
 ---------------------------------------------------------------- dispatch
-SlashCmdList["CORELINK"] = function(input)
+local function Run(input)
   local cmd, arg = input:match("^(%S*)%s*(.-)$")
   cmd = cmd:lower()
   if GM_ONLY[cmd] and not IsGM() then
@@ -244,4 +244,13 @@ SlashCmdList["CORELINK"] = function(input)
   end
   local handler = commands[cmd]
   if handler then handler(arg) else ShowStatus() end
+end
+
+-- The game hands a slash command the edit box it was typed in; that box knows its chat window. Replies printed
+-- while the command runs go there (NS.Print). What the addon says later, by itself, goes to the default window.
+SlashCmdList["CORELINK"] = function(input, editBox)
+  NS.replyFrame = type(editBox) == "table" and editBox.chatFrame or nil
+  local ok, err = pcall(Run, input)
+  NS.replyFrame = nil
+  if not ok then error(err, 0) end
 end
