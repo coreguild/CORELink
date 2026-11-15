@@ -38,7 +38,7 @@ If it keeps happening, ask the sender and receiver to run `/cl report`. Share bo
 
 ## WoW says "No player named X is currently playing"
 
-If the notice keeps appearing while you use CORELink, share a report. WoW can show this notice if someone logs off before receiving a whisper or an addon greeting. CORELink hides notices it recognizes as replies to its own greetings.
+WoW shows this notice when someone logs off before a whisper reaches them. CORELink whispers players in linked guilds to greet them and to pass along messages from guild members without the addon. It hides the notices it recognizes as replies to its own whispers and stops whispering that player until they're back. Version 0.2.0 only hid the replies to greetings, so update if you see the notice repeat after a player in a linked guild logs off. If it keeps appearing on a newer version, share a report.
 
 ## Read the report
 
