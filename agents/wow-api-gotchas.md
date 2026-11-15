@@ -61,7 +61,9 @@ Read before changing anything in the relay, channel or chat code.
     `/run local f=CreateFrame("Frame");f:RegisterEvent("ADDON_ACTION_BLOCKED");f:SetScript("OnEvent",print)`.
 14. **`GetGuildInfoText` is sometimes blocked.** Seen in the live guild on 2026-11-14 through BugGrabber:
     `[ADDON_ACTION_BLOCKED] AddOn 'CORELink' tried to call the protected function 'UNKNOWN()'`, stack
-    `pcall` <- `GuildInfo.lua` `FindLine` <- `ReadGuildInfo` <- the minute tick. `pcall` returns without the
-    text, the player gets "Interface action failed because of an AddOn", and `/cl report` logs
-    `guild info: not readable`. Most reads succeed; what state blocks it (combat is the guess) is not
-    verified in game. The addon does not ask in combat or chat lockdown, and only every five minutes.
+    `pcall` <- `GuildInfo.lua` `FindLine` <- `ReadGuildInfo` <- the minute tick, and again from the
+    `GUILD_ROSTER_UPDATE` handler "as I started combat". `pcall` returns without the text, the player gets
+    "Interface action failed because of an AddOn", and `/cl report` logs `guild info: not readable`. Most reads
+    succeed, and a read from a timer has also succeeded around a fight, so the exact condition is not pinned
+    down; the start of combat is the one confirmed case. The addon does not ask in combat (`InCombatLockdown`
+    or `UnitAffectingCombat("player")`) or chat lockdown, and only every five minutes.

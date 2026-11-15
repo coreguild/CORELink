@@ -506,6 +506,10 @@ do
   check("guild info: never read in combat, not even on /cl reload", reads == 0 and CORELinkDB.tag == "MAIN", reads)
   check("guild info: the report says why it was not read", report():find("guildInfo not read: in combat or chat lockdown", 1, true) ~= nil, report())
   InCombatLockdown = nil
+  UnitAffectingCombat = function(unit) return unit == "player" end
+  reads = 0; advance(400); slash("reload")
+  check("guild info: not read while the player is fighting, whatever the lockdown flag says", reads == 0 and CORELinkDB.tag == "MAIN", reads)
+  UnitAffectingCombat = nil
   advance(60)
   check("guild info: read again after combat, and the changed line is picked up", reads >= 1 and CORELinkDB.tag == "OTHER", reads .. " " .. tostring(CORELinkDB.tag))
   local inLockdown = C_ChatInfo.InChatMessagingLockdown

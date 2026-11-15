@@ -24,14 +24,18 @@ local function GIState(state)
   end
 end
 
--- The game blocks GetGuildInfoText for addons at times (seen in the live guild as ADDON_ACTION_BLOCKED, which
--- the player gets as "Interface action failed because of an AddOn"; pcall does not catch it). So the text is
--- not asked for in combat or chat lockdown, and once the settings are loaded only every few minutes: the line
--- changes rarely. force: the player asked (/cl reload) or we are logging in.
+-- The game blocks GetGuildInfoText for addons at times (seen in the live guild as ADDON_ACTION_BLOCKED, once
+-- the moment a fight started, which the player gets as "Interface action failed because of an AddOn"; pcall
+-- does not catch it). So the text is not asked for in combat or chat lockdown, and once the settings are loaded
+-- only every few minutes: the line changes rarely. force: the player asked (/cl reload) or we are logging in.
 local READ_EVERY = 300
 local nextRead = 0
+local function InCombat()
+  return (InCombatLockdown and InCombatLockdown()) or (UnitAffectingCombat and UnitAffectingCombat("player")) or false
+end
+
 local function MayRead(force)
-  if (InCombatLockdown and InCombatLockdown()) or NS.Locked() then
+  if InCombat() or NS.Locked() then
     GIState("not read: in combat or chat lockdown")
     return false
   end
