@@ -7,36 +7,38 @@
 -- Packets (whisper addon channel): HELLO~tag~realm~guild, PEER~tag~realm~guild (the answer),
 -- DIR~name@realm@tag@guild;... (gossip), WB~<packet> (a carried line).
 -- Provides NS.peers, NS.LoadPeers, NS.LivePeer, NS.NotePeer, NS.IsCourier, NS.Courier, NS.Hello, NS.ForgetHello,
--- NS.WhisperAvailable, NS.ScheduleWho, NS.ResetWhoTimer, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName,
--- NS.whisperStats, NS.guildOnline, NS.PEER_ONLINE_SECS.
+-- NS.WhisperAvailable, NS.WhisperOut, NS.OnWhisperAddon, NS.PeerName, NS.whisperStats, NS.PEER_ONLINE_SECS.
+-- There is no /who lookup of other guilds: the game blocks C_FriendList.SendWho outside a keypress.
 local _, NS = ...
 local Debug, Locked, IsMe, MyName, MyRealm, GetTag = NS.Debug, NS.Locked, NS.IsMe, NS.MyName, NS.MyRealm, NS.GetTag
 local issecret, SEP = NS.issecret, NS.SEP
 
 local peers = {}             -- name (as the game gives it) -> { tag=, realm=, guild=, seen= }  (saved in db.peers)
 NS.peers = peers
-NS.guildOnline = {}          -- guild name -> { n = online count, t = time }  (from /who)
 local helloAt = {}           -- whisper target -> last hello time
 local fanned = {}            -- packet id -> time we fanned it out to our guild
-NS.whisperStats = { who = 0, hello = 0, answered = 0, sent = 0, recv = 0, fanned = 0 }
+NS.whisperStats = { hello = 0, answered = 0, sent = 0, recv = 0, fanned = 0 }
 local stats = NS.whisperStats
-local whoQueue, whoPending, whoNext = {}, nil, 0
-local WHO_EVERY, HELLO_EVERY, HELLO_PER_GUILD = 600, 600, 3
+local HELLO_EVERY = 600
 local COURIER_SECS = 360      -- a guildmate silent this long is not a courier candidate
 NS.PEER_ONLINE_SECS = 1200    -- a peer silent this long is not whispered to
 local PEER_ONLINE_SECS, PEER_KEEP_SECS = NS.PEER_ONLINE_SECS, 7 * 86400
+local GONE_PING_SECS = 3600   -- how long a peer the game called "not playing" is still greeted now and then
+local NOT_PLAYING_SECS = 10   -- the game's "not playing" answer counts as ours this long after a whisper left
 
--- Saved peers from a previous session (ADDON_LOADED).
+-- Saved peers from a previous session (ADDON_LOADED). Who logged off last session is not known now.
 function NS.LoadPeers(saved)
   if type(saved) ~= "table" then return end
+  for _, p in pairs(saved) do if type(p) == "table" then p.gone = nil end end
   peers = saved
   NS.peers = saved
 end
 
 local function SavePeers() if NS.db then NS.db.peers = peers end end
 
--- Heard from in the last 20 minutes. A peer that never answered has seen == 0 and is never live.
-local function Live(p, now) return p.seen > 0 and now - p.seen <= PEER_ONLINE_SECS end
+-- Heard from in the last 20 minutes, and the game has not said since that they are not playing (p.gone, the
+-- time it first said so). A peer that never answered has seen == 0 and is never live.
+local function Live(p, now) return p.seen > 0 and now - p.seen <= PEER_ONLINE_SECS and not p.gone end
 NS.LivePeer = Live
 
 ---------------------------------------------------------------- courier election
@@ -67,7 +69,7 @@ local PeerName = NS.PeerName
 local function RememberPeer(key, tag, realm, guild)
   if not key or key == "" or not tag or tag == "" then return end
   local p = peers[key] or {}
-  p.tag, p.seen = tag, GetTime()
+  p.tag, p.seen, p.gone = tag, GetTime(), nil
   p.realm = (realm and realm ~= "" and realm) or p.realm or "?"
   p.guild = (guild and guild ~= "" and guild) or p.guild
   peers[key] = p
@@ -109,83 +111,48 @@ local function Directory()
   return table.concat(out, ";")
 end
 
----------------------------------------------------------------- who rounds (optional bootstrap)
--- With guilds= on the Guild Info line, the courier asks who is online in each listed guild and greets a few,
--- so a guild nobody has heard from yet still gets a peer. Silent, one guild at a time, never while the
--- player's Who window is open.
-local function WhoAvailable()
-  return C_FriendList and C_FriendList.SendWho and C_FriendList.GetNumWhoResults and C_FriendList.GetWhoInfo
+---------------------------------------------------------------- carrying a line
+local carriedTo = {}   -- whisper target -> the carried lines (WB~...) that left for them in the last few seconds
+
+-- A whisper left for this target (called by the queue drain in Channel.lua). Carried lines are kept for a few
+-- seconds: if the game answers that the target is not playing, they go to another peer of that guild.
+function NS.NoteWhispered(target, text)
+  local now = GetTime()
+  local last = NS.whisperedAt[target]
+  if not last or now - last > NOT_PLAYING_SECS then carriedTo[target] = nil end
+  NS.whisperedAt[target] = now
+  if text:sub(1, 3) == "WB" .. SEP then
+    carriedTo[target] = carriedTo[target] or {}
+    table.insert(carriedTo[target], text)
+  end
 end
 
-local function RunWho()
-  if whoPending or #whoQueue == 0 or not WhoAvailable() then return end
-  if FriendsFrame and FriendsFrame.IsShown and FriendsFrame:IsShown() then C_Timer.After(30, RunWho) return end
-  local g = table.remove(whoQueue, 1)
-  whoPending = { guild = g, at = GetTime() }
-  if C_FriendList.SetWhoToUi then pcall(C_FriendList.SetWhoToUi, true) end
-  local ok = pcall(C_FriendList.SendWho, 'g-"' .. g .. '"')
-  if not ok then whoPending = nil return end
-  stats.who = stats.who + 1
-  C_Timer.After(6, function() if whoPending and whoPending.guild == g then whoPending = nil; RunWho() end end)
+-- The freshest live peer of a guild, or nil.
+local function FreshestPeer(tag, now)
+  local best
+  for key, p in pairs(peers) do
+    if p.tag == tag and Live(p, now) and (not best or p.seen > peers[best].seen) then best = key end
+  end
+  return best
 end
 
-function NS.ScheduleWho()
-  local db = NS.db
-  if not db or not db.guilds or #db.guilds == 0 or not IsCourier() then return end
-  if GetTime() < whoNext then return end
-  whoNext = GetTime() + WHO_EVERY
-  wipe(whoQueue)
-  local mineName = GetGuildInfo("player")
-  for _, g in ipairs(db.guilds) do if g ~= mineName then whoQueue[#whoQueue + 1] = g end end
-  RunWho()
-end
-
-function NS.ResetWhoTimer() whoNext = 0 end
-
--- The names in the Who results that are really in guild g, and how many there are. The server's g-"Name"
--- filter is a substring match (g-"CORE" also returns Molten Soft Core), so the guild name is checked exactly.
-local function WhoResults(g)
-  local n = C_FriendList.GetNumWhoResults() or 0
-  local online, names = 0, {}
-  for i = 1, n do
-    local okw, info = pcall(C_FriendList.GetWhoInfo, i)
-    local full = okw and type(info) == "table" and info.fullName
-    local guild = okw and type(info) == "table" and info.fullGuildName
-    local inGuild = type(guild) ~= "string" or issecret(guild) or guild == g
-    if type(full) == "string" and not issecret(full) and full ~= "" and inGuild then
-      online = online + 1
-      if not IsMe(PeerName(full)) then names[#names + 1] = full end
+-- The peer `key` of guild `tag` is not playing: the carried lines that just left for them, and those still
+-- queued, go to that guild's next freshest peer. With no other live peer they are lost.
+local function Reroute(key, tag)
+  local lines, queue = carriedTo[key] or {}, NS.whisperQueue
+  carriedTo[key] = nil
+  for i = #queue, 1, -1 do
+    if queue[i].target == key then
+      local w = table.remove(queue, i)
+      if w.text:sub(1, 3) == "WB" .. SEP then table.insert(lines, w.text) end
     end
   end
-  Debug("who %s: %d in that guild of %d results", g, online, n)
-  return online, names
+  local other = FreshestPeer(tag, GetTime())
+  if other then for _, text in ipairs(lines) do QueueWhisper(other, text) end end
+  Debug("%s is not playing: %d carried line(s) %s; no more to them until they are heard from again", key, #lines,
+    other and ("sent on to " .. PeerName(other)) or "lost, no other live peer in <" .. tostring(tag) .. ">")
 end
 
--- Greet a few names we have not heard from, rotating through the list over the rounds (a name waits 30 min
--- between hellos). Known peers are pinged by PeerUpkeep instead.
-local function GreetSome(names)
-  local now, greeted = GetTime(), 0
-  for _, key in ipairs(names) do
-    if greeted >= HELLO_PER_GUILD then break end
-    local p = peers[key]
-    local known = p and p.seen > 0
-    local rested = not helloAt[key] or now - helloAt[key] >= 3 * HELLO_EVERY
-    if not known and rested and Hello(key) then greeted = greeted + 1 end
-  end
-end
-
-local function OnWhoList()
-  if not whoPending then return end
-  local g = whoPending.guild
-  whoPending = nil
-  local online, names = WhoResults(g)
-  NS.guildOnline[g] = { n = online, t = GetTime() }
-  GreetSome(names)
-  C_Timer.After(3, RunWho)
-end
-NS.events.WHO_LIST_UPDATE = OnWhoList
-
----------------------------------------------------------------- carrying a line
 -- The courier carries a guildmate's line: one whisper to the freshest live peer of every other guild.
 function NS.WhisperOut(id, tag, text)
   local db = NS.db
@@ -261,32 +228,60 @@ function NS.OnWhisperAddon(text, sender)
 end
 
 -- Keep live peers fresh: the courier pings known peers every 10 minutes; anyone answers. Forget peers silent
--- for a week and fanned ids after a minute. Then run the who round if it is due.
+-- for a week and fanned ids after a minute.
 local function PeerUpkeep()
   if not NS.db then return end
   local now = GetTime()
   for key, p in pairs(peers) do
     if now - p.seen > PEER_KEEP_SECS then peers[key] = nil
-    elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY then Hello(key, "HELLO") end
+    elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY
+      and (not p.gone or now - p.gone < GONE_PING_SECS) then
+      Hello(key, "HELLO")     -- a peer who logged off is asked again for an hour, in case they came back quietly
+    end
   end
   for id, t in pairs(fanned) do if now - t > NS.FORGET_SECS then fanned[id] = nil end end
+  for key, t in pairs(NS.whisperedAt) do
+    if now - t > NOT_PLAYING_SECS then NS.whisperedAt[key], carriedTo[key] = nil, nil end
+  end
   SavePeers()
-  NS.ScheduleWho()
 end
 C_Timer.NewTicker(60, PeerUpkeep)
 
--- A hello to someone who logged off makes the game print "No player named 'X' is currently playing."; hide it
--- when it is about a name we whispered in the last few seconds, and forget that peer for now.
-ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
-  if issecret(msg) or type(msg) ~= "string" then return false end
-  local name = msg:match("^No player named '([^']+)' is currently playing")
-  if not name then return false end
-  local now = GetTime()
-  for key, t in pairs(helloAt) do
-    if now - t <= 10 and (key == name or PeerName(key) == name or key:gsub("%-.*$", "") == name) then
-      if peers[key] then peers[key].seen = 0 end
-      return true
-    end
+-- An addon whisper to someone who logged off makes the game answer the sender "No player named 'X' is
+-- currently playing.", once per whisper: a hello, or every line the courier carries to that peer. When it is
+-- about a name a whisper of ours left for in the last few seconds, the peer is marked gone (no more carried
+-- lines; a hello now and then for an hour) until they are heard from again, the lines that just left for them
+-- or are still queued go to their guild's next peer (Reroute), and the chat filter keeps the line out of chat.
+local notPlaying   -- the client's wording of that answer as a pattern, built on first use
+local function NotPlayingName(msg)
+  if issecret(msg) or type(msg) ~= "string" then return nil end
+  if not notPlaying then
+    local text = type(ERR_CHAT_PLAYER_NOT_FOUND_S) == "string" and ERR_CHAT_PLAYER_NOT_FOUND_S
+      or "No player named '%s' is currently playing."
+    notPlaying = "^" .. text:gsub("%%s", "\1"):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0"):gsub("\1", "(.+)") .. "$"
   end
-  return false
+  return msg:match(notPlaying)
+end
+
+-- The whisper target this name stands for, if a whisper left for them just now: the exact name first.
+local function WhisperedJust(name, now)
+  local sent = NS.whisperedAt
+  if sent[name] and now - sent[name] <= NOT_PLAYING_SECS then return name end
+  for key, t in pairs(sent) do
+    if now - t <= NOT_PLAYING_SECS and PeerName(key) == name then return key end
+  end
+end
+
+NS.events.CHAT_MSG_SYSTEM = function(msg)
+  local name = NotPlayingName(msg)
+  local key = name and WhisperedJust(name, GetTime())
+  local p = key and peers[key]
+  if not p or p.gone then return end
+  p.gone = GetTime()
+  Reroute(key, p.tag)
+end
+
+ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", function(_, _, msg)
+  local name = NotPlayingName(msg)
+  return (name and WhisperedJust(name, GetTime())) ~= nil
 end)

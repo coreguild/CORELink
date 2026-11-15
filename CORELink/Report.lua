@@ -51,9 +51,9 @@ end
 
 local function WhisperSummary()
   local db, s = NS.db, NS.whisperStats
-  return string.format("whisper %s courier=%s guilds=%d peers=%d who=%d hello=%d answered=%d sent=%d recv=%d fanned=%d",
+  return string.format("whisper %s courier=%s guilds=%d peers=%d hello=%d answered=%d sent=%d recv=%d fanned=%d",
     OnOff(db.whisper ~= false), NS.IsCourier() and "me" or NS.Courier(), db.guilds and #db.guilds or 0, (LivePeers()),
-    s.who, s.hello, s.answered, s.sent, s.recv, s.fanned)
+    s.hello, s.answered, s.sent, s.recv, s.fanned)
 end
 
 local function EchoSummary()
@@ -101,8 +101,7 @@ NS.commands.report = function()
 end
 
 ---------------------------------------------------------------- /cl guilds
--- "TAG - heard 12s ago, 2 peers" for each guild heard in the last 10 minutes, then the courier and the
--- counts from the last who round.
+-- "TAG - heard 12s ago, 2 peers" for each guild heard in the last 10 minutes, then the courier.
 NS.commands.guilds = function()
   local now, n = GetTime(), 0
   local _, perTag = LivePeers()
@@ -118,19 +117,13 @@ NS.commands.guilds = function()
   if n == 0 then Print("no guilds heard on the link in the last 10 minutes.") end
   Print("courier for your guild: " .. (NS.IsCourier() and "you" or NS.Courier())
     .. " (" .. CountKeys(NS.addonUsers) .. " guildmate(s) seen running the addon)")
-  local names = {}
-  for g in pairs(NS.guildOnline) do names[#names + 1] = g end
-  table.sort(names)
-  for _, g in ipairs(names) do
-    local e = NS.guildOnline[g]
-    Print(string.format("%s - %d online (asked %ds ago)", g, e.n, math.floor(now - e.t)))
-  end
 end
 
 ---------------------------------------------------------------- /cl peers
 local function PeerState(p, now)
   if p.seen == 0 then return "not yet answered" end
   if NS.LivePeer(p, now) then return "seen " .. math.floor(now - p.seen) .. "s ago" end
+  if p.gone then return "logged off (the game said so " .. math.floor(now - p.gone) .. "s ago)" end
   return "offline"
 end
 
