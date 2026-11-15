@@ -66,4 +66,5 @@ Read before changing anything in the relay, channel or chat code.
     "Interface action failed because of an AddOn", and `/cl report` logs `guild info: not readable`. Most reads
     succeed, and a read from a timer has also succeeded around a fight, so the exact condition is not pinned
     down; the start of combat is the one confirmed case. The addon does not ask in combat (`InCombatLockdown`
-    or `UnitAffectingCombat("player")`) or chat lockdown, and only every five minutes.
+    or `UnitAffectingCombat("player")`) or chat lockdown, asks only every five minutes, and logs
+    `guild info read blocked: lockdown=.. fighting=.. instance=..` when a read is blocked, to find the condition.

@@ -46,7 +46,7 @@ If your Guild Information line has a `guilds=` list, update CORELink, or ask you
 
 ## WoW says "Interface action failed because of an AddOn" during play
 
-Update CORELink. Versions up to 0.2.1 re-read Guild Information once a minute, and WoW sometimes refuses that to addons and shows this notice. Newer versions read it at login, every five minutes after that, and never in combat. Because of that, a changed CORELink line now reaches members who are online within five minutes; `/cl reload` loads it at once.
+Update CORELink. Versions up to 0.2.1 re-read Guild Information at least once a minute, and WoW sometimes refuses that to addons and shows this notice. Newer versions read it at login and every five minutes after that, and never in combat. A changed CORELink line reaches members who are online within five minutes; `/cl reload` loads it at once, or right after the fight if you're in combat. If the notice still appears, send the `/cl report`: its log says what your character was doing when the read was refused.
 
 ## Read the report
 

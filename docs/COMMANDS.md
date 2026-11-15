@@ -9,7 +9,7 @@ Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat chan
 | `/cl` | Shows whether CORELink is on, your guild tag, which channel you are connected to, where your settings came from, and which commands you can run. |
 | `/cl guilds` | Lists guilds heard in the last 10 minutes. It also shows who is carrying chat for your guild. |
 | `/cl report` | Opens a copy box with your addon version, connection status, and recent events. Share it when asking for help. |
-| `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. |
+| `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. In combat it retries the channel and re-reads Guild Information when the fight is over. |
 
 ## Mute a guild, set a nickname, or turn CORELink off
 

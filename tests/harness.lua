@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 17, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -486,37 +486,59 @@ do
   JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
 end
 
--- Reading Guild Info is a call the game blocks at times and reports to the player as an addon failure: it is
--- not made in combat or chat lockdown, and once configured only every five minutes, unless the player asks.
+-- Reading Guild Info is a call the game blocks at times and reports to the player as an addon failure. It is
+-- made rarely, never in combat or chat lockdown, and a read that had to wait is done when the fight is over.
 do
   CORELinkDB = {}; joined = {}; joinCalls = {}
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
   local reads, realRead = 0, GetGuildInfoText
-  GetGuildInfoText = function() reads = reads + 1; return realRead() end
+  local function counted() reads = reads + 1; return realRead() end
+  GetGuildInfoText = counted
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
   check("guild info: read at login", reads >= 1 and CORELinkDB.channel == "CORELink7100", reads)
   advance(300); reads = 0
   for _ = 1, 4 do advance(60); H(nil, "GUILD_ROSTER_UPDATE") end
-  check("guild info: once configured, roster updates and the minute tick do not read it more than once in five minutes", reads <= 1, reads)
-  reads = 0; slash("reload")
-  check("guild info: /cl reload reads it at once", reads == 1, reads)
+  check("guild info: once read, roster updates and the minute tick read it at most once in five minutes", reads <= 1, reads)
+  reads = 0; out = lines(function() slash("reload") end)
+  check("guild info: /cl reload reads it at once", reads == 1 and out:find("re-read Guild Info and retried the channel", 1, true) ~= nil, reads .. " " .. out)
+  -- in combat: not read, the player is told, and the read is done when the fight is over
   InCombatLockdown = function() return true end
   guildInfoText = "CORELink: CORELink7100 pw1 OTHER 1\n"
-  reads = 0; advance(400); H(nil, "GUILD_ROSTER_UPDATE"); slash("reload")
-  check("guild info: never read in combat, not even on /cl reload", reads == 0 and CORELinkDB.tag == "MAIN", reads)
-  check("guild info: the report says why it was not read", report():find("guildInfo not read: in combat or chat lockdown", 1, true) ~= nil, report())
+  reads = 0; advance(20); H(nil, "GUILD_ROSTER_UPDATE")
+  check("guild info: a read that is not due in combat leaves the report alone", reads == 0 and report():find("guildInfo line read", 1, true) ~= nil, report())
+  out = lines(function() slash("reload") end)
+  check("guild info: /cl reload in combat reads nothing and says the read will follow", reads == 0 and CORELinkDB.tag == "MAIN" and out:find("Guild Info will be re-read when the fight or lockdown is over", 1, true) ~= nil and report():find("guildInfo waiting: not read in combat or chat lockdown", 1, true) ~= nil, out)
   InCombatLockdown = nil
+  H(nil, "PLAYER_REGEN_ENABLED"); advance(3)
+  check("guild info: the read that waited is done when the fight is over, and the changed line is picked up", reads == 1 and CORELinkDB.tag == "OTHER", reads .. " " .. tostring(CORELinkDB.tag))
   UnitAffectingCombat = function(unit) return unit == "player" end
-  reads = 0; advance(400); slash("reload")
-  check("guild info: not read while the player is fighting, whatever the lockdown flag says", reads == 0 and CORELinkDB.tag == "MAIN", reads)
+  reads = 0; slash("reload")
+  check("guild info: not read while the player is fighting, whatever the lockdown flag says", reads == 0, reads)
   UnitAffectingCombat = nil
-  advance(60)
-  check("guild info: read again after combat, and the changed line is picked up", reads >= 1 and CORELinkDB.tag == "OTHER", reads .. " " .. tostring(CORELinkDB.tag))
   local inLockdown = C_ChatInfo.InChatMessagingLockdown
   C_ChatInfo.InChatMessagingLockdown = function() return true end
-  reads = 0; advance(400); slash("reload")
-  check("guild info: never read in chat lockdown", reads == 0, reads)
+  advance(400)
+  check("guild info: not read in chat lockdown", reads == 0, reads)
   C_ChatInfo.InChatMessagingLockdown = inLockdown
+  advance(60)
+  check("guild info: the read that waited through a lockdown is done on the next tick", reads == 1, reads)
+  -- a read that gives nothing is tried again soon, not in five minutes
+  guildInfoText = ""; slash("reload")
+  guildInfoText = "CORELink: CORELink7100 pw1 THIRD 1\n"; reads = 0; advance(90)
+  check("guild info: after a read that gave no text, the next one comes within a minute or so", reads >= 1 and CORELinkDB.tag == "THIRD", reads .. " " .. tostring(CORELinkDB.tag))
+  -- the game blocks the read anyway: it reports that by event during the call, and the call returns nothing
+  advance(400)
+  GetGuildInfoText = function() reads = reads + 1; H(nil, "ADDON_ACTION_BLOCKED", "CORELink", "UNKNOWN()") end
+  reads = 0; advance(400)
+  check("guild info: a read the game blocked changes no setting and is logged with the state it happened in", reads == 1 and CORELinkDB.tag == "THIRD" and CORELinkDB.channel == "CORELink7100" and report():find("guildInfo blocked by the game", 1, true) ~= nil and report():find("guild info read blocked: lockdown=", 1, true) ~= nil, reads .. " " .. report())
+  reads = 0; advance(1200); for _ = 1, 3 do H(nil, "GUILD_ROSTER_UPDATE"); advance(6) end
+  check("guild info: after a blocked read it is not tried again for half an hour", reads == 0, reads)
+  advance(700)
+  check("guild info: then it is tried again", reads == 1, reads)
+  GetGuildInfoText = counted
+  H(nil, "ADDON_ACTION_BLOCKED", "CORELink", "UNKNOWN()")
+  reads = 0; slash("reload")
+  check("guild info: a block reported outside our read is not taken for ours", reads == 1 and report():find("blocked by the game", 1, true) == nil, report())
   GetGuildInfoText = realRead
 end
 
@@ -527,7 +549,10 @@ do
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
   check("settings came from Guild Info", CORELinkDB.channel == "CORELink7100" and CORELinkDB.source == "Guild Info")
   guildInfoText = "A different guild, no link here\n"
-  advance(400)                                          -- past the next background read; they are five minutes apart
+  local realGuild = GetGuildInfo
+  GetGuildInfo = function() return "Another Guild", "Member", 3 end   -- the character changed guild
+  advance(60)
+  GetGuildInfo = realGuild
   check("a guild with no CORELink line clears settings inherited from Guild Info and leaves the channel",
     CORELinkDB.channel == nil and joined["CORELink7100"] == nil and last():find("settings from the previous guild were cleared", 1, true) ~= nil, last())
   guildInfoText = savedTextForRestore
