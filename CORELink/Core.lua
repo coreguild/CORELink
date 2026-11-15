@@ -41,6 +41,7 @@ NS.pending = {}     -- packet id -> true while a back-off decides whether the co
 NS.displayed = {}   -- packet id -> time it was shown in guild chat
 NS.heard = {}       -- guild tag -> last time one of its lines reached us by any path
 NS.whisperQueue = {}   -- { target=, text= } waiting for the whisper addon channel
+NS.whisperedAt = {}    -- whisper target -> when an addon whisper last left for them (hello or carried line)
 -- What we know about authors from relay packets: class token and officer label, keyed by chat name.
 -- Community lines carry neither, so this is how they get class and officer colours.
 NS.authorClass, NS.authorOfficer, NS.authorNick, NS.authorSeen = {}, {}, {}, {}

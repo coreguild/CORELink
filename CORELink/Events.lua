@@ -81,7 +81,6 @@ NS.events.PLAYER_LOGIN = function()
     if NS.db.nicks[NS.MyName()] then NS.BroadcastNick() end
     NS.SendGuildAddon("NREQ")
   end)
-  C_Timer.After(45, NS.ScheduleWho)
   C_Timer.After(20, function()
     if not Configured() and not warned then
       warned = true
