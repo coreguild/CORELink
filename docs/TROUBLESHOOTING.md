@@ -48,6 +48,10 @@ If your Guild Information line has a `guilds=` list, update CORELink, or ask you
 
 Update CORELink. Versions up to 0.2.1 re-read Guild Information at least once a minute, and WoW sometimes refuses that to addons and shows this notice. Newer versions read it at login and every five minutes after that, and never in combat. A changed CORELink line reaches members who are online within five minutes; `/cl reload` loads it at once, or right after the fight if you're in combat. If the notice still appears, send the `/cl report`: its log says what your character was doing when the read was refused.
 
+## I type a `/cl` command and nothing appears
+
+Update CORELink. Versions up to 0.2.1 print their replies in the first chat tab, usually named General, so you don't see them while you're reading another tab. Until you update, click the first tab after typing the command, or use `/cl report`, which also opens a copy box. Newer versions reply in the tab you typed the command in. Messages CORELink shows by itself, such as a failed channel join, still appear in the first tab.
+
 ## Read the report
 
 | Field | What it tells you |

@@ -341,6 +341,31 @@ n0 = #chatLines; local rep = report()
 check("/cl report fills the copy box", rep ~= "")
 check("report has version, channel id, last send result and log", rep:find("CORELink 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. rep)
+-- a reply to a /cl command goes to the chat window the command was typed in; anything else to the default one
+do
+  local function typedIn(editBox, command)
+    local at = #chatLines
+    SlashCmdList["CORELINK"](command or "", editBox)
+    return chatLines[at + 1] and chatLines[at + 1].frame
+  end
+  local got = typedIn(nil)
+  check("a /cl reply goes to the default chat window when the game names no edit box", got == 1, got)
+  got = typedIn({ chatFrame = ChatFrame3 })
+  check("a /cl reply goes to the chat window the command was typed in", got == 3, got)
+  got = typedIn({ chatFrame = ChatFrame2 })
+  check("a /cl reply typed in the combat log window goes to the default window", got == 1, got)
+  ChatFrame3.IsShown = function() return false end
+  got = typedIn({ chatFrame = ChatFrame3 })
+  check("a /cl reply typed in a window that is not shown goes to the default window", got == 1, got)
+  ChatFrame3.IsShown = nil
+  got = typedIn({ chatFrame = { id = 9 } })
+  check("a /cl reply goes to the default window when the edit box's window cannot take it", got == 1, got)
+  typedIn({ chatFrame = ChatFrame3 })
+  local at = #chatLines
+  NS.Print("said later, by the addon itself")
+  got = chatLines[at + 1] and chatLines[at + 1].frame
+  check("what the addon says by itself after a command goes to the default window again", got == 1 and NS.replyFrame == nil, got)
+end
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end

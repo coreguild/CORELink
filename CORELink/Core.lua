@@ -63,8 +63,15 @@ function NS.Locked()
   return false
 end
 
+-- The addon's own messages go to the default chat window. While a /cl command runs, NS.replyFrame is the chat
+-- window it was typed in (set by the slash handler), so the reply shows where the player is looking even if
+-- they never open the first tab. A hidden window or the combat log cannot show a reply: the default it is.
 function NS.Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
+  local frame = NS.replyFrame
+  local usable = type(frame) == "table" and frame.AddMessage and frame ~= ChatFrame2
+    and not (frame.IsShown and not frame:IsShown())
+  if not usable then frame = DEFAULT_CHAT_FRAME end
+  frame:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
 end
 
 -- Debug log: always recorded (last DEBUG_MAX lines, shown by /cl report), echoed to chat when /cl debug on.
