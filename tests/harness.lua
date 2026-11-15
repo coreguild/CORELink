@@ -262,6 +262,9 @@ do
   check("a second copy of another guild's quest link line under another id is shown once", stat("shown") == s0 + 1, stat("shown") - s0)
   channelLine("CL4~0badf003~ALT~Carol~PRIEST~~~see |cffffff00|Hquest:78:20|h[Found]|h|r", "Carol")
   check("a line linking a different quest is shown", stat("shown") == s0 + 2, stat("shown") - s0)
+  channelLine("CL4~0badf004~ALT~Carol~PRIEST~~~|cff1eff00|Hitem:9:0:0:0:0:0:851|h[Ring of the Bear]|h|r", "Carol")
+  channelLine("CL4~0badf005~ALT~Carol~PRIEST~~~|cff1eff00|Hitem:9:0:0:0:0:0:852|h[Ring of the Eagle]|h|r", "Carol")
+  check("two variants of one item, linked one after the other, are both shown", stat("shown") == s0 + 4, stat("shown") - s0)
 end
 -- a copy arrives on the channel during the back-off: the courier stands down
 amark = #sentAddon

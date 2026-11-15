@@ -106,9 +106,9 @@ end
 
 -- One line can reach two clients as different text: the game writes a link's colour and details (a quest's
 -- level) for each viewer. Packet ids hash the raw text, so they differ. This key keeps only what the line says:
--- each link becomes its type and first id, colour codes go.
+-- each link becomes its type, first id and shown name, colour codes go.
 function NS.TextKey(tag, author, msg)
-  msg = msg:gsub("|H(%a+):([^:|]*)[^|]*|h.-|h", "{%1:%2}")
+  msg = msg:gsub("|H(%a+):([^:|]*)[^|]*|h(.-)|h", "{%1:%2:%3}")
   msg = msg:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|cn[^:|]*:", ""):gsub("|r", "")
   return NS.Hash(tag .. author .. msg)
 end
