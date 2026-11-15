@@ -836,15 +836,19 @@ do
   check("whisper: /cl publish writes guilds= last", lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 echo=on guilds=Trois Royaume, Deux", lastSetText)
   advance(400)                                                   -- earlier blocks' guildmates age out of the election
   check("whisper: we are the courier when no guildmate runs the addon", report():find("courier=me guilds=2", 1, true) ~= nil, report())
-  -- who round: one silent query per listed guild; results are names without realms; exact guild only
+  -- who lookup: the game allows the query only inside a keypress, so nothing asks by itself; each /cl who
+  -- asks about the next listed guild. Results are names without realms; exact guild only.
+  check("whisper: no who lookup runs by itself after login", #whoSent == 0, #whoSent)
   advance(60); whoSent = {}
-  slash("who")
-  check("whisper: a who round queries the first listed guild", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
+  out = lines(function() slash("who") end)
+  check("whisper: /cl who asks about the first listed guild and says how to ask about the next", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"' and out:find("asking who is online in Trois Royaume. The game allows one lookup per command: run /cl who again", 1, true) ~= nil, tostring(whoSent[1]) .. " " .. out)
   whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
                  { fullName = "Sgt Mayo", fullGuildName = "Molten Trois Royaume" }, { fullName = "Orla Finch", fullGuildName = "Trois Royaume" },
                  { fullName = "Shockly", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
   H(nil, "WHO_LIST_UPDATE"); advance(4)
-  check("whisper: the next guild is queried after the results arrive", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
+  check("whisper: the results do not start another lookup (outside a keypress the game blocks it)", #whoSent == 1, #whoSent)
+  slash("who")
+  check("whisper: the next /cl who asks about the next listed guild", #whoSent == 2 and whoSent[2] == 'g-"Deux"', #whoSent .. " " .. tostring(whoSent[2]))
   whoResults = {}; H(nil, "WHO_LIST_UPDATE"); advance(4)
   local hellos = {}
   for _, m in ipairs(sentAddon) do if m.kind == "WHISPER" and m.text:match("^HELLO~MAIN~PvE~CORE Forever$") then hellos[m.target] = true end end
@@ -852,8 +856,13 @@ do
     hellos["Nia Thorn"] and hellos["Cosmo Vale"] and hellos["Orla Finch"] and not hellos["Shockly"] and not hellos["Sgt Mayo"] and not hellos["Ash Vale"])
   out = lines(function() slash("guilds") end)
   check("whisper: /cl guilds counts the exact guild's online members from the last round", out:find("Trois Royaume - 5 online (asked", 1, true) ~= nil, out)
-  advance(616); whoSent = {}                                     -- the automatic round at +600 runs and times out
+  whoSent = {}; advance(616)
+  check("whisper: no who lookup runs by itself, however long the session", #whoSent == 0, #whoSent)
+  whoResults = { { fullName = "Late Comer", fullGuildName = "Deux" } }; local nLate = #sentAddon
+  H(nil, "WHO_LIST_UPDATE"); advance(4)                          -- the player's own /who, long after our lookup
+  check("whisper: who results that are not the answer to our lookup greet nobody", #whisperSends(nLate, "HELLO~") == 0)
   slash("who")
+  check("whisper: after the last listed guild, /cl who starts over with the first", #whoSent == 1 and whoSent[1] == 'g-"Trois Royaume"', tostring(whoSent[1]))
   whoResults = { { fullName = "Nia Thorn", fullGuildName = "Trois Royaume" }, { fullName = "Cosmo Vale", fullGuildName = "Trois Royaume" },
                  { fullName = "Orla Finch", fullGuildName = "Trois Royaume" }, { fullName = "Ash Vale", fullGuildName = "Trois Royaume" } }
   local nSent0 = #sentAddon

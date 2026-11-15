@@ -170,11 +170,15 @@ end
 
 commands.who = function()
   local db = NS.db
-  NS.ResetWhoTimer()
-  if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.")
-  elseif not NS.IsCourier() then
+  if not db.guilds or #db.guilds == 0 then Print("no guilds= list on the CORELink line in Guild Info.") return end
+  if not NS.IsCourier() then
     Print("a guildmate is the courier on " .. NS.MyRealm() .. "; only the courier queries.")
-  else NS.ScheduleWho(); Print("asking who is online in " .. #db.guilds .. " guild(s).") end
+    return
+  end
+  local guild, n = NS.WhoNext()
+  if not guild then Print(n) return end
+  Print("asking who is online in " .. guild .. "."
+    .. (n > 1 and " The game allows one lookup per command: run /cl who again for the next guild." or ""))
 end
 
 -- Greet one player by hand: the smallest in-game test of whisper addon messages crossing realms (they show up

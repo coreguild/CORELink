@@ -39,7 +39,7 @@ as `NS.Name()` when called.
 | `Roster.lua` | Our guild's members: ranks, our own full name, nicknames, presence, the guild addon channel dispatcher. Owns `NS.addonUsers`. |
 | `Echo.lua` | Re-posting linked guilds' lines into plain guild chat for members without the addon (ECHO claims). |
 | `Display.lua` | Drawing another guild's line in guild chat; the dedupe between relay and community copies; the officer colour filter. |
-| `Whisper.lua` | The courier election, peers, greetings, the optional who round, carrying lines (HELLO, PEER, DIR, WB). Owns `NS.peers`. |
+| `Whisper.lua` | The courier election, peers, greetings, the `/cl who` lookup, carrying lines (HELLO, PEER, DIR, WB). Owns `NS.peers`. |
 | `Relay.lua` | Our own typed line out as channel text, the courier's carry of a guildmate's line, every packet in (`ShowPacket`), the LINE fan-out. |
 | `Mirror.lua` | Posting typed guild lines into the community and showing its posts in guild chat. Owns `NS.mirror`. |
 | `Hooks.lua` | The chat send hooks, the one place the addon runs inside the player's keypress. |
@@ -162,8 +162,9 @@ raising `BASELINE`.
 
 A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line
 on the channel is one. A HELLO/PEER exchange adds one by hand (`/cl hello`), gossip (DIR) suggests more, and
-with `guilds=` on the Guild Info line the courier runs a silent `/who` per listed guild and greets a few members,
-for a guild nobody has heard from yet. Peers are saved between sessions; one that never answered is never
+with `guilds=` on the Guild Info line the courier's `/cl who` asks who is online in one listed guild and greets a
+few members, for a guild nobody has heard from yet. The game only allows that lookup inside a keypress, so it
+never runs by itself. Peers are saved between sessions; one that never answered is never
 whispered to. The courier pings its peers every ten minutes to keep them fresh.
 
 ## Things the game will not let us do
