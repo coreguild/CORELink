@@ -123,6 +123,7 @@ end
 local function PeerState(p, now)
   if p.seen == 0 then return "not yet answered" end
   if NS.LivePeer(p, now) then return "seen " .. math.floor(now - p.seen) .. "s ago" end
+  if p.gone then return "logged off (the game said so " .. math.floor(now - p.gone) .. "s ago)" end
   return "offline"
 end
 

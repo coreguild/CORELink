@@ -19,7 +19,7 @@ read_globals = {
   "ChatFrame_AddMessageEventFilter", "ChatFrame_RemoveChannel", "StaticPopup_Show", "C_AddOns", "GetAddOnMetadata",
   "GetChatWindowMessages", "GetChatWindowChannels", "ChatFrame1EditBox", "ChatEdit_ParseText", "hooksecurefunc",
   -- chat / channels
-  "SendChatMessage", "SendAddonMessage", "JoinChannelByName", "StaticPopup_Hide", "JoinTemporaryChannel", "LeaveChannelByName",
+  "SendChatMessage", "SendAddonMessage", "ERR_CHAT_PLAYER_NOT_FOUND_S", "JoinChannelByName", "StaticPopup_Hide", "JoinTemporaryChannel", "LeaveChannelByName",
   "GetChannelName", "GetChannelList", "C_ChatInfo", "C_Club",
   -- guild / player
   "GetGuildInfo", "GetGuildInfoText", "IsInGuild", "GetNumGuildMembers", "GetGuildRosterInfo", "GuildRoster",

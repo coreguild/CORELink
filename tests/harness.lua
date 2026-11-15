@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 14, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -887,6 +887,60 @@ do
   check("whisper: other 'not playing' lines are left alone", sf(nil, "CHAT_MSG_SYSTEM", "No player named 'Someone Else' is currently playing.") ~= true)
   out = lines(function() slash("peers") end)
   check("whisper: /cl peers lists peers with tag, guild and state", out:find("Zag Mathris - Trois (Trois Royaume) seen", 1, true) ~= nil and out:find("Rook Hale - Deux (Deux) not yet answered", 1, true) ~= nil, out)
+  -- a peer logged off: the game answers every whisper to them, a carried line as much as a hello, with a
+  -- "not playing" line. It is hidden, and that peer gets no more carried lines until heard from again.
+  do
+    local zag, st, carriedN = CORELinkDB.peers["Zag Mathris"], NS.whisperStats, NS.relayStats.carried
+    local seenBefore, sent, hello, answered = zag.seen, st.sent, st.hello, st.answered
+    local gone = "No player named 'Zag Mathris' is currently playing."
+    local function system(msg) H(nil, "CHAT_MSG_SYSTEM", msg); return sf(nil, "CHAT_MSG_SYSTEM", msg) == true end
+    local function toZag(from, prefix)
+      local n = 0
+      for _, w in ipairs(whisperSends(from, prefix)) do if w.target == "Zag Mathris" then n = n + 1 end end
+      return n
+    end
+    local function carriedTo(text, wait)
+      local from = #sentAddon
+      H(nil, "CHAT_MSG_GUILD", text, "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob"); advance(wait or 4)
+      return toZag(from, "WB~")
+    end
+    advance(30)   -- well past the last whisper to anyone
+    check("whisper: a 'not playing' line about a peer we have not just whispered is shown and changes nothing", not system(gone) and not zag.gone)
+    check("whisper: a guildmate's line is carried to the live peer", carriedTo("is anyone there") == 1)
+    check("whisper: a 'not playing' line in other words, or about another name, is shown and changes nothing", not system("Zag Mathris is away.") and not system("No player named 'Zag' is currently playing.") and not zag.gone)
+    -- two more lines are waiting in the queue for that peer when the game's answer to the first arrives
+    NS.whisperQueue[#NS.whisperQueue + 1] = { target = "Zag Mathris", text = "WB~queued one" }
+    NS.whisperQueue[#NS.whisperQueue + 1] = { target = "Someone Else", text = "WB~for another" }
+    nSent = #sentAddon
+    check("whisper: the game's 'not playing' line for a carried line is hidden", system(gone))
+    advance(2)
+    check("whisper: with no other live peer in that guild, lines queued for that peer are dropped; others go out", #whisperSends(nSent, "WB~queued one") == 0 and #whisperSends(nSent, "WB~for another") == 1)
+    check("whisper: a peer the game says is not playing gets no more carried lines, and stays known", carriedTo("still nobody") == 0 and zag.gone ~= nil and zag.seen == seenBefore)
+    out = lines(function() slash("peers") end)
+    check("whisper: /cl peers says that peer logged off", out:find("Zag Mathris - Trois (Trois Royaume) logged off", 1, true) ~= nil, out)
+    nSent = #sentAddon; advance(660)
+    check("whisper: a peer who logged off is greeted again later, in case they came back quietly", toZag(nSent, "HELLO~") == 1, toZag(nSent, "HELLO~"))
+    H(nil, "CHAT_MSG_ADDON", "CORELink", "PEER~Trois~CAMWOWUS2Realm1PvE~Trois Royaume", "WHISPER", "Zag Mathris")
+    check("whisper: once that peer answers, lines are carried to them again", not zag.gone and carriedTo("welcome back") == 1)
+    -- with another live peer in that guild nothing is lost: the line that just left and the one still queued move on
+    CORELinkDB.peers["Zed Orr"] = { tag = "Trois", realm = "?", seen = zag.seen - 5 }
+    NS.whisperQueue[#NS.whisperQueue + 1] = { target = "Zag Mathris", text = "WB~queued two" }
+    nSent = #sentAddon
+    system(gone); advance(2)
+    local toZed = ""
+    for _, w in ipairs(whisperSends(nSent, "WB~")) do if w.target == "Zed Orr" then toZed = toZed .. w.text .. "\n" end end
+    check("whisper: the carried line that just left for a peer who is not playing goes to the guild's next peer", toZed:find("welcome back", 1, true) ~= nil and toZag(nSent, "WB~") == 0, toZed)
+    check("whisper: so does a line still queued for them", toZed:find("WB~queued two\n", 1, true) ~= nil, toZed)
+    nSent = #sentAddon
+    system(gone); advance(2)
+    check("whisper: a second 'not playing' line about the same peer sends nothing again", #whisperSends(nSent, "WB~") == 0)
+    CORELinkDB.peers["Zed Orr"] = nil
+    advance(3700)
+    check("whisper: an hour after logging off, that peer is no longer greeted", zag.gone ~= nil and (function() local m = #sentAddon; advance(700); return toZag(m, "HELLO~") == 0 end)())
+    zag.gone, zag.seen = nil, GetTime()
+    check("whisper: (the peer is live again for the next check)", carriedTo("one more") == 1)
+    zag.gone, zag.seen, st.sent, st.hello, st.answered, NS.relayStats.carried = nil, GetTime(), sent, hello, answered, carriedN
+  end
   slash("whisper off")
   nSent = #sentAddon
   H(nil, "CHAT_MSG_GUILD", "while off", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora"); advance(3)

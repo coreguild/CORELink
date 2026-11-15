@@ -77,6 +77,7 @@ Defined in `Core.lua`, used everywhere:
 | `NS.displayed` | packet id -> time | already shown in guild chat |
 | `NS.heard` | guild tag -> time | guilds whose lines reached us in the last 10 minutes, by any path |
 | `NS.whisperQueue` | whispers waiting | drained a few per second by `Channel.lua` |
+| `NS.whisperedAt` | whisper target -> when a whisper last left for them | written by the drain in `Channel.lua`; `Whisper.lua` reads it to recognise the game's "not playing" answer, and prunes it |
 | `NS.authorClass`, `authorOfficer`, `authorNick`, `authorSeen` | author -> what packets told us | community posts carry none of it |
 
 Each feature file owns its own state and exposes it for `/cl report`: `NS.conn` (channel diagnostics),
