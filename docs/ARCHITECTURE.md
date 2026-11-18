@@ -159,6 +159,10 @@ The baseline (`BASELINE` in that script, `v0.2.0`) is the oldest release that mu
 previous release. Changing a frozen format means dropping that release: a decision for a human, made by
 raising `BASELINE`.
 
+Today the code reads `CL4` only (`ParsePacket`); the rule above is for whoever adds `CL5`. A packet-shaped line with a later word (`CL5~id~tag~`) from another guild is not
+shown; the first one in a session, by any path, prints one notice asking the player to update and is noted in
+`/cl report` (`Relay.lua`, `NoteNewerProto`). An earlier word (`CL3~`) is ignored silently.
+
 ## Peers and the courier
 
 A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line
