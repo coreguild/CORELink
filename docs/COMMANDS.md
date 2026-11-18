@@ -9,7 +9,7 @@ Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat chan
 | `/cl` | Shows whether CORELink is on, your guild tag, which channel you are connected to, where your settings came from, and which commands you can run. |
 | `/cl guilds` | Lists guilds heard in the last 10 minutes. It also shows who is carrying chat for your guild. |
 | `/cl report` | Opens a copy box with your addon version, connection status, and recent events. Share it when asking for help. |
-| `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. |
+| `/cl reload` | Re-reads Guild Information and tries to connect to the channel again. In combat it retries the channel and re-reads Guild Information when the fight is over. |
 
 ## Mute a guild, set a nickname, or turn CORELink off
 
@@ -29,7 +29,7 @@ Type `/cl` in WoW to see whether CORELink is on, whether it joined the chat chan
 | `/cl nicknames on/off` | Shows or hides other people's nicknames. |
 | `/cl classcolor on/off` | Turns class colours for player names on or off. |
 | `/cl officer on/off` | Turns highlighting for officers' messages on or off. |
-| `/cl officercolor [RRGGBB\|reset]` | Sets the colour for officers' messages or restores the default. Type `/cl officercolor` on its own to open the colour picker. |
+| `/cl officercolor [RRGGBB\|reset]` | Sets the colour for officers' messages or restores the default, `40db27`: the guild green a shade darker. Type `/cl officercolor` on its own to open the colour picker. |
 | `/cl window <n>` | Shows linked messages in the chat window you specify. Type `/cl window` on its own to show them in windows that already display guild chat. |
 
 ## Help relay messages
