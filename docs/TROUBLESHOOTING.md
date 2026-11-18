@@ -44,6 +44,10 @@ WoW shows this notice when someone logs off before a whisper reaches them. COREL
 
 If your Guild Information line has a `guilds=` list, update CORELink, or ask your guild master to delete `guilds=` and the names after it from the line. Version 0.2.0 looked up the listed guilds after login and every ten minutes, and WoW refuses that lookup from an addon. Version 0.2.1 no longer does the lookup. If the notice still appears, another addon may be the cause.
 
+## CORELink says a guild member runs a newer version
+
+Check CurseForge, or wherever you installed CORELink, for an update. Addons can't check the web, so CORELink learns about a newer version from guild members who already run it. If you find nothing newer there, the guild member may be testing a version that isn't published yet. You see the notice once per version.
+
 ## WoW says "Interface action failed because of an AddOn" during play
 
 Update CORELink. Versions up to 0.2.1 re-read Guild Information at least once a minute, and WoW sometimes refuses that to addons and shows this notice. Newer versions read it at login and every five minutes after that, and never in combat. A changed CORELink line reaches members who are online within five minutes; `/cl reload` loads it at once, or right after the fight if you're in combat. If the notice still appears, send the `/cl report`: its log says what your character was doing when the read was refused.
@@ -56,6 +60,7 @@ Update CORELink. Versions up to 0.2.1 print their replies in the first chat tab,
 
 | Field | What it tells you |
 |---|---|
+| `CORELink` | Your version. `(newer seen: X)` after it means a guild member reported version X this session. Nothing after it means nobody online reported a newer one. |
 | `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
 | `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |
 | `lastSend` | `ok` means the local send call completed. `refused` means the server reported a refusal. `error` means the call itself failed. |
