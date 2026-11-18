@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 15, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 17, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -344,6 +344,31 @@ check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines
 -- plain /cl: the send result is a word (ok, error, refused) since 0.2.0, so no "(0 = success)" hint after it
 out = lines(function() slash("") end) .. "\n"
 check("plain /cl prints the last send result without the old numeric hint", out:find("last send result: ok\n", 1, true) ~= nil, out)
+-- a reply to a /cl command goes to the chat window the command was typed in; anything else to the default one
+do
+  local function typedIn(editBox, command)
+    local at = #chatLines
+    SlashCmdList["CORELINK"](command or "", editBox)
+    return chatLines[at + 1] and chatLines[at + 1].frame
+  end
+  local got = typedIn(nil)
+  check("a /cl reply goes to the default chat window when the game names no edit box", got == 1, got)
+  got = typedIn({ chatFrame = ChatFrame3 })
+  check("a /cl reply goes to the chat window the command was typed in", got == 3, got)
+  got = typedIn({ chatFrame = ChatFrame2 })
+  check("a /cl reply typed in the combat log window goes to the default window", got == 1, got)
+  ChatFrame3.IsShown = function() return false end
+  got = typedIn({ chatFrame = ChatFrame3 })
+  check("a /cl reply typed in a window that is not shown goes to the default window", got == 1, got)
+  ChatFrame3.IsShown = nil
+  got = typedIn({ chatFrame = { id = 9 } })
+  check("a /cl reply goes to the default window when the edit box's window cannot take it", got == 1, got)
+  typedIn({ chatFrame = ChatFrame3 })
+  local at = #chatLines
+  NS.Print("said later, by the addon itself")
+  got = chatLines[at + 1] and chatLines[at + 1].frame
+  check("what the addon says by itself after a command goes to the default window again", got == 1 and NS.replyFrame == nil, got)
+end
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
@@ -489,6 +514,62 @@ do
   JoinChannelByName = function(n, pw) joinCalls[#joinCalls + 1] = { n, pw }; joined[n] = 6 end
 end
 
+-- Reading Guild Info is a call the game blocks at times and reports to the player as an addon failure. It is
+-- made rarely, never in combat or chat lockdown, and a read that had to wait is done when the fight is over.
+do
+  CORELinkDB = {}; joined = {}; joinCalls = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  local reads, realRead = 0, GetGuildInfoText
+  local function counted() reads = reads + 1; return realRead() end
+  GetGuildInfoText = counted
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  check("guild info: read at login", reads >= 1 and CORELinkDB.channel == "CORELink7100", reads)
+  advance(300); reads = 0
+  for _ = 1, 4 do advance(60); H(nil, "GUILD_ROSTER_UPDATE") end
+  check("guild info: once read, roster updates and the minute tick read it at most once in five minutes", reads <= 1, reads)
+  reads = 0; out = lines(function() slash("reload") end)
+  check("guild info: /cl reload reads it at once", reads == 1 and out:find("re-read Guild Info and retried the channel", 1, true) ~= nil, reads .. " " .. out)
+  -- in combat: not read, the player is told, and the read is done when the fight is over
+  InCombatLockdown = function() return true end
+  guildInfoText = "CORELink: CORELink7100 pw1 OTHER 1\n"
+  reads = 0; advance(20); H(nil, "GUILD_ROSTER_UPDATE")
+  check("guild info: a read that is not due in combat leaves the report alone", reads == 0 and report():find("guildInfo line read", 1, true) ~= nil, report())
+  out = lines(function() slash("reload") end)
+  check("guild info: /cl reload in combat reads nothing and says the read will follow", reads == 0 and CORELinkDB.tag == "MAIN" and out:find("Guild Info will be re-read when the fight or lockdown is over", 1, true) ~= nil and report():find("guildInfo waiting: not read in combat or chat lockdown", 1, true) ~= nil, out)
+  InCombatLockdown = nil
+  H(nil, "PLAYER_REGEN_ENABLED"); advance(3)
+  check("guild info: the read that waited is done when the fight is over, and the changed line is picked up", reads == 1 and CORELinkDB.tag == "OTHER", reads .. " " .. tostring(CORELinkDB.tag))
+  UnitAffectingCombat = function(unit) return unit == "player" end
+  reads = 0; slash("reload")
+  check("guild info: not read while the player is fighting, whatever the lockdown flag says", reads == 0, reads)
+  UnitAffectingCombat = nil
+  local inLockdown = C_ChatInfo.InChatMessagingLockdown
+  C_ChatInfo.InChatMessagingLockdown = function() return true end
+  advance(400)
+  check("guild info: not read in chat lockdown", reads == 0, reads)
+  C_ChatInfo.InChatMessagingLockdown = inLockdown
+  advance(60)
+  check("guild info: the read that waited through a lockdown is done on the next tick", reads == 1, reads)
+  -- a read that gives nothing is tried again soon, not in five minutes
+  guildInfoText = ""; slash("reload")
+  guildInfoText = "CORELink: CORELink7100 pw1 THIRD 1\n"; reads = 0; advance(90)
+  check("guild info: after a read that gave no text, the next one comes within a minute or so", reads >= 1 and CORELinkDB.tag == "THIRD", reads .. " " .. tostring(CORELinkDB.tag))
+  -- the game blocks the read anyway: it reports that by event during the call, and the call returns nothing
+  advance(400)
+  GetGuildInfoText = function() reads = reads + 1; H(nil, "ADDON_ACTION_BLOCKED", "CORELink", "UNKNOWN()") end
+  reads = 0; advance(400)
+  check("guild info: a read the game blocked changes no setting and is logged with the state it happened in", reads == 1 and CORELinkDB.tag == "THIRD" and CORELinkDB.channel == "CORELink7100" and report():find("guildInfo blocked by the game", 1, true) ~= nil and report():find("guild info read blocked: lockdown=", 1, true) ~= nil, reads .. " " .. report())
+  reads = 0; advance(1200); for _ = 1, 3 do H(nil, "GUILD_ROSTER_UPDATE"); advance(6) end
+  check("guild info: after a blocked read it is not tried again for half an hour", reads == 0, reads)
+  advance(700)
+  check("guild info: then it is tried again", reads == 1, reads)
+  GetGuildInfoText = counted
+  H(nil, "ADDON_ACTION_BLOCKED", "CORELink", "UNKNOWN()")
+  reads = 0; slash("reload")
+  check("guild info: a block reported outside our read is not taken for ours", reads == 1 and report():find("blocked by the game", 1, true) == nil, report())
+  GetGuildInfoText = realRead
+end
+
 -- A character that moves to a guild without a CORELink line does not keep the old guild's settings
 do
   CORELinkDB = {}; joined = {}; joinCalls = {}
@@ -496,7 +577,10 @@ do
   H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); advance(8)
   check("settings came from Guild Info", CORELinkDB.channel == "CORELink7100" and CORELinkDB.source == "Guild Info")
   guildInfoText = "A different guild, no link here\n"
+  local realGuild = GetGuildInfo
+  GetGuildInfo = function() return "Another Guild", "Member", 3 end   -- the character changed guild
   advance(60)
+  GetGuildInfo = realGuild
   check("a guild with no CORELink line clears settings inherited from Guild Info and leaves the channel",
     CORELinkDB.channel == nil and joined["CORELink7100"] == nil and last():find("settings from the previous guild were cleared", 1, true) ~= nil, last())
   guildInfoText = savedTextForRestore
@@ -607,7 +691,7 @@ do
   clubMessages[111] = { messageId = 111, content = "[ALT] Gus Pine: now via the community", author = { name = "Gus Pine", isSelf = false } }
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 111)
   local cl = chatLines[#chatLines]
-  check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and cl.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and cl.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(cl.r * 255 + 0.5) == 0xe8, cl.text .. " r=" .. tostring(cl.r))
+  check("mirror read: class and officer colour learned from an earlier relay packet", #chatLines > n0 and cl.text:find("|cffc79c6e[Gus Pine]|r", 1, true) ~= nil and cl.text:find("(Captain) now via the community", 1, true) ~= nil and math.floor(cl.g * 255 + 0.5) == 0xdb, cl.text .. " g=" .. tostring(cl.g))
   n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23112951, 1, 104); advance(2)
   check("mirror read: plain community chat shows under the author's name only", #chatLines > n0 and last():find("[Dana Reed]|h: just chatting", 1, true) ~= nil and last():find("Core Test", 1, true) == nil, last())
   slash("mirror read off"); n0 = #chatLines
@@ -693,13 +777,13 @@ do
   check("wow club: it is shown once the member record loads", #chatLines == n0 + 2 and last():find("[Cosmo Vale]", 1, true) ~= nil, last())
   local cl = chatLines[#chatLines]
   check("wow club: a community Moderator never heard on the relay gets the officer colour, text prefix untouched",
-    math.floor(cl.r * 255 + 0.5) == 0xe8 and cl.text:find("|h: [Trois] late author", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
+    math.floor(cl.g * 255 + 0.5) == 0xdb and cl.text:find("|h: [Trois] late author", 1, true) ~= nil, cl.text .. " g=" .. tostring(cl.g))
   clubMessages[212] = { messageId = 212, content = sealed("[Trois] (Captain Zaggy) ranked"), author = { memberId = 7 } }
   channelLine("CL4~00000b01~Trois~Zag Mathris~MAGE~~Zaggy~plain member", "Zag Mathris")
   advance(10); n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 212); advance(2)
   cl = chatLines[#chatLines]
   check("wow club: relay knowledge wins: a non-officer's sealed line is not officer-coloured and the prefix is not doubled",
-    #chatLines == n0 + 2 and math.floor(cl.r * 255 + 0.5) ~= 0xe8 and cl.text:find("|h: [Trois] (Captain Zaggy) ranked", 1, true) ~= nil, cl.text .. " r=" .. tostring(cl.r))
+    #chatLines == n0 + 2 and math.floor(cl.g * 255 + 0.5) ~= 0xdb and cl.text:find("|h: [Trois] (Captain Zaggy) ranked", 1, true) ~= nil, cl.text .. " g=" .. tostring(cl.g))
   -- relay first, community copy within 5 s: shown once
   advance(10); n0 = #chatLines
   channelLine("CL4~0000cafe~Trois~Zag Mathris~MAGE~~Zaggy~both ways", "Zag Mathris")
@@ -992,7 +1076,7 @@ do
   slash("window 3"); check("commands: /cl window 3 pins the window", CORELinkDB.window == 3 and last():find("window 3", 1, true) ~= nil)
   slash("window"); check("commands: /cl window alone unpins it", CORELinkDB.window == nil)
   slash("officercolor e8c63e"); check("commands: /cl officercolor RRGGBB sets the colour", CORELinkDB.officerColorHex == "e8c63e")
-  slash("officercolor reset"); check("commands: /cl officercolor reset clears it", CORELinkDB.officerColorHex == nil)
+  slash("officercolor reset"); check("commands: /cl officercolor reset clears it and names the default", CORELinkDB.officerColorHex == nil and last():find("(#40db27)", 1, true) ~= nil, last())
   slash("officercolor"); check("commands: /cl officercolor without a picker explains the fallback", last():find("couldn't open the colour picker", 1, true) ~= nil, last())
   CORELinkDB.nicks[UnitName("player")] = "Shocky"; sentAddon = {}
   H(nil, "CHAT_MSG_ADDON", "CORELink", "NREQ", "GUILD", "Bob-Beta"); advance(8)
