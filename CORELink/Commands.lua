@@ -118,9 +118,10 @@ commands.officercolor = function(arg)
   if a:match("^%x%x%x%x%x%x$") then
     NS.db.officerColorHex = a; Print("officer colour set to #" .. a)
   elseif a == "reset" then
-    NS.db.officerColorHex = nil; Print("officer colour reset to the default (#e8c63e).")
+    NS.db.officerColorHex = nil; Print("officer colour reset to the default (#" .. NS.DEFAULT_OFFICER_COLOR .. ").")
   elseif not pcall(OpenColorPicker) then
-    Print("couldn't open the colour picker. Use /cl officercolor RRGGBB instead (e.g. e8c63e).")
+    Print("couldn't open the colour picker. Use /cl officercolor RRGGBB instead (e.g. "
+      .. NS.DEFAULT_OFFICER_COLOR .. ").")
   end
 end
 
@@ -218,7 +219,10 @@ end
 commands.reload = function()
   local conn = NS.conn
   NS.db.lastGI = nil; conn.blockedUntil = 0; conn.blockedWhy = nil
-  NS.ReadGuildInfo(); NS.EnsureChannel(); Print("re-read Guild Info and retried the channel.")
+  local read = NS.ReadGuildInfo(true)
+  NS.EnsureChannel()
+  Print(read == false and "retried the channel. Guild Info will be re-read when the fight or lockdown is over."
+    or "re-read Guild Info and retried the channel.")
 end
 
 commands.on = function() NS.db.enabled = true; NS.EnsureChannel(); Print("enabled.") end
@@ -235,7 +239,7 @@ commands.unmute = function(arg)
 end
 
 ---------------------------------------------------------------- dispatch
-SlashCmdList["CORELINK"] = function(input)
+local function Run(input)
   local cmd, arg = input:match("^(%S*)%s*(.-)$")
   cmd = cmd:lower()
   if GM_ONLY[cmd] and not IsGM() then
@@ -244,4 +248,13 @@ SlashCmdList["CORELINK"] = function(input)
   end
   local handler = commands[cmd]
   if handler then handler(arg) else ShowStatus() end
+end
+
+-- The game hands a slash command the edit box it was typed in; that box knows its chat window. Replies printed
+-- while the command runs go there (NS.Print). What the addon says later, by itself, goes to the default window.
+SlashCmdList["CORELINK"] = function(input, editBox)
+  NS.replyFrame = type(editBox) == "table" and editBox.chatFrame or nil
+  local ok, err = pcall(Run, input)
+  NS.replyFrame = nil
+  if not ok then error(err, 0) end
 end
