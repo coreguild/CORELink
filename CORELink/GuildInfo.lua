@@ -24,10 +24,50 @@ local function GIState(state)
   end
 end
 
+-- The game blocks GetGuildInfoText for addons at times (seen in the live guild as ADDON_ACTION_BLOCKED, once
+-- the moment a fight started, which the player gets as "Interface action failed because of an AddOn"; pcall
+-- does not catch it). So the text is asked for rarely: at login, when the character's guild changes, when the
+-- player types /cl reload, and otherwise every five minutes (sooner while the last read gave nothing). It is
+-- never asked for in combat or chat lockdown: a read that was due then is remembered and done after the fight.
+local READ_EVERY, RETRY_SOON, BLOCKED_WAIT = 300, 30, 1800
+local nextRead, wanted, lastGuild = 0, false, nil
+local reading, blocked = false, false   -- set around the call, so a block reported during it is known to be ours
+local function InCombat()
+  return (InCombatLockdown and InCombatLockdown()) or (UnitAffectingCombat and UnitAffectingCombat("player")) or false
+end
+
+-- Is a read due? force: the player asked, or we are logging in.
+local function Due(force)
+  local guild = GetGuildInfo("player")
+  if guild ~= lastGuild then lastGuild, wanted = guild, true end   -- another guild's settings must not linger
+  return force or wanted or GetTime() >= nextRead
+end
+
+-- The game reports a blocked call with this event, while the call is still running.
+NS.events.ADDON_ACTION_BLOCKED = function(addon)
+  if reading and addon == NS.ADDON then blocked = true end
+end
+
+-- The fight is over: do the read that had to wait, a moment later.
+NS.events.PLAYER_REGEN_ENABLED = function()
+  if wanted then C_Timer.After(2, NS.ReadGuildInfo) end
+end
+
 -- The CORELink line out of the Guild Info text, or nil with the reason recorded in conn.giState.
 local function FindLine()
   if not IsInGuild() then GIState("not in a guild") return nil end
+  reading, blocked = true, false
   local ok, text = pcall(GetGuildInfoText)
+  reading = false
+  if blocked then
+    -- what state the game refuses in is not known yet: keep what was true, and stay away for half an hour
+    nextRead = GetTime() + BLOCKED_WAIT
+    conn.giState = "blocked by the game"
+    Debug("guild info read blocked: lockdown=%s fighting=%s instance=%s",
+      tostring(InCombatLockdown and InCombatLockdown()),
+      tostring(UnitAffectingCombat and UnitAffectingCombat("player")), tostring(IsInInstance and (IsInInstance())))
+    return nil
+  end
   if not ok or type(text) ~= "string" or issecret(text) then GIState("not readable") return nil end
   if text == "" then GIState("empty (not received yet, or nothing written)") return nil end
   local i = text:lower():find("corelink:", 1, true)
@@ -62,11 +102,20 @@ local function ReadFlag(value)
 end
 
 -- Members: pick up the "CORELink: <channel> <password> [tag]" line if it changed.
-function NS.ReadGuildInfo()
+-- Returns false when the read has to wait for the end of a fight or a lockdown.
+function NS.ReadGuildInfo(force)
   local db = NS.db
-  if not db then return end
+  if not db or not Due(force) then return end
+  if InCombat() or NS.Locked() then
+    wanted = true
+    GIState("waiting: not read in combat or chat lockdown")
+    return false
+  end
+  wanted = false
+  nextRead = GetTime() + RETRY_SOON      -- FindLine makes it longer when the game blocks the read
   local line = FindLine()
   if not line then return end
+  nextRead = GetTime() + READ_EVERY
   if line == db.lastGI then GIState("line unchanged") return end   -- keep any local override
   local ch, pw, tag, orank = line:sub(10):match("^[ \t]*([^%s]+)[ \t]+([^%s]+)[ \t]*([^%s]*)[ \t]*([^%s]*)")
   if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
