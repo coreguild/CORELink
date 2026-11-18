@@ -31,7 +31,7 @@ NS.PREFIX = "CORELink"                 -- addon message prefix on the guild and 
 NS.MAX_MSG, NS.DEDUPE_SECS = 200, 10
 NS.HEARD_SECS = 600                    -- a guild or a player counts as present this long after it was last heard
 NS.FORGET_SECS = 60                    -- packet ids are remembered this long
-NS.DEFAULT_OFFICER_COLOR = "e8c63e"
+NS.DEFAULT_OFFICER_COLOR = "40db27"   -- the default guild green, a shade darker
 
 ---------------------------------------------------------------- shared state
 -- NS.db is the saved-variables table (CORELinkDB, per character), set at ADDON_LOADED; nil before that.
@@ -63,8 +63,15 @@ function NS.Locked()
   return false
 end
 
+-- The addon's own messages go to the default chat window. While a /cl command runs, NS.replyFrame is the chat
+-- window it was typed in (set by the slash handler), so the reply shows where the player is looking even if
+-- they never open the first tab. A hidden window or the combat log cannot show a reply: the default it is.
 function NS.Print(msg)
-  DEFAULT_CHAT_FRAME:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
+  local frame = NS.replyFrame
+  local usable = type(frame) == "table" and frame.AddMessage and frame ~= ChatFrame2
+    and not (frame.IsShown and not frame:IsShown())
+  if not usable then frame = DEFAULT_CHAT_FRAME end
+  frame:AddMessage("|cff33ff99CORELink:|r " .. tostring(msg))
 end
 
 -- Debug log: always recorded (last DEBUG_MAX lines, shown by /cl report), echoed to chat when /cl debug on.
