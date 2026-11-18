@@ -27,21 +27,44 @@ function NS.ClassOf(author, guid)
   return ""
 end
 
+-- Forget the saved nicknames of members who left the guild. Only called after a complete roster read, and a
+-- name must stay missing for ten minutes of such reads (the roster can lag behind someone who just joined).
+-- Our own nickname stays: it may be saved under the short name until the roster teaches us the full one.
+local goneSince = {}    -- nickname holder missing from the roster -> when a complete read first missed them
+local PRUNE_AFTER = 600
+local function PruneNicks()
+  local nicks = NS.db and NS.db.nicks
+  if not nicks then return end
+  local now, short = GetTime(), UnitName("player")
+  for name in pairs(goneSince) do
+    if rankOf[name] ~= nil or not nicks[name] then goneSince[name] = nil end
+  end
+  for name in pairs(nicks) do
+    if rankOf[name] == nil and name ~= short then
+      goneSince[name] = goneSince[name] or now
+      if now - goneSince[name] >= PRUNE_AFTER then nicks[name], goneSince[name] = nil, nil end
+    end
+  end
+end
+
 -- Read the roster: ranks, guids, and our own full name when our GUID is in it. False when it was empty.
 function NS.RefreshRoster()
   if not IsInGuild() then return false end
   local n = GetNumGuildMembers() or 0
   if n == 0 then return false end
   wipe(rankOf); wipe(rankNameOf)
+  local read = 0
   for i = 1, n do
     local name, rankName, rankIndex, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
     if not name then break end
+    read = read + 1
     name = Ambiguate(name, "none")
     rankOf[name] = rankIndex
     rankNameOf[name] = rankName
     if guid and not issecret(guid) then rosterGuid[guid] = name end
     if NS.me.guid and guid and not issecret(guid) and guid == NS.me.guid then NS.LearnMyName(name) end
   end
+  if read == n then PruneNicks() end   -- a roster that stopped short says nothing about who left
   return true
 end
 
@@ -117,6 +140,7 @@ end
 -- A packet on the guild addon channel: note the sender as an addon user, then hand it to its handler.
 function NS.OnGuildAddon(text, sender)
   if issecret(text) or issecret(sender) or type(text) ~= "string" or type(sender) ~= "string" then return end
+  if not NS.db then return end               -- the handlers read settings
   sender = Ambiguate(sender, "none")
   NS.addonUsers[sender] = GetTime()
   local cmd, rest = text:match("^(%a+)" .. SEP .. "?(.*)$")
