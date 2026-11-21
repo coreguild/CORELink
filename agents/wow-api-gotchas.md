@@ -68,3 +68,8 @@ Read before changing anything in the relay, channel or chat code.
     down; the start of combat is the one confirmed case. The addon does not ask in combat (`InCombatLockdown`
     or `UnitAffectingCombat("player")`) or chat lockdown, asks only every five minutes, and logs
     `guild info read blocked: lockdown=.. fighting=.. instance=..` when a read is blocked, to find the condition.
+16. **`/chatlist` prints nothing for the link channel.** The game shows a channel's member list
+    (`CHAT_MSG_CHANNEL_LIST`) only in a chat window that displays the channel, and the addon removes the link
+    channel from every window. `ListChannelByName(id)` plus a listener for that event works (run by hand in the
+    live guild on 2026-11-21). `/cl members` does this; the event's argument layout and the marks in front of the
+    owner's name are assumed from the standard client, not confirmed on Forever.

@@ -161,7 +161,7 @@ local function H(_, event, ...)
 end
 local nRegistered = 0
 for _ in pairs(registered) do nRegistered = nRegistered + 1 end
-check("events: every handler is registered with the game", nRegistered == 17, nRegistered)
+check("events: every handler is registered with the game", nRegistered == 18, nRegistered)
 local function slash(s) SlashCmdList["CORELINK"](s) end
 -- text on the link channel, as the game delivers it
 local function channelLine(text, author, channel)
@@ -1078,6 +1078,48 @@ do
   CORELinkDB.nicks[UnitName("player")] = "Shocky"; sentAddon = {}
   H(nil, "CHAT_MSG_ADDON", "CORELink", "NREQ", "GUILD", "Bob-Beta"); advance(8)
   check("commands: an NREQ from a guildmate makes us re-send our nickname", #guildSends(0, "NICK~Shocky") == 1)
+  -- /cl members: the channel's member list, read from the game's answer, grouped by guild, also in the copy box
+  do
+    local asked
+    local ch = CORELinkDB.channel
+    ListChannelByName = function(id)
+      asked = id
+      H(nil, "CHAT_MSG_CHANNEL_LIST", "*Bob, Carol Reed", "", "", "6. " .. ch, "", "", 0, 6, ch)
+      H(nil, "CHAT_MSG_CHANNEL_LIST", "@Mallory, " .. UnitName("player"), "", "", "6. " .. ch, "", "", 0, 6, ch)
+      H(nil, "CHAT_MSG_CHANNEL_LIST", "Trader Joe", "", "", "2. Trade", "", "", 0, 2, "Trade")
+    end
+    NS.peers["Carol Reed-Realm7"] = { tag = "ALT", guild = "Alt Guild", realm = "Realm7", seen = 0 }
+    H(nil, "CHAT_MSG_CHANNEL_LIST", "Nobody Asked", "", "", "6. " .. ch, "", "", 0, 6, ch)
+    sentAddon = {}; lastSetText = nil
+    local at = #chatLines
+    SlashCmdList["CORELINK"]("members", { chatFrame = ChatFrame3 })
+    check("members: nothing is printed before the list has had time to arrive", #chatLines == at and asked == 6, asked)
+    advance(2)
+    local got = {}
+    for i = at + 1, #chatLines do got[#got + 1] = chatLines[i].text end
+    got = table.concat(got, "\n")
+    check("members: the count and channel head the list", got:find("4 in " .. ch, 1, true) ~= nil, got)
+    check("members: our own guild's members are grouped under its name, marks removed",
+      got:find("CORE Forever (2): Bob, " .. UnitName("player"), 1, true) ~= nil, got)
+    check("members: a known peer is grouped under their guild", got:find("Alt Guild (1): Carol Reed", 1, true) ~= nil, got)
+    check("members: anyone else is listed as guild not known", got:find("guild not known (1): Mallory", 1, true) ~= nil, got)
+    check("members: names from another channel or from before the request are left out",
+      got:find("Trader Joe", 1, true) == nil and got:find("Nobody Asked", 1, true) == nil, got)
+    check("members: the reply goes to the window the command was typed in", chatLines[at + 1] and chatLines[at + 1].frame == 3)
+    check("members: the list is in the copy box on one line",
+      lastSetText == "4 in " .. ch .. " | Alt Guild (1): Carol Reed | CORE Forever (2): Bob, " .. UnitName("player")
+        .. " | guild not known (1): Mallory", lastSetText)
+    advance(5)
+    local hellos = whisperSends(0, "HELLO~")
+    check("members: a member whose guild is not known is greeted, the known ones are not",
+      #hellos == 1 and hellos[1].target == "Mallory", #hellos)
+    ListChannelByName = function() end
+    slash("members"); advance(2)
+    check("members: no answer from the game is said plainly", last():find("the game sent no member list", 1, true) ~= nil, last())
+    ListChannelByName = nil
+    slash("members")
+    check("members: a client without the list call says so", last():find("cannot list a channel's members", 1, true) ~= nil, last())
+  end
   slash("clear"); check("commands: /cl clear forgets the configuration", CORELinkDB.channel == nil and joined.other == nil)
   myRank = 3
 end
