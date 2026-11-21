@@ -96,6 +96,12 @@ function NS.Version()
   return v
 end
 
+-- "version 0.2.2", the same words wherever the addon says which build it is.
+function NS.VersionText()
+  local v = NS.Version()
+  return "version " .. v .. (v == "dev" and " (unreleased build)" or "")
+end
+
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
 -- Could this be a character's name on this client? Names here are words of letters with one space between
