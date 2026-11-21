@@ -32,6 +32,10 @@ Ask them to install CORELink if they want to read linked chat. If your guild mas
 
 Type `/cl report` and check the version at the start. If it's older than 0.2.0, install a newer version. If you're already up to date, share the report when asking for help.
 
+## A message shows under a name that can't exist, or from the wrong guild
+
+Update CORELink. Versions up to 0.2.2 showed whatever name, rank and guild a message claimed, and anyone in the link channel could type one. Newer versions show the character that really posted a line, drop a line whose author isn't a possible character name, and drop a line that a member of your own guild sends under another guild's name. `/cl report` on a client that dropped one says who delivered it.
+
 ## The same message appears twice
 
 Older versions could show a message with a quest link more than once in the linked guild, because the game writes the link differently for each player. Update the addon in both guilds.
