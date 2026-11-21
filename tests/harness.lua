@@ -466,8 +466,13 @@ check("long message truncated on a UTF-8 boundary with ellipsis", body and #p <=
 -- /cl report: one pasteable line with version, channel, last send result and the debug log
 n0 = #chatLines; local rep = report()
 check("/cl report fills the copy box", rep ~= "")
-check("report has version, channel id, last send result and log", rep:find("CORELink 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
+check("report starts with the version in words", rep:find("CORELink version 0.2.0-test | ", 1, true) == 1, rep)
+check("report has version, channel id, last send result and log", rep:find("CORELink version 0.2.0-test", 1, true) and rep:find("channel CORELink7100 id 6", 1, true) and rep:find("lastSend ok", 1, true) and rep:find("log: ", 1, true), rep)
 check("report is also printed to chat", #chatLines > n0 and chatLines[#chatLines].text == "|cff33ff99CORELink:|r " .. rep)
+check("the chat line above the report says the version too",
+  chatLines[#chatLines - 1].text == "|cff33ff99CORELink:|r version 0.2.0-test. Report (also in the copy box, Ctrl+C and paste it to whoever is helping):", chatLines[#chatLines - 1].text)
+check("plain /cl says the version in its status line",
+  lines(function() slash("") end):find("CORELink:|r version 0.2.0-test | ON | tag: MAIN", 1, true) ~= nil, lines(function() slash("") end))
 -- plain /cl: the send result is a word (ok, error, refused) since 0.2.0, so no "(0 = success)" hint after it
 out = lines(function() slash("") end) .. "\n"
 check("plain /cl prints the last send result without the old numeric hint", out:find("last send result: ok\n", 1, true) ~= nil, out)
@@ -499,7 +504,7 @@ end
 -- an unstamped (dev) checkout reports "dev" instead of the placeholder
 local realMeta = C_AddOns.GetAddOnMetadata
 C_AddOns.GetAddOnMetadata = function() return "@project-version@" end
-check("placeholder version shows as dev", report():find("CORELink dev |", 1, true) ~= nil)
+check("placeholder version shows as an unreleased build", report():find("CORELink version dev (unreleased build) |", 1, true) == 1, report())
 C_AddOns.GetAddOnMetadata = realMeta
 
 -- /cl debug on echoes debug lines to chat; off silences them but the report still keeps the log
