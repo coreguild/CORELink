@@ -50,7 +50,7 @@ Linux `apt install lua5.4 lua-check`.
 5. `tests/compat.sh`: the addon as released at the baseline tag (`BASELINE` in the script, the oldest release
    that must keep working) and the working copy, each in its own fake clients, exchange lines, greetings, the
    Guild Info line and saved variables. It needs the tag: without it the script says how to fetch it
-   (`git fetch origin tag v0.2.0`), skips with a note on your machine and fails in CI.
+   (`git fetch origin tag v0.2.2`), skips with a note on your machine and fails in CI.
 6. `tests/site-render.sh`: the download page renders with awkward release notes.
 7. `tests/mutation.sh <base>` (not in `run.sh`; CI runs it on pull requests): when `CORELink/` changed, the
    harness is run against the base branch's addon files and must fail there, so at least one check depends on
