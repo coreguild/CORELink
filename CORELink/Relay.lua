@@ -9,7 +9,7 @@
 local _, NS = ...
 local Debug, Configured, Locked, IsMe, GetTag = NS.Debug, NS.Configured, NS.Locked, NS.IsMe, NS.GetTag
 local issecret, SEP, PROTO = NS.issecret, NS.SEP, NS.PROTO
-local seen, pending, displayed = NS.seen, NS.pending, NS.displayed
+local seen, pending, displayed, seenText = NS.seen, NS.pending, NS.displayed, NS.seenText
 
 NS.relayStats = { typed = 0, carried = 0, shown = 0 }
 local COURIER_WAIT = 1          -- seconds the courier gives the author's own client before carrying a line
@@ -21,6 +21,12 @@ local function Packet(id, tag, author, msg, class, flags, nick)
 end
 
 local function LineId(tag, author, msg) return NS.Hash(tag .. author .. msg) end
+
+-- Did a line saying the same thing (NS.TextKey) reach us in the dedupe window?
+local function SameLine(key)
+  local t = seenText[key]
+  return t ~= nil and GetTime() - t < NS.DEDUPE_SECS
+end
 
 ---------------------------------------------------------------- out: our own typed line
 -- From the chat send hooks, inside the keypress that sent the guild line: post it into the channel as text.
@@ -47,7 +53,8 @@ end
 -- A line in our guild chat by someone else: if the author runs the addon, their own keypress posts it into the
 -- channel and the copy arrives within a moment. The courier waits for that, and carries the line by whisper
 -- when no copy came, whoever the author is (no addon, addon switched off, addon broken). A late copy costs
--- one redundant whisper; receivers drop the duplicate by id.
+-- one redundant whisper; receivers drop the duplicate by id. The copy is recognised by id or, when the game
+-- rendered a link in it differently for the author and for us, by what it says (SameLine).
 function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local db = NS.db
   if not db.enabled or not Configured() or Locked() then return end
@@ -58,14 +65,14 @@ function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   if IsMe(author, guid) then return end           -- RelayTyped did it (and learned our chat-format name)
   if NS.IsEchoLine(msg, author) then return end   -- a guildmate's echo of another guild's line: not ours
   if not NS.IsCourier() then return end
-  local id = LineId(tag, author, msg)
+  local id, key = LineId(tag, author, msg), NS.TextKey(tag, author, msg)
   if (seen[id] and GetTime() - seen[id] < NS.DEDUPE_SECS) or pending[id] then return end
   pending[id] = true
   local rn = NS.OfficerRankName(author)
   local packet = Packet(id, tag, author, msg, NS.ClassOf(author, guid), rn and ("O" .. rn) or "", db.nicks[author])
   C_Timer.After(COURIER_WAIT + math.random() * 1.5, function()
     pending[id] = nil
-    if seen[id] then return end                   -- their own client relayed it
+    if seen[id] or SameLine(key) then return end   -- their own client relayed it
     seen[id] = GetTime()
     stats.carried = stats.carried + 1
     NS.WhisperOut(id, tag, packet)
@@ -164,7 +171,10 @@ function NS.ShowPacket(text, via, from)
   end
   seen[id] = now
   if not status then NS.heard[tag] = now end
-  if displayed[id] then return tag, status end
+  local key = NS.TextKey(tag, author, msg or "")
+  local again = displayed[id] or seenText[key]     -- the same packet, or the same line under another id
+  if tag == GetTag() or not again then seenText[key] = now end   -- our guild's: the courier times the latest copy
+  if again then return tag, status end
   displayed[id] = now
   if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag, status end
   if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag, status end
