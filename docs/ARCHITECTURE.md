@@ -74,6 +74,7 @@ Defined in `Core.lua`, used everywhere:
 |---|---|---|
 | `NS.db` | the saved variables (`CORELinkDB`, per character) | settings, nicknames, mutes, saved peers; nil until ADDON_LOADED |
 | `NS.seen` | packet id -> time | a line already relayed, read, carried or fanned: do not do it again |
+| `NS.seenText` | `NS.TextKey` of a line -> time | the same line under another packet id (a quest link is written per viewer): not carried, not shown again |
 | `NS.pending` | packet id -> true | the courier's back-off is deciding whether to carry it |
 | `NS.displayed` | packet id -> time | already shown in guild chat |
 | `NS.heard` | guild tag -> time | guilds whose lines reached us in the last 10 minutes, by any path |
