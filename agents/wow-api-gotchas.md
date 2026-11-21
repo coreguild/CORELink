@@ -74,3 +74,13 @@ Read before changing anything in the relay, channel or chat code.
     client receives, so `NS.Hash` of the raw text gives each client a different packet id and id dedupe misses.
     Compare lines with `NS.TextKey` (a quest link reduced to its quest id, colour codes removed; other links untouched) as well
     as by id. Which part of the link differs was not captured; nothing here was verified in game.
+16. **The author field of a channel packet is not evidence.** Seen in the live link on 2026-11-21: a line shown as
+    `[Eternal] [Beau's Beard]`, a name the reporter says the game does not allow. Anyone in the link channel can
+    type `CL4~...` text with any author, rank and nickname in it. On the channel the game itself names the
+    poster (`CHAT_MSG_CHANNEL`'s author), and a typed line is posted by its author's own client, so show that
+    name, and take nothing else from a packet whose author field names someone else. The guild tag is still only
+    what the sender wrote, and a line carried by whisper has no such check (its log names who delivered it). Who posted the line above was not established.
+    Two things a receiver can still tell: an author that is not a possible character name (`NS.ValidName`:
+    words of letters, single spaces; taken from the names seen in the live guild, not from a published rule),
+    and a poster or whisperer who is on its own roster while the packet speaks for another guild. A guildmate's
+    fan-out (`LINE`) cannot be told from an invented one; its sender is logged.
