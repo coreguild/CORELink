@@ -121,7 +121,8 @@ end
 
 -- Why a packet is not believed at all, or nil. On the channel the game names the poster, and a poster from our
 -- own roster cannot be speaking for another guild. On the other paths the author is only what the packet says:
--- it must be a name the game could have given a character, with nothing but a realm after a hyphen.
+-- it must be a name the game could have given a character, with nothing but a realm after a hyphen (a realm
+-- has no spaces and draws nothing, whatever letters it uses).
 local function Refused(via, tag, author, from)
   if not NS.Accepts(tag) then return "guild <" .. Safe(tag) .. "> is not on our accept= list" end
   if via == "channel" then
@@ -131,7 +132,7 @@ local function Refused(via, tag, author, from)
     return nil
   end
   local name, realm = author:match("^([^-]+)-?(.*)$")
-  if not name or not NS.ValidName(name) or realm:find("[^%w]") then
+  if not name or not NS.ValidName(name) or realm:find("[%s%c|]") then
     return "'" .. Safe(author) .. "' is not a character name"
   end
   return nil
