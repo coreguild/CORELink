@@ -960,6 +960,55 @@ do
   guildInfoText = savedTextForRestore
 end
 
+-- accept=TAG,TAG on the Guild Info line: only those guilds' lines and peers are taken; no list takes every guild
+do
+  CORELinkDB = {}; joined = {}
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 accept=ALT,Deux guilds=Old Name\n"
+  H(nil, "ADDON_LOADED", "CORELink"); H(nil, "PLAYER_LOGIN"); H(nil, "GUILD_ROSTER_UPDATE"); advance(8)
+  local function nShown() return tonumber(report():match("relay typed=.- shown=(%d+)")) end
+  check("accept: the report names the accepted guilds", report():find("| accept ALT,Deux |", 1, true) ~= nil, report())
+  myRank = 0; lastSetText = nil; slash("publish"); myRank = 3
+  check("accept: /cl publish keeps the list on the line, before guilds=",
+    lastSetText == "CORELink: CORELink7100 pw1 MAIN 1 accept=ALT,Deux guilds=Old Name", lastSetText)
+  local s0 = nShown()
+  channelLine("CL4~0acc0001~ALT~Carol~PRIEST~~~listed", "Carol")
+  channelLine("CL4~0acc0002~alt~Carol~PRIEST~~~listed in another case", "Carol")
+  check("accept: lines from a listed guild are shown, whatever the case of the tag", nShown() == s0 + 2, nShown() - s0)
+  NS.heard.Trois = nil
+  local peers0 = report():match("peers=(%d+)")
+  channelLine("CL4~0acc0003~Trois~Zag Mathris~MAGE~~~not listed", "Zag Mathris")
+  check("accept: a line from a guild not on the list is not shown, and the log says why",
+    nShown() == s0 + 2 and report():find("0acc0003 via channel, delivered by Zag Mathris: guild <Trois> is not on our accept= list", 1, true) ~= nil, report())
+  check("accept: that guild is not marked heard and its poster is no peer",
+    report():match("heard ([^|]*)"):find("Trois", 1, true) == nil and report():match("peers=(%d+)") == peers0, report())
+  local sent0 = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HELLO~Trois~PvE~Trois Royaume", "WHISPER", "Zag Mathris"); advance(3)
+  check("accept: a hello from a guild not on the list is not answered", #whisperSends(sent0, "PEER~") == 0 and #whisperSends(sent0, "DIR~") == 0)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "HELLO~Deux~PvE~Deux", "WHISPER", "Dee Vale"); advance(3)
+  check("accept: a hello from a listed guild is answered", #whisperSends(sent0, "PEER~") == 1)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0acc0004~Trois~Zag Mathris~MAGE~~~carried, not listed", "WHISPER", "Dee Vale"); advance(3)
+  check("accept: a carried line for a guild not on the list is not shown or fanned out",
+    nShown() == s0 + 2 and #guildSends(sent0, "LINE~") == 0, nShown() - s0)
+  check("accept: our own guild needs no entry", NS.Accepts("main") == true and NS.Accepts("Trois") == false)
+  sent0 = #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@PvE@Trois@Trois Royaume;Finn Oak@PvE@Deux@Deux", "WHISPER", "Dee Vale"); advance(3)
+  local greeted = whisperSends(sent0, "HELLO~")
+  check("accept: gossip about a guild not on the list is not followed up", #greeted == 1 and greeted[1].target == "Finn Oak", #greeted)
+  NS.peers["Zed Trois"] = { tag = "Trois", realm = "?", seen = GetTime() }   -- a peer from before the list was written
+  sent0 = #sentAddon
+  H(nil, "CHAT_MSG_GUILD", "to listed guilds only", "Bob-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-bob"); advance(4)
+  local carried, toZed = whisperSends(sent0, "WB~"), 0
+  for _, w in ipairs(carried) do if w.target == "Zed Trois" then toZed = toZed + 1 end end
+  check("accept: a guildmate's line is carried to listed guilds and not to a peer of another", #carried >= 1 and toZed == 0, #carried .. "/" .. toZed)
+  NS.peers["Zed Trois"] = nil
+  -- the guild master takes the list off the line: every guild is taken again
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
+  slash("reload"); advance(3)
+  channelLine("CL4~0acc0005~Trois~Zag Mathris~MAGE~~~no list now", "Zag Mathris")
+  check("accept: with no list every guild's lines are shown", nShown() == s0 + 3 and report():find("| accept all |", 1, true) ~= nil, report())
+  guildInfoText = savedTextForRestore
+end
+
 -- Echo: with echo=on in Guild Info, one addon user per guild re-posts other guilds' readable lines as real
 -- guild messages for members without the addon; addon users hide them and never relay or carry them.
 do
@@ -1044,7 +1093,7 @@ do
   for _, w in ipairs(carried) do targets[w.target] = w.text end
   check("whisper: the line is carried once to each other guild, to its freshest peer",
     #carried == 2 and targets["Zag Mathris"] and targets["Dee Vale"] and targets["Zag Mathris"]:match("^WB~CL4~%x+~MAIN~Dora~~~~over the water$") ~= nil, #carried)
-  check("whisper: report counts the carried line per guild", report():find("sent=4", 1, true) ~= nil, report())
+  check("whisper: report counts the carried line per guild", report():find("sent=7", 1, true) ~= nil, report())
   -- inbound: a carried line from a peer is shown once and fanned out to our guild once; never carried onward
   nSent = #sentAddon; n0 = #chatLines
   H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", "WHISPER", "Zag Mathris")
@@ -1052,7 +1101,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=6 fanned=3", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=3 sent=7 recv=7 fanned=3", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)

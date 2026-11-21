@@ -78,13 +78,14 @@ These commands change settings on your client. To share the settings with your g
 See [Link your guild](../README.md#link-your-guild) for a setup example. The square brackets below mark optional fields. Leave the brackets out of the line you paste into Guild Information.
 
 ```text
-CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on] [guilds=<name>, <name>]
+CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] [echo=on] [accept=<tag>,<tag>] [guilds=<name>, <name>]
 ```
 
 - Use the same channel and password for all linked guilds. Use `-` in the password position if the channel has no password.
 - Give each guild a distinct tag of up to eight characters. Use `-` or omit the tag to let CORELink make one from the guild name.
 - The officer rank cutoff defaults to 1, so ranks 0 and 1 are shown as officers.
 - Add `echo=on` if you want one addon user to re-post linked messages into guild chat for members without CORELink. Try this in a test guild before using it on the live Forever servers.
+- Add `accept=` followed by the tags of the guilds you link with, separated by commas and without spaces, for example `accept=Eternal,Deux`. Your guild's members then see lines only from those guilds, and their addons greet and carry lines only to those guilds. Use the tags shown in brackets in guild chat; upper and lower case don't matter. Without `accept=`, every guild on the channel is accepted. Put it before `guilds=` if the line has one.
 - `guilds=` followed by guild names is still accepted at the end of the line, and does nothing since 0.2.1. You can leave it or delete it.
 
 ### Mirror chat into a WoW Community

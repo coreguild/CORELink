@@ -1,6 +1,6 @@
 -- CORELink/GuildInfo.lua: the shared configuration line in Guild Info.
--- "CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [guilds=a, b]" is written by the
--- guild master (by hand: addons cannot write Guild Info) and read by every member's client.
+-- "CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [accept=TAG,TAG] [guilds=a, b]"
+-- is written by the guild master (by hand: addons cannot write Guild Info) and read by every member's client.
 -- Provides NS.ReadGuildInfo, NS.Publish, NS.ShowCopyBox, NS.BuildLine.
 local _, NS = ...
 local Print, Debug, Configured, Clean = NS.Print, NS.Debug, NS.Configured, NS.Clean
@@ -14,6 +14,7 @@ function NS.BuildLine()
     .. " " .. (hasTag and db.tag or "-") .. " " .. (db.officerRank or 1)
     .. (db.club and (" club=" .. db.club) or "")
     .. (db.echo and " echo=on" or "")
+    .. ((db.accept and #db.accept > 0) and (" accept=" .. table.concat(db.accept, ",")) or "")
     .. ((db.guilds and #db.guilds > 0) and (" guilds=" .. table.concat(db.guilds, ", ")) or "")
 end
 
@@ -96,6 +97,14 @@ local function TakeGuildList(line)
   return guilds, line
 end
 
+-- "accept=Eternal,Deux" -> { "Eternal", "Deux" }; nil without the field (every guild is accepted).
+local function ReadAccept(value)
+  local tags = {}
+  for tag in (value or ""):gmatch("[^,]+") do tags[#tags + 1] = tag end
+  if #tags > 0 then Debug("accepting only %s (accept= on the Guild Info line)", table.concat(tags, ",")) end
+  return #tags > 0 and tags or nil
+end
+
 local function ReadFlag(value)
   if value == nil then return false end
   return value:lower() == "on" or value == "1" or value:lower() == "yes"
@@ -123,6 +132,7 @@ function NS.ReadGuildInfo(force)
   db.officerRank = tonumber(orank) or 1
   db.guilds, line = TakeGuildList(line)
   db.echo = ReadFlag(line:match("[%s]echo=(%w+)"))
+  db.accept = ReadAccept(line:match("[%s]accept=([^%s]+)"))
   local club = line:match("[%s]club=([^%s]+)")
   if club ~= db.club then
     db.club, db.clubId = club, nil          -- the id is resolved from the token when first needed

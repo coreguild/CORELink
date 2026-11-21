@@ -654,6 +654,9 @@ guildInfo("corelink: CompatLink pw1 ALFA guilds=Bravo Guild",
 -- the rule for new data: a key=value field the release does not know, placed before guilds=, changes nothing for it
 guildInfo("CORELink: CompatLink pw1 ALFA 1 later=thing echo=on guilds=Bravo Guild",
   "channel=CompatLink password=pw1 tag=ALFA officerRank=1 club=nil echo=true guilds=Bravo Guild")
+-- accept= is such a field: the release ignores it and reads the rest as before
+guildInfo("CORELink: CompatLink pw1 ALFA 1 echo=on accept=BRAVO,Other",
+  "channel=CompatLink password=pw1 tag=ALFA officerRank=1 club=nil echo=true guilds=")
 
 ---------------------------------------------------------------- saved variables written by the release
 -- The player updates: the working copy starts with the CORELinkDB that the release left behind (Abe's, above).

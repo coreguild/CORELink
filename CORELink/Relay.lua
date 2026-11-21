@@ -123,6 +123,7 @@ end
 -- own roster cannot be speaking for another guild. On the other paths the author is only what the packet says:
 -- it must be a name the game could have given a character, with nothing but a realm after a hyphen.
 local function Refused(via, tag, author, from)
+  if not NS.Accepts(tag) then return "guild <" .. Safe(tag) .. "> is not on our accept= list" end
   if via == "channel" then
     if from and tag ~= GetTag() and NS.IsGuildmate(from) then
       return Safe(from) .. " is in our guild but the packet says <" .. Safe(tag) .. ">"

@@ -160,7 +160,7 @@ function NS.WhisperOut(id, tag, text)
   local now, best = GetTime(), {}
   for key, p in pairs(peers) do
     local fresher = not best[p.tag] or p.seen > peers[best[p.tag]].seen
-    if p.tag ~= tag and Live(p, now) and fresher then best[p.tag] = key end
+    if p.tag ~= tag and NS.Accepts(p.tag) and Live(p, now) and fresher then best[p.tag] = key end
   end
   for peerTag, key in pairs(best) do
     QueueWhisper(key, "WB" .. SEP .. text)
@@ -174,6 +174,10 @@ end
 local function OnCard(cmd, rest, sender)
   local tag, realm, guild = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
   if not tag then return end
+  if not NS.Accepts(tag) then
+    Debug("ignored a %s from %s: guild <%s> is not on our accept= list", cmd, sender, tag:sub(1, 20):gsub("|", "||"))
+    return
+  end
   RememberPeer(sender, tag, realm, guild)
   stats.answered = stats.answered + 1
   if cmd == "HELLO" then
@@ -190,7 +194,7 @@ NS.whisperPackets.DIR = function(rest)
   local greeted = 0
   for entry in rest:gmatch("[^;]+") do
     local key, realm, tag, guild = entry:match("^([^@]+)@([^@]*)@([^@]*)@(.*)$")
-    if key and tag ~= "" and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
+    if key and tag ~= "" and NS.Accepts(tag) and not IsMe(PeerName(key)) and not peers[key] and greeted < 6 then
       peers[key] = { tag = tag, realm = realm ~= "" and realm or "?", guild = guild, seen = 0 }   -- not yet confirmed
       SavePeers()
       greeted = greeted + 1

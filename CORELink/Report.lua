@@ -82,6 +82,7 @@ local function BuildReport()
     "realm " .. MyRealm(),
     "me " .. tostring(NS.me.name or ("short: " .. tostring(UnitName("player")))),
     "heard " .. RecentTags(),
+    "accept " .. ((db.accept and #db.accept > 0) and table.concat(db.accept, ",") or "all"),
     string.format("tables seen=%d displayed=%d nicks=%d addonUsers=%d",
       CountKeys(NS.seen), CountKeys(NS.displayed), CountKeys(db.nicks), CountKeys(NS.addonUsers)),
     MirrorSummary(),

@@ -97,6 +97,18 @@ end
 
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
+-- accept=TAG,TAG on the Guild Info line names the only other guilds this guild takes lines and peers from.
+-- With no list, every guild on the link is taken.
+function NS.Accepts(tag)
+  local list = NS.db and NS.db.accept
+  if not list or #list == 0 or not tag then return true end
+  local mine = NS.GetTag()
+  tag = tag:lower()
+  if mine and tag == mine:lower() then return true end
+  for _, listed in ipairs(list) do if listed:lower() == tag then return true end end
+  return false
+end
+
 -- Could this be a character's name on this client? Names here are words of letters with one space between
 -- them ("First Surname"): no digits, apostrophes or other punctuation. Bytes above 127 pass as accented letters.
 function NS.ValidName(name)

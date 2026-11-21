@@ -36,6 +36,10 @@ Type `/cl report` and check the version at the start. If it's older than 0.2.0, 
 
 Update CORELink. Versions up to 0.2.2 showed whatever name, rank and guild a message claimed, and anyone in the link channel could type one. Newer versions show the character that really posted a line, drop a line whose author isn't a possible character name, and drop a line that a member of your own guild sends under another guild's name. `/cl report` on a client that dropped one says who delivered it.
 
+## A linked guild's messages stopped showing
+
+Check your Guild Information line for `accept=`. If it's there, your guild only shows messages from the guilds whose tags it lists. Ask your guild master to add the missing guild's tag, exactly as it appears in brackets in that guild's messages, then wait five minutes or type `/cl reload`. `/cl report` shows the list after `accept`, and its log names any guild whose message was dropped for not being on it.
+
 ## The same message appears twice
 
 If it keeps happening, ask the sender and receiver to run `/cl report`. Share both reports and mention whether your guilds also share chat through a WoW Community.

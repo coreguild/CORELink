@@ -143,7 +143,8 @@ These formats cannot change while a release that reads them is still supported: 
 * the guild packets `PRESENT~version`, `NICK~name`, `NREQ`, `LINE~<packet>`, `ECHO~id`;
 * the echoed guild chat line `[TAG] Name (Rank Nick): text`: 0.2.0 recognises an echo by `[TAG] ...: ` at the
   start, to hide it and to keep its courier from carrying it back out;
-* the Guild Info line `CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [guilds=a, b]`;
+* the Guild Info line `CORELink: <channel> <password|-> [tag|-] [officerRank] [club=..] [echo=on] [guilds=a, b]`
+  (`accept=TAG,TAG`, added later, is a new field in the place the rule below gives it);
 * the saved variables `CORELinkDB` as 0.2.0 wrote them.
 
 New data never goes inside an existing format. It travels in:
@@ -165,6 +166,10 @@ raising `BASELINE`.
 
 A peer is an addon user of another guild. Clients learn them from ordinary traffic: the author of every line
 on the channel is one. A HELLO/PEER exchange adds one by hand (`/cl hello`), and gossip (DIR) suggests more.
+`accept=TAG,TAG` on the Guild Info line limits all of this to the listed guilds (`NS.Accepts`): packets with
+another tag are dropped on every path, their senders are not noted or answered, gossip about them is not followed
+up, and nothing is carried to them. With no list every guild is accepted. The tag is what a packet claims, so
+the list keeps out guilds that join under their own name, not someone posing as a listed one.
 `guilds=` on the Guild Info line is still read but does nothing: it fed a `/who` lookup of the listed guilds,
 which the game blocks outside a keypress (removed in 0.2.1). Peers are saved between sessions; one that never answered is never
 whispered to. The courier pings its peers every ten minutes to keep them fresh.
