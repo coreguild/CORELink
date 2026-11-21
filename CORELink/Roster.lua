@@ -54,6 +54,8 @@ function NS.LearnMyNameFromRoster()
   NS.RefreshRoster()
 end
 
+function NS.RosterLoaded() return next(rankOf) ~= nil end
+
 function NS.IsGuildmate(name, guid)
   if guid and rosterGuid[guid] then return true end
   return name ~= nil and rankOf[name] ~= nil
