@@ -244,6 +244,98 @@ advance(1)
 check("the courier waits at least a second for the author's own copy", #whisperSends(amark, "WB~") == 0)
 advance(3)
 check("a line from an addon user whose own copy never arrives is carried after the wait", #whisperSends(amark, "WB~") == 1)
+-- the author shown for a channel line is the player the game says posted it, not the name typed into the packet
+do
+  local peers0 = report():match("peers=(%d+)")
+  local at = #chatLines
+  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~Fancy~I am majestic", "Mallory")
+  local got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a channel packet naming someone else as author is shown under its real sender",
+    got:find("[Mallory]", 1, true) ~= nil and got:find("Beau", 1, true) == nil, got)
+  check("the rank and nickname such a packet claims are not shown",
+    got:find("Captain", 1, true) == nil and got:find("Fancy", 1, true) == nil, got)
+  check("the report log names the author field and the real sender",
+    report():find("names Beau's Beard as author but Mallory posted it", 1, true) ~= nil, report())
+  check("its sender does not become a peer of the guild it names", report():match("peers=(%d+)") == peers0, report())
+  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~Fancy~I am majestic", "Mallory")
+  local _, said = report():gsub("names Beau's Beard as author", "")
+  check("a repeat of the same packet adds no second log line", said == 1, said)
+  -- an honest line: the game may spell the poster with a realm the packet does not carry
+  at = #chatLines
+  local _, forged = NS.ShowPacket("CL4~0badf0ab~ALT~Carol~PRIEST~OCaptain~Cee~honest", "channel", "Carol-Realm7")
+  got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a poster spelled with a realm is the packet's author: name, rank and nickname kept",
+    forged == nil and got:find("[Carol]", 1, true) ~= nil and got:find("(Captain Cee)", 1, true) ~= nil
+    and report():find("names Carol as author", 1, true) == nil, got)
+  -- claiming our own tag does not make a stranger one of our addon users (they would be elected courier)
+  channelLine("CL4~0badf0ac~MAIN~Aaa~PRIEST~~~hi", "Aaa")
+  check("a stranger posting under our tag does not become the courier", report():find("courier=me", 1, true) ~= nil, report())
+  -- a name the game could not have given a character is not an author, by any path
+  for name, want in pairs({ ["Gobbs Stormblessed"] = true, ["Sir Zaghary"] = true, ["Be Mogue"] = true, ["K\195\169wzie Zombie"] = true,
+      ["Beau's Beard"] = false, ["Bob2"] = false, ["A"] = false, ["Two  Spaces"] = false, [" Lead"] = false,
+      ["Trail "] = false, ["Semi;Colon"] = false, [""] = false }) do
+    check("name rule: '" .. name .. "' " .. (want and "is" or "is not") .. " a character name", NS.ValidName(name) == want)
+  end
+  local shown0, sent0 = report():match("relay typed=.- shown=(%d+)"), #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0ae~ALT~Beau's Beard~PRIEST~~~I am majestic", "WHISPER", "Carol")
+  advance(3)
+  check("a carried line whose author is not a character name is not shown, and the log names who delivered it",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("dropped packet 0badf0ae via whisper, delivered by Carol: 'Beau's Beard' is not a character name", 1, true) ~= nil, report())
+  check("such a line is not fanned out to the guild either", #guildSends(sent0, "LINE~") == 0)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0badf0af~ALT~Beau's Beard~PRIEST~~~I am majestic", "GUILD", "Tanner-Beta")
+  check("nor is it shown when a guildmate fans it out", report():match("relay typed=.- shown=(%d+)") == shown0, report())
+  -- someone on our own roster cannot be speaking for another guild
+  channelLine("CL4~0badf0b0~ALT~Bob~WARRIOR~~~hello from the alts", "Bob")
+  check("a channel packet from a guildmate under another guild's tag is not shown, and the log names them",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("Bob is in our guild but the packet says <ALT>", 1, true) ~= nil, report())
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b1~ALT~Carol~PRIEST~~~carried by one of ours", "WHISPER", "Bob")
+  advance(3)
+  check("a carried line whispered by a guildmate is not shown",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("dropped a carried line from Bob: they are in our own guild", 1, true) ~= nil, report())
+  -- a hyphen does not get an invented name past the rule, and what the log quotes cannot draw anything
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b2~ALT~Beau-'s Beard |cffff0000GM|r~PRIEST~~~x", "WHISPER", "Carol")
+  advance(3)
+  check("a carried line whose author hides an invented name behind a hyphen is not shown",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("'Beau-'s Beard ||cffff0000GM||r' is not a character name", 1, true) ~= nil, report())
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b3~ALT~Erin Vale-Zul'J\195\173n~PRIEST~~~with a realm", "WHISPER", "Carol")
+  advance(3)
+  check("a carried line whose author carries a realm is shown",
+    tonumber(report():match("relay typed=.- shown=(%d+)")) == shown0 + 1, report())
+  -- on the channel the poster's name comes from the game: extra text after it in the packet is a false author
+  at = #chatLines
+  channelLine("CL4~0badf0b4~ALT~Mallory-99 [GM]~PRIEST~OGuild Master~Boss~text", "Mallory")
+  got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a poster who adds to their own name in the packet is shown under the game's name, without the rank claimed",
+    got:find("[Mallory]", 1, true) ~= nil and got:find("GM", 1, true) == nil and got:find("Boss", 1, true) == nil, got)
+  -- a real character is never dropped for their name on the channel, whatever the name rule thinks of it
+  at = #chatLines
+  channelLine("CL4~0badf0b5~ALT~D'Arcy Vale~PRIEST~OCaptain~~my own name", "D'Arcy Vale")
+  got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a channel line from a poster whose real name the rule does not know is shown, rank kept",
+    got:find("[D'Arcy Vale]", 1, true) ~= nil and got:find("(Captain)", 1, true) ~= nil, got)
+  -- a client that does not know its surname yet writes its first name
+  at = #chatLines
+  channelLine("CL4~0badf0b6~ALT~Carol~PRIEST~OCaptain~Cee~first name only", "Carol Reed")
+  got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a packet with the poster's first name alone is theirs: full name shown, rank and nickname kept",
+    got:find("[Carol Reed]", 1, true) ~= nil and got:find("(Captain Cee)", 1, true) ~= nil, got)
+  -- a forged packet is not word from the guild it names
+  channelLine("CL4~0badf0b7~FAKE~Someone Else~PRIEST~~~hi", "Mallory")
+  check("a forged packet does not mark the guild it names as heard", report():match("heard ([^|]*)"):find("FAKE", 1, true) == nil, report():match("heard [^|]*"))
+  -- a refused channel copy does not hide the same line arriving honestly afterwards
+  at = #chatLines
+  channelLine("CL4~0badf0b8~ALT~Bob~WARRIOR~~~moved guild", "Bob")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0badf0b8~ALT~Bob~WARRIOR~~~moved guild", "GUILD", "Tanner-Beta")
+  check("a line refused on the channel is still shown when a guildmate fans it out", #chatLines > at, #chatLines - at)
+  -- a carried line's log says who delivered it
+  NS.ShowPacket("CL4~0badf0ad~ALT~Erin~PRIEST~~~carried", "whisper", "Carol")
+  check("the log of a carried line names who delivered it",
+    report():find("0badf0ad via whisper from Erin <ALT>, delivered by Carol", 1, true) ~= nil, report())
+end
 -- a quest link reaches each client with its own colour and level, so the author's packet id is not the id the
 -- courier computes from guild chat: the copy is recognised by what it says
 do
@@ -308,7 +400,7 @@ advance(3)
 local fan = guildSends(amark, "LINE~")
 check("a carried line for a guild we have heard is shown once and fanned out to our guild once", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fan == 1 and fan[1] == "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", (#chatLines - n0) .. " " .. #fan)
 check("a carried line is never whispered onward", #whisperSends(amark, "WB~") == 0)
-check("report counts both received copies and the one fan-out", report():find("recv=2 fanned=1", 1, true) ~= nil, report())
+check("report counts both received copies and the one fan-out", report():find("recv=5 fanned=2", 1, true) ~= nil, report())
 n0 = #chatLines; amark = #sentAddon
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f004~Deux~Dee Vale~PRIEST~~~fanned by tanner", "GUILD", "Tanner-Beta")
 advance(3)
@@ -1083,7 +1175,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=5 recv=3 fanned=2", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=5 recv=6 fanned=3", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)
