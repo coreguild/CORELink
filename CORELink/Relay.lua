@@ -9,6 +9,7 @@
 local _, NS = ...
 local Debug, Configured, Locked, IsMe, GetTag = NS.Debug, NS.Configured, NS.Locked, NS.IsMe, NS.GetTag
 local issecret, SEP, PROTO = NS.issecret, NS.SEP, NS.PROTO
+local Safe, LogOnce = NS.Safe, NS.LogOnce
 local seen, pending, displayed = NS.seen, NS.pending, NS.displayed
 
 NS.relayStats = { typed = 0, carried = 0, shown = 0 }
@@ -98,18 +99,6 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
--- Packet text is anyone's to write: what goes into the log is cut short and cannot draw anything.
-local function Safe(s) return (tostring(s):sub(1, 40):gsub("|", "||")) end
-
--- One log line per packet id about a packet we did not believe, however often it is repeated.
-local logged, nLogged = {}, 0
-local function LogOnce(id, fmt, ...)
-  if logged[id] then return end
-  if nLogged >= 50 then logged, nLogged = {}, 0 end
-  logged[id], nLogged = true, nLogged + 1
-  Debug(fmt, ...)
-end
-
 -- The name to show for a channel packet, or nil when its author field names someone other than its poster.
 -- The poster's own client writes its name as the game spells it, without the realm, or as the first name
 -- alone (before its roster has loaded).
@@ -124,7 +113,6 @@ end
 -- it must be a name the game could have given a character, with nothing but a realm after a hyphen (a realm
 -- has no spaces and draws nothing, whatever letters it uses).
 local function Refused(via, tag, author, from)
-  if not NS.Accepts(tag) then return "guild <" .. Safe(tag) .. "> is not on our accept= list" end
   if via == "channel" then
     if from and tag ~= GetTag() and NS.IsGuildmate(from) then
       return Safe(from) .. " is in our guild but the packet says <" .. Safe(tag) .. ">"
@@ -150,6 +138,7 @@ function NS.ShowPacket(text, via, from)
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then return nil end
   local now, status = GetTime(), nil
+  if not NS.Accepts(tag) then return tag, "refused" end   -- logged once per guild by NS.Accepts
   local why = Refused(via, tag, author, from)
   if why then
     LogOnce(id, "dropped packet %s via %s, delivered by %s: %s", id, via, Safe(from), why)

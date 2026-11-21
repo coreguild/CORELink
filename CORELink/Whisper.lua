@@ -174,10 +174,7 @@ end
 local function OnCard(cmd, rest, sender)
   local tag, realm, guild = rest:match("^([^" .. SEP .. "]*)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP .. "(.*)$")
   if not tag then return end
-  if not NS.Accepts(tag) then
-    Debug("ignored a %s from %s: guild <%s> is not on our accept= list", cmd, sender, tag:sub(1, 20):gsub("|", "||"))
-    return
-  end
+  if not NS.Accepts(tag) then return end
   RememberPeer(sender, tag, realm, guild)
   stats.answered = stats.answered + 1
   if cmd == "HELLO" then
@@ -212,6 +209,7 @@ NS.whisperPackets.WB = function(rest, sender)
     Debug("dropped a carried line from %s: they are in our own guild", sender)
     return
   end
+  if tag and not NS.Accepts(tag) then return end
   local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
   if not known then
     Debug("dropped a carried line from %s: not a peer, tag %s not heard", sender, tostring(tag))
@@ -241,7 +239,7 @@ local function PeerUpkeep()
   if not NS.db then return end
   local now = GetTime()
   for key, p in pairs(peers) do
-    if now - p.seen > PEER_KEEP_SECS then peers[key] = nil
+    if now - p.seen > PEER_KEEP_SECS or not NS.Accepts(p.tag) then peers[key] = nil   -- too old, or not listed
     elseif IsCourier() and p.seen > 0 and now - p.seen > HELLO_EVERY
       and (not p.gone or now - p.gone < GONE_PING_SECS) then
       Hello(key, "HELLO")     -- a peer who logged off is asked again for an hour, in case they came back quietly

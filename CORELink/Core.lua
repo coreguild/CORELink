@@ -97,15 +97,28 @@ end
 
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
+-- Packet text is anyone's to write: what goes into the log is cut short and cannot draw anything.
+function NS.Safe(s) return (tostring(s):sub(1, 40):gsub("|", "||")) end
+
+-- One log line per key (a packet id, a guild) about something we did not believe, however often it repeats.
+local logged, nLogged = {}, 0
+function NS.LogOnce(key, fmt, ...)
+  if logged[key] then return end
+  if nLogged >= 50 then logged, nLogged = {}, 0 end
+  logged[key], nLogged = true, nLogged + 1
+  NS.Debug(fmt, ...)
+end
+
 -- accept=TAG,TAG on the Guild Info line names the only other guilds this guild takes lines and peers from.
--- With no list, every guild on the link is taken.
+-- With no list, every guild on the link is taken. Our own tag needs no entry (spelled exactly: another
+-- spelling of it is another guild). A refusal is logged once per guild, not per line.
 function NS.Accepts(tag)
   local list = NS.db and NS.db.accept
-  if not list or #list == 0 or not tag then return true end
-  local mine = NS.GetTag()
-  tag = tag:lower()
-  if mine and tag == mine:lower() then return true end
-  for _, listed in ipairs(list) do if listed:lower() == tag then return true end end
+  if not list or #list == 0 or not tag or tag == NS.GetTag() then return true end
+  local lower = tag:lower()
+  for _, listed in ipairs(list) do if listed:lower() == lower then return true end end
+  NS.LogOnce("accept:" .. lower, "guild <%s> is not on our accept= list: its lines, greetings and peers are ignored",
+    NS.Safe(tag))
   return false
 end
 

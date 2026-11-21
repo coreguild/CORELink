@@ -46,6 +46,7 @@ commands.setup = function(arg)
   end
   pw = (pw == "-") and "" or Clean(pw)
   tag = (tag ~= "" and tag ~= "-") and Clean(tag):sub(1, 8) or nil
+  NS.db.accept = nil      -- a list read from another guild's line does not follow a new setup
   NS.SetConfig(Clean(ch), pw, tag, "local")
   Print("configured. Channel: " .. Clean(ch) .. ", tag: " .. tostring(tag or "auto"))
   NS.Publish()
@@ -86,7 +87,7 @@ end
 commands.clear = function()
   local db = NS.db
   NS.LeaveLink()
-  db.channel, db.password, db.tag, db.source, db.lastGI = nil, nil, nil, nil, nil
+  db.channel, db.password, db.tag, db.source, db.lastGI, db.accept = nil, nil, nil, nil, nil, nil
   Print("settings cleared.")
 end
 

@@ -78,6 +78,7 @@ local function FindLine()
     if NS.db.source == "Guild Info" and Configured() then
       NS.LeaveLink()
       NS.db.channel, NS.db.password, NS.db.tag, NS.db.source, NS.db.lastGI = nil, nil, nil, nil, nil
+      NS.db.accept = nil
       Print("this guild's Guild Info has no CORELink line; the settings from the previous guild were cleared.")
     end
     return nil
@@ -97,11 +98,15 @@ local function TakeGuildList(line)
   return guilds, line
 end
 
--- "accept=Eternal,Deux" -> { "Eternal", "Deux" }; nil without the field (every guild is accepted).
-local function ReadAccept(value)
+-- The accept= list on a line that guilds= was already cut from: { "Eternal", "Deux" }, or nil without the field
+-- (every guild is accepted). Written "accept=Eternal,Deux"; spaces, semicolons and brackets around the tags
+-- are forgiven, and the list ends at the next key=value field.
+local function ReadAccept(line, before)
+  local text = line:match("[%s]accept=(.*)$")
   local tags = {}
-  for tag in (value or ""):gmatch("[^,]+") do tags[#tags + 1] = tag end
-  if #tags > 0 then Debug("accepting only %s (accept= on the Guild Info line)", table.concat(tags, ",")) end
+  for tag in (text or ""):gsub("%s%a+=.*$", ""):gmatch("[^,;%s%[%]]+") do tags[#tags + 1] = tag end
+  local now, was = table.concat(tags, ","), table.concat(before or {}, ",")
+  if now ~= was then Debug("accept list: %s", now ~= "" and now or "none, every guild is accepted") end
   return #tags > 0 and tags or nil
 end
 
@@ -128,11 +133,14 @@ function NS.ReadGuildInfo(force)
   if line == db.lastGI then GIState("line unchanged") return end   -- keep any local override
   local ch, pw, tag, orank = line:sub(10):match("^[ \t]*([^%s]+)[ \t]+([^%s]+)[ \t]*([^%s]*)[ \t]*([^%s]*)")
   if not ch then GIState("line present but could not be parsed: " .. line:sub(1, 60)) return end
-  GIState("line read")
+  -- Every version reads the third and fourth words as tag and rank, whatever they are.
+  local misplaced = tag:find("=", 1, true) or orank:find("=", 1, true)
+  GIState(misplaced and "line read, but a key=value field stands where the tag or officer rank belongs:"
+    .. " write the tag (or -) and the rank before it" or "line read")
   db.officerRank = tonumber(orank) or 1
   db.guilds, line = TakeGuildList(line)
   db.echo = ReadFlag(line:match("[%s]echo=(%w+)"))
-  db.accept = ReadAccept(line:match("[%s]accept=([^%s]+)"))
+  db.accept = ReadAccept(line, db.accept)
   local club = line:match("[%s]club=([^%s]+)")
   if club ~= db.club then
     db.club, db.clubId = club, nil          -- the id is resolved from the token when first needed

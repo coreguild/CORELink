@@ -166,6 +166,7 @@ local function OnClubMessage(clubId, streamId, messageId, attempt)
   }
   local myTag = GetTag()
   if tag and ((myTag and StreamKey(tag) == StreamKey(myTag)) or NS.db.muted[tag:lower()]) then return end
+  if tag and not NS.Accepts(tag) then return end
   if channelTag then ShowChannelPost(line) else ShowGeneralPost(line) end
 end
 NS.events.CLUB_MESSAGE_ADDED = function(clubId, streamId, messageId) OnClubMessage(clubId, streamId, messageId) end

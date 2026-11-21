@@ -905,6 +905,12 @@ do
   H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 209); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 210); H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 211)
   check("wow club: readable [TAG] text lines keep tag filtering", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil, last())
   slash("unmute QUIET")
+  -- the accept list holds for community posts too
+  CORELinkDB.accept = { "Deux" }
+  clubMessages[214] = { messageId = 214, content = "[Trois] readable, not listed", author = { memberId = 7 } }
+  advance(10); n0 = #chatLines; H(nil, "CLUB_MESSAGE_ADDED", 23149801, 1, 214); advance(2)
+  check("accept: a community post from a guild not on the list is not shown", #chatLines == n0, last())
+  CORELinkDB.accept = nil
   guildInfoText = savedTextForRestore
 end
 
@@ -978,7 +984,7 @@ do
   local peers0 = report():match("peers=(%d+)")
   channelLine("CL4~0acc0003~Trois~Zag Mathris~MAGE~~~not listed", "Zag Mathris")
   check("accept: a line from a guild not on the list is not shown, and the log says why",
-    nShown() == s0 + 2 and report():find("0acc0003 via channel, delivered by Zag Mathris: guild <Trois> is not on our accept= list", 1, true) ~= nil, report())
+    nShown() == s0 + 2 and report():find("guild <Trois> is not on our accept= list", 1, true) ~= nil, report())
   check("accept: that guild is not marked heard and its poster is no peer",
     report():match("heard ([^|]*)"):find("Trois", 1, true) == nil and report():match("peers=(%d+)") == peers0, report())
   local sent0 = #sentAddon
@@ -989,7 +995,19 @@ do
   H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0acc0004~Trois~Zag Mathris~MAGE~~~carried, not listed", "WHISPER", "Dee Vale"); advance(3)
   check("accept: a carried line for a guild not on the list is not shown or fanned out",
     nShown() == s0 + 2 and #guildSends(sent0, "LINE~") == 0, nShown() - s0)
-  check("accept: our own guild needs no entry", NS.Accepts("main") == true and NS.Accepts("Trois") == false)
+  check("accept: our own guild needs no entry, another spelling of its tag is another guild",
+    NS.Accepts("MAIN") == true and NS.Accepts("main") == false and NS.Accepts("Trois") == false)
+  channelLine("CL4~0acc0010~Trois~Zag Mathris~MAGE~~~again", "Zag Mathris"); channelLine("CL4~0acc0011~Trois~Zag Mathris~MAGE~~~and again", "Zag Mathris")
+  local _, told = report():gsub("guild <Trois> is not on our accept= list", "")
+  check("accept: the log says so once per guild, not once per line", told == 1, told)
+  -- a peer saved before the list was written is forgotten, not pinged for a week
+  NS.peers["Old Trois"] = { tag = "Trois", realm = "?", seen = GetTime() - 700 }
+  sent0 = #sentAddon; advance(61)
+  check("accept: a saved peer of a guild not on the list is dropped at the next upkeep and not greeted",
+    NS.peers["Old Trois"] == nil and #whisperSends(sent0, "HELLO~") == 0, #whisperSends(sent0, "HELLO~"))
+  local recv0 = report():match("recv=(%d+)")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0acc0012~Trois~Zag Mathris~MAGE~~~carried again", "WHISPER", "Dee Vale"); advance(1)
+  check("accept: a carried line for a guild not on the list is not counted as received", report():match("recv=(%d+)") == recv0, report():match("recv=%d+"))
   sent0 = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@PvE@Trois@Trois Royaume;Finn Oak@PvE@Deux@Deux", "WHISPER", "Dee Vale"); advance(3)
   local greeted = whisperSends(sent0, "HELLO~")
@@ -1001,11 +1019,23 @@ do
   for _, w in ipairs(carried) do if w.target == "Zed Trois" then toZed = toZed + 1 end end
   check("accept: a guildmate's line is carried to listed guilds and not to a peer of another", #carried >= 1 and toZed == 0, #carried .. "/" .. toZed)
   NS.peers["Zed Trois"] = nil
+  -- the list forgives how it is written, and ends at the next field
+  guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1 accept=[ALT], Deux; Quatre echo=on\n"
+  slash("reload"); advance(3)
+  check("accept: spaces, semicolons and brackets around the tags are forgiven, and the next field is not swallowed",
+    table.concat(CORELinkDB.accept or {}, ",") == "ALT,Deux,Quatre" and CORELinkDB.echo == true, table.concat(CORELinkDB.accept or {}, ","))
+  guildInfoText = "CORELink: CORELink7100 pw1 accept=ALT\n"
+  slash("reload"); advance(3)
+  check("accept: written where the tag belongs, the report says what is wrong with the line",
+    report():find("a key=value field stands where the tag or officer rank belongs", 1, true) ~= nil, report())
   -- the guild master takes the list off the line: every guild is taken again
   guildInfoText = "CORELink: CORELink7100 pw1 MAIN 1\n"
   slash("reload"); advance(3)
   channelLine("CL4~0acc0005~Trois~Zag Mathris~MAGE~~~no list now", "Zag Mathris")
   check("accept: with no list every guild's lines are shown", nShown() == s0 + 3 and report():find("| accept all |", 1, true) ~= nil, report())
+  CORELinkDB.accept = { "ALT" }; myRank = 0; slash("setup other pw9"); myRank = 3
+  check("accept: a list read from a Guild Info line does not follow a new local setup", CORELinkDB.accept == nil)
+  slash("clear")
   guildInfoText = savedTextForRestore
 end
 
@@ -1101,7 +1131,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=3 sent=7 recv=7 fanned=3", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=3 sent=7 recv=6 fanned=3", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)

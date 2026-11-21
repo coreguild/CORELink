@@ -85,7 +85,7 @@ CORELink: <channel> <password|-> [tag|-] [officerRankCutoff] [club=<community>] 
 - Give each guild a distinct tag of up to eight characters. Use `-` or omit the tag to let CORELink make one from the guild name.
 - The officer rank cutoff defaults to 1, so ranks 0 and 1 are shown as officers.
 - Add `echo=on` if you want one addon user to re-post linked messages into guild chat for members without CORELink. Try this in a test guild before using it on the live Forever servers.
-- Add `accept=` followed by the tags of the guilds you link with, separated by commas and without spaces, for example `accept=Eternal,Deux`. Your guild's members then see lines only from those guilds, and their addons greet and carry lines only to those guilds. Use the tags shown in brackets in guild chat; upper and lower case don't matter. Without `accept=`, every guild on the channel is accepted. Put it before `guilds=` if the line has one.
+- Add `accept=` followed by the tags of the guilds you link with, separated by commas and without spaces, for example `accept=Eternal,Deux`. Your guild's members then see lines only from those guilds, and their addons greet and carry lines only to those guilds. Use the tags shown in brackets in guild chat; upper and lower case don't matter. Without `accept=`, every guild on the channel is accepted. Put it after the tag and the officer rank, which must both be written when you use it (`-` for no tag), and before `guilds=` if the line has one: every version reads the third and fourth words of the line as the tag and the rank.
 - `guilds=` followed by guild names is still accepted at the end of the line, and does nothing since 0.2.1. You can leave it or delete it.
 
 ### Mirror chat into a WoW Community
