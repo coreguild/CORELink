@@ -66,6 +66,7 @@ Update CORELink. Versions up to 0.2.1 print their replies in the first chat tab,
 
 | Field | What it tells you |
 |---|---|
+| `version` | The first words of the report: the CORELink version you run. `dev (unreleased build)` means a copy that didn't come from a release. |
 | `proto` | The message format your version reads. `(a linked guild sent a newer one)` after it means a newer format arrived this session; the log has the number. |
 | `channel` | A number after `id` means you joined the channel. `id not joined` means you haven't joined. |
 | `lastNotice` | The most recent channel notice from WoW. If `NOT_ALLOWED_IN_CHANNEL` keeps appearing, include it when you ask for help. |

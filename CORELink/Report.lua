@@ -64,7 +64,7 @@ end
 local function BuildReport()
   local db, newer = NS.db, NS.relayStats.newerProto
   return table.concat({
-    "CORELink " .. NS.Version(),
+    "CORELink " .. NS.VersionText(),
     "proto " .. NS.PROTO .. (newer and " (a linked guild sent a newer one)" or ""),
     db.enabled and "enabled" or "disabled",
     Configured() and ("channel " .. db.channel .. " id " .. tostring(NS.ChannelId() or "not joined"))
@@ -95,7 +95,7 @@ end
 
 NS.commands.report = function()
   local report = BuildReport()
-  Print("report (also in the copy box, Ctrl+C and paste it to whoever is helping):")
+  Print(NS.VersionText() .. ". Report (also in the copy box, Ctrl+C and paste it to whoever is helping):")
   Print(report)
   pcall(NS.ShowCopyBox, report)
 end
