@@ -97,6 +97,13 @@ end
 
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
+-- Could this be a character's name on this client? Names here are words of letters with one space between
+-- them ("First Surname"): no digits, apostrophes or other punctuation. Bytes above 127 pass as accented letters.
+function NS.ValidName(name)
+  if type(name) ~= "string" or #name < 2 or #name > 48 then return false end
+  return ((" " .. name):gsub(" [%a\128-\255]+", "")) == ""
+end
+
 function NS.Hash(s)
   local h = 5381
   for i = 1, #s do h = (h * 33 + s:byte(i)) % 4294967296 end

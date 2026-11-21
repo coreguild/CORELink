@@ -270,6 +270,31 @@ do
   -- claiming our own tag does not make a stranger one of our addon users (they would be elected courier)
   channelLine("CL4~0badf0ac~MAIN~Aaa~PRIEST~~~hi", "Aaa")
   check("a stranger posting under our tag does not become the courier", report():find("courier=me", 1, true) ~= nil, report())
+  -- a name the game could not have given a character is not an author, by any path
+  for name, want in pairs({ ["Gobbs Stormblessed"] = true, ["Sir Zaghary"] = true, ["Be Mogue"] = true, ["K\195\169wzie Zombie"] = true,
+      ["Beau's Beard"] = false, ["Bob2"] = false, ["A"] = false, ["Two  Spaces"] = false, [" Lead"] = false,
+      ["Trail "] = false, ["Semi;Colon"] = false, [""] = false }) do
+    check("name rule: '" .. name .. "' " .. (want and "is" or "is not") .. " a character name", NS.ValidName(name) == want)
+  end
+  local shown0, sent0 = report():match("relay typed=.- shown=(%d+)"), #sentAddon
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0ae~ALT~Beau's Beard~PRIEST~~~I am majestic", "WHISPER", "Carol")
+  advance(3)
+  check("a carried line whose author is not a character name is not shown, and the log names who delivered it",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("dropped packet 0badf0ae via whisper, delivered by Carol: 'Beau's Beard' is not a character name", 1, true) ~= nil, report())
+  check("such a line is not fanned out to the guild either", #guildSends(sent0, "LINE~") == 0)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0badf0af~ALT~Beau's Beard~PRIEST~~~I am majestic", "GUILD", "Bob-Beta")
+  check("nor is it shown when a guildmate fans it out", report():match("relay typed=.- shown=(%d+)") == shown0, report())
+  -- someone on our own roster cannot be speaking for another guild
+  channelLine("CL4~0badf0b0~ALT~Bob~WARRIOR~~~hello from the alts", "Bob")
+  check("a channel packet from a guildmate under another guild's tag is not shown, and the log names them",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("Bob is in our guild but the packet says <ALT>", 1, true) ~= nil, report())
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b1~ALT~Carol~PRIEST~~~carried by one of ours", "WHISPER", "Bob")
+  advance(3)
+  check("a carried line whispered by a guildmate is not shown",
+    report():match("relay typed=.- shown=(%d+)") == shown0
+    and report():find("dropped a carried line from Bob: they are in our own guild", 1, true) ~= nil, report())
   -- a carried line's log says who delivered it
   NS.ShowPacket("CL4~0badf0ad~ALT~Erin~PRIEST~~~carried", "whisper", "Carol")
   check("the log of a carried line names who delivered it",
@@ -304,7 +329,7 @@ advance(3)
 local fan = guildSends(amark, "LINE~")
 check("a carried line for a guild we have heard is shown once and fanned out to our guild once", #chatLines == n0 + 2 and last():find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fan == 1 and fan[1] == "LINE~CL4~0000f003~Trois~Zag Mathris~MAGE~~Zaggy~from across", (#chatLines - n0) .. " " .. #fan)
 check("a carried line is never whispered onward", #whisperSends(amark, "WB~") == 0)
-check("report counts both received copies and the one fan-out", report():find("recv=2 fanned=1", 1, true) ~= nil, report())
+check("report counts both received copies and the one fan-out", report():find("recv=3 fanned=1", 1, true) ~= nil, report())
 n0 = #chatLines; amark = #sentAddon
 H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0000f004~Deux~Dee Vale~PRIEST~~~fanned by tanner", "GUILD", "Tanner-Beta")
 advance(3)
@@ -991,7 +1016,7 @@ do
   local fanned = guildSends(nSent, "LINE~")
   check("whisper: a carried line from a peer is shown once, fanned out once, and echoed for members without the addon",
     #chatLines >= n0 + 2 and chatLines[n0 + 1].text:find("[Trois] |Hplayer:Zag Mathris|h", 1, true) ~= nil and #fanned == 1 and #whisperSends(nSent, "WB~") == 0, (#chatLines - n0) .. " " .. #fanned)
-  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=3 fanned=2", 1, true) ~= nil, report())
+  check("whisper: report counts answers, carried, received and fanned lines", report():find("answered=2 sent=4 recv=4 fanned=2", 1, true) ~= nil, report())
   -- gossip: an unknown name in a directory gets a hello; the game's "not playing" reply is hidden
   nSent = #sentAddon
   H(nil, "CHAT_MSG_ADDON", "CORELink", "DIR~Rook Hale@CAMWOWUS2Realm1PvE@Deux@Deux", "WHISPER", "Zag Mathris"); advance(2)

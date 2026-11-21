@@ -98,6 +98,16 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
+-- Why a packet is not believed at all, or nil. Its author must be a name the game could have given a
+-- character. On the channel, a poster from our own roster cannot be speaking for another guild.
+local function Refused(via, tag, author, from)
+  if not NS.ValidName(NS.PeerName(author)) then return "'" .. author .. "' is not a character name" end
+  if via == "channel" and from and tag ~= GetTag() and NS.IsGuildmate(from) then
+    return from .. " is in our guild but the packet says <" .. tag .. ">"
+  end
+  return nil
+end
+
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet)
 -- and whether its author field was false.
 -- from: who the game says delivered it. On the link channel that is the author: a typed line is posted by its
@@ -112,6 +122,12 @@ function NS.ShowPacket(text, via, from)
   local forged = via == "channel" and from ~= nil and NS.PeerName(from) ~= NS.PeerName(author)
   if forged then author, class, flags, nick = from, "", "", "" end
   local now = GetTime()
+  local why = Refused(via, tag, author, from)
+  if why then
+    if not displayed[id] then Debug("dropped packet %s via %s, delivered by %s: %s", id, via, tostring(from), why) end
+    displayed[id] = now
+    return tag, true
+  end
   seen[id] = now
   if not forged then NS.heard[tag] = now end
   if displayed[id] then return tag, forged end
