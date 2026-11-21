@@ -74,3 +74,7 @@ Read before changing anything in the relay, channel or chat code.
     poster (`CHAT_MSG_CHANNEL`'s author), and a typed line is posted by its author's own client, so show that
     name, and take nothing else from a packet whose author field names someone else. The guild tag is still only
     what the sender wrote, and a line carried by whisper has no such check (its log names who delivered it). Who posted the line above was not established.
+    Two things a receiver can still tell: an author that is not a possible character name (`NS.ValidName`:
+    words of letters, single spaces; taken from the names seen in the live guild, not from a published rule),
+    and a poster or whisperer who is on its own roster while the packet speaks for another guild. A guildmate's
+    fan-out (`LINE`) cannot be told from an invented one; its sender is logged.
