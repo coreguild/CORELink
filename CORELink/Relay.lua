@@ -98,64 +98,97 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
--- Why a packet is not believed at all, or nil. Its author must be a name the game could have given a
--- character. On the channel, a poster from our own roster cannot be speaking for another guild.
+-- Packet text is anyone's to write: what goes into the log is cut short and cannot draw anything.
+local function Safe(s) return (tostring(s):sub(1, 40):gsub("|", "||")) end
+
+-- One log line per packet id about a packet we did not believe, however often it is repeated.
+local logged, nLogged = {}, 0
+local function LogOnce(id, fmt, ...)
+  if logged[id] then return end
+  if nLogged >= 50 then logged, nLogged = {}, 0 end
+  logged[id], nLogged = true, nLogged + 1
+  Debug(fmt, ...)
+end
+
+-- The name to show for a channel packet, or nil when its author field names someone other than its poster.
+-- The poster's own client writes its name as the game spells it, without the realm, or as the first name
+-- alone (before its roster has loaded).
+local function PosterName(author, from)
+  if author == from or author == NS.PeerName(from) then return author end
+  if from:sub(1, #author + 1) == author .. " " then return NS.PeerName(from) end
+  return nil
+end
+
+-- Why a packet is not believed at all, or nil. On the channel the game names the poster, and a poster from our
+-- own roster cannot be speaking for another guild. On the other paths the author is only what the packet says:
+-- it must be a name the game could have given a character, with nothing but a realm after a hyphen.
 local function Refused(via, tag, author, from)
-  if not NS.ValidName(NS.PeerName(author)) then return "'" .. author .. "' is not a character name" end
-  if via == "channel" and from and tag ~= GetTag() and NS.IsGuildmate(from) then
-    return from .. " is in our guild but the packet says <" .. tag .. ">"
+  if via == "channel" then
+    if from and tag ~= GetTag() and NS.IsGuildmate(from) then
+      return Safe(from) .. " is in our guild but the packet says <" .. Safe(tag) .. ">"
+    end
+    return nil
+  end
+  local name, realm = author:match("^([^-]+)-?(.*)$")
+  if not name or not NS.ValidName(name) or realm:find("[^%w]") then
+    return "'" .. Safe(author) .. "' is not a character name"
   end
   return nil
 end
 
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet)
--- and whether its author field was false.
+-- and a status: nil when it was taken as it is, "forged" when it was shown under its poster instead of the
+-- author it names, "refused" when it was dropped.
 -- from: who the game says delivered it. On the link channel that is the author: a typed line is posted by its
 -- author's own client, and the packet's fields are text anyone in the channel can type. A packet there that
--- names someone else is shown under its poster, without the rank, nickname and class it claims. A carried
--- line (whisper, guild) names a guildmate of the courier; from is only logged.
+-- names someone else is shown under its poster, without the rank, nickname and class it claims, and does not
+-- count as word from the guild it names. A carried line (whisper, guild) names a guildmate of the courier.
 function NS.ShowPacket(text, via, from)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then return nil end
-  local claimed = author
-  local forged = via == "channel" and from ~= nil and NS.PeerName(from) ~= NS.PeerName(author)
-  if forged then author, class, flags, nick = from, "", "", "" end
-  local now = GetTime()
+  local now, status = GetTime(), nil
   local why = Refused(via, tag, author, from)
   if why then
-    if not displayed[id] then Debug("dropped packet %s via %s, delivered by %s: %s", id, via, tostring(from), why) end
-    displayed[id] = now
-    return tag, true
+    LogOnce(id, "dropped packet %s via %s, delivered by %s: %s", id, via, Safe(from), why)
+    return tag, "refused"
+  end
+  if via == "channel" and from then
+    local name = PosterName(author, from)
+    if not name then
+      LogOnce(id, "packet %s via channel names %s as author but %s posted it", id, Safe(author), Safe(from))
+      status, class, flags, nick = "forged", "", "", ""
+    end
+    author = name or from
   end
   seen[id] = now
-  if not forged then NS.heard[tag] = now end
-  if displayed[id] then return tag, forged end
+  if not status then NS.heard[tag] = now end
+  if displayed[id] then return tag, status end
   displayed[id] = now
-  if forged then Debug("packet %s via channel names %s as author but %s posted it", id, claimed, from) end
-  if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag, forged end
-  if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag, forged end
-  Debug("showing packet %s via %s from %s <%s>, delivered by %s", id, via, author, tag, tostring(from))
+  if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag, status end
+  if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag, status end
+  Debug("showing packet %s via %s from %s <%s>, delivered by %s", id, via, Safe(author), tag, Safe(from))
   local label = OfficerLabel(flags)
   nick = NS.CleanNick(nick)
   NoteAuthor(author, class, label, nick)
-  if NS.CrossSeen(author, "relay") then Debug("skipped packet %s: shown from the community", id) return tag, forged end
+  if NS.CrossSeen(author, "relay") then Debug("skipped packet %s: shown from the community", id) return tag, status end
   stats.shown = stats.shown + 1
   NS.Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
   NS.MaybeEcho(id, tag, author, msg, label, nick ~= "" and nick or nil)
-  return tag, forged
+  return tag, status
 end
 
 -- Text on the link channel (CHAT_MSG_CHANNEL): an addon user's own line. Its poster is an addon user of the
 -- guild it names: a guildmate's line tells us they relay their own, another guild's gives us a peer. A poster
--- whose packet named someone else, or who claims our tag without being in our roster, is neither.
+-- whose packet was forged or refused, or who claims our tag without being in our roster, is neither. (With no
+-- roster yet, just after login, the tag is believed.)
 function NS.OnLinkMessage(text, author)
   if issecret(text) or issecret(author) or type(text) ~= "string" or type(author) ~= "string" then return end
   author = Ambiguate(author, "none")
-  local tag, forged = NS.ShowPacket(text, "channel", author)
-  if not tag or forged then return end
+  local tag, status = NS.ShowPacket(text, "channel", author)
+  if not tag or status then return end
   if tag ~= GetTag() then NS.NotePeer(author, tag)
-  elseif NS.IsGuildmate(author) then NS.addonUsers[author] = GetTime() end
+  elseif NS.IsGuildmate(author) or not NS.RosterLoaded() then NS.addonUsers[author] = GetTime() end
 end
 
 -- LINE~<packet>: a guildmate fans out a line it received by whisper from another guild's courier.
