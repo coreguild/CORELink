@@ -131,6 +131,7 @@ local function Housekeeping()
   local now = GetTime()
   for k, v in pairs(NS.seen) do if now - v > NS.FORGET_SECS then NS.seen[k] = nil end end
   for k, v in pairs(NS.displayed) do if now - v > NS.FORGET_SECS then NS.displayed[k] = nil end end
+  for k, v in pairs(NS.seenText) do if now - v > NS.FORGET_SECS then NS.seenText[k] = nil end end
   for tag, t in pairs(NS.heard) do if now - t > NS.HEARD_SECS then NS.heard[tag] = nil end end
   NS.ReadGuildInfo()
   NS.EnsureChannel()
