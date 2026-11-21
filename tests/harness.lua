@@ -1081,15 +1081,18 @@ do
   -- /cl members: the channel's member list, read from the game's answer, grouped by guild, also in the copy box
   do
     local asked
-    local ch = CORELinkDB.channel
+    local ch, me = CORELinkDB.channel, UnitName("player")
+    local function list(text, channel) H(nil, "CHAT_MSG_CHANNEL_LIST", text, "", "", channel or ("6. " .. ch), "", "", 0, 6, channel and "Trade" or ch) end
     ListChannelByName = function(id)
       asked = id
-      H(nil, "CHAT_MSG_CHANNEL_LIST", "*Bob, Carol Reed", "", "", "6. " .. ch, "", "", 0, 6, ch)
-      H(nil, "CHAT_MSG_CHANNEL_LIST", "@Mallory, " .. UnitName("player"), "", "", "6. " .. ch, "", "", 0, 6, ch)
-      H(nil, "CHAT_MSG_CHANNEL_LIST", "Trader Joe", "", "", "2. Trade", "", "", 0, 2, "Trade")
+      list("*Bob, Carol Reed, Dave Hill, Gossip Girl"); list("@Mallory, Old Timer, " .. me); list("Trader Joe", "2. Trade")
+      H(nil, "CHAT_MSG_CHANNEL_LIST", "Number Nine", "", "", 6, "", "", 0, 6, 9)   -- arguments of another shape
     end
-    NS.peers["Carol Reed-Realm7"] = { tag = "ALT", guild = "Alt Guild", realm = "Realm7", seen = 0 }
-    H(nil, "CHAT_MSG_CHANNEL_LIST", "Nobody Asked", "", "", "6. " .. ch, "", "", 0, 6, ch)
+    NS.peers["Carol Reed-Realm7"] = { tag = "ALT", guild = "Alt Guild", realm = "Realm7", seen = GetTime() }
+    NS.peers["Dave Hill"] = { tag = "ALT", realm = "?", seen = GetTime() }                       -- spoke on the link
+    NS.peers["Old Timer"] = { tag = "ALT", guild = "Alt Guild", realm = "?", seen = GetTime() - 5000 }
+    NS.peers["Gossip Girl"] = { tag = "ALT", guild = "Alt Guild", realm = "?", seen = 0 }        -- only named in a DIR
+    list("Nobody Asked")
     sentAddon = {}; lastSetText = nil
     local at = #chatLines
     SlashCmdList["CORELINK"]("members", { chatFrame = ChatFrame3 })
@@ -1098,29 +1101,46 @@ do
     local got = {}
     for i = at + 1, #chatLines do got[#got + 1] = chatLines[i].text end
     got = table.concat(got, "\n")
-    check("members: the count and channel head the list", got:find("4 in " .. ch, 1, true) ~= nil, got)
+    check("members: the count and channel head the list", got:find("8 in " .. ch, 1, true) ~= nil, got)
     check("members: our own guild's members are grouped under its name, marks removed",
-      got:find("CORE Forever (2): Bob, " .. UnitName("player"), 1, true) ~= nil, got)
-    check("members: a known peer is grouped under their guild", got:find("Alt Guild (1): Carol Reed", 1, true) ~= nil, got)
-    check("members: anyone else is listed as guild not known", got:find("guild not known (1): Mallory", 1, true) ~= nil, got)
+      got:find("CORE Forever (2): Bob, " .. me, 1, true) ~= nil, got)
+    check("members: peers of one guild share a line, whether known by name or by tag only",
+      got:find("Alt Guild (3): Carol Reed, Dave Hill, Old Timer", 1, true) ~= nil, got)
+    check("members: a stranger and a name only gossiped to us are listed as guild not known",
+      got:find("guild not known (3): Gossip Girl, Mallory, Number Nine", 1, true) ~= nil, got)
     check("members: names from another channel or from before the request are left out",
       got:find("Trader Joe", 1, true) == nil and got:find("Nobody Asked", 1, true) == nil, got)
     check("members: the reply goes to the window the command was typed in", chatLines[at + 1] and chatLines[at + 1].frame == 3)
     check("members: the list is in the copy box on one line",
-      lastSetText == "4 in " .. ch .. " | Alt Guild (1): Carol Reed | CORE Forever (2): Bob, " .. UnitName("player")
-        .. " | guild not known (1): Mallory", lastSetText)
+      lastSetText == "8 in " .. ch .. " | Alt Guild (3): Carol Reed, Dave Hill, Old Timer | CORE Forever (2): Bob, " .. me
+        .. " | guild not known (3): Gossip Girl, Mallory, Number Nine", lastSetText)
+    check("members: it says how many were greeted", got:find("greeted 5 of 5 member(s)", 1, true) ~= nil, got)
     check("members: the report log records the request and what came back",
-      report():find("members: 4 name(s) in 2 list event(s)", 1, true) ~= nil, report())
+      report():find("members: 8 name(s) in 3 list event(s)", 1, true) ~= nil, report())
     advance(5)
-    local hellos = whisperSends(0, "HELLO~")
-    check("members: a member whose guild is not known is greeted, the known ones are not",
-      #hellos == 1 and hellos[1].target == "Mallory", #hellos)
+    local to = {}
+    for _, w in ipairs(whisperSends(0, "HELLO~")) do to[#to + 1] = w.target end
+    table.sort(to)
+    check("members: strangers, a tag-only peer and a peer not heard lately are greeted; a fresh named peer and guildmates are not",
+      table.concat(to, ",") == "Dave Hill,Gossip Girl,Mallory,Number Nine,Old Timer", table.concat(to, ","))
+    at = #chatLines; slash("members"); advance(2)
+    got = {}
+    for i = at + 1, #chatLines do got[#got + 1] = chatLines[i].text end
+    check("members: asked again at once, nobody is greeted twice and it says why",
+      table.concat(got, "\n"):find("could be asked their guild, but they were greeted in the last ten minutes", 1, true) ~= nil, table.concat(got, "\n"))
     ListChannelByName = function() end
     slash("members"); advance(2)
-    check("members: no answer from the game is said plainly", last():find("the game sent no member list", 1, true) ~= nil, last())
+    check("members: no answer from the game is said plainly", last():find("no member list arrived", 1, true) ~= nil, last())
+    ListChannelByName = function() error("refused") end
+    slash("members")
+    check("members: a refused request says so", last():find("refused to list", 1, true) ~= nil, last())
+    ListChannelByName = function() list("Bob") end
+    at = #chatLines; slash("members"); advance(2)
+    check("members: and the next request works", chatLines[at + 1] and chatLines[at + 1].text:find("1 in " .. ch, 1, true) ~= nil, last())
     ListChannelByName = nil
     slash("members")
     check("members: a client without the list call says so", last():find("cannot list a channel's members", 1, true) ~= nil, last())
+    NS.peers["Carol Reed-Realm7"], NS.peers["Dave Hill"], NS.peers["Old Timer"], NS.peers["Gossip Girl"] = nil, nil, nil, nil
   end
   slash("clear"); check("commands: /cl clear forgets the configuration", CORELinkDB.channel == nil and joined.other == nil)
   myRank = 3

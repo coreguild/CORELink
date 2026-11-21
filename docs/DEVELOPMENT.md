@@ -8,7 +8,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 
 | Path | What it is |
 |---|---|
-| `CORELink/` | The addon: fourteen Lua files and two TOCs. This folder is what goes into `Interface/AddOns/`. |
+| `CORELink/` | The addon: fifteen Lua files and two TOCs. This folder is what goes into `Interface/AddOns/`. |
 | `tests/` | `run.sh` runs the checks below without the game. `harness.lua` is the mock WoW API, `compat.sh` and `compat.lua` the test against the released addon, `size.sh` the size limits, `site-render.sh` the download page test, `secrets.sh` and `curseforge-args.sh` the release scripts' guard rails. `mutation.sh` (CI runs it too, separately) proves a check fails without the change. `review-evals/` measures the reviewer against past bugs. |
 | `scripts/install-local.sh` | Symlinks the addon into your WoW client so edits are live after `/reload`. |
 | `scripts/package.sh` | Builds `dist/CORELink-<version>.zip`, stamping the version into the TOCs, after running tests. |

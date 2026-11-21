@@ -1,6 +1,6 @@
 # Agent guide
 
-CORELink is a World of Warcraft addon (`CORELink/`, fourteen Lua files loaded in TOC order, mapped in
+CORELink is a World of Warcraft addon (`CORELink/`, fifteen Lua files loaded in TOC order, mapped in
 `docs/ARCHITECTURE.md`) that bridges guild chat between co-guilds over a hidden custom chat channel. It targets the WoW: Forever client (Classic-based engine, interface
 16001) and tolerates retail 12.x APIs.
 
