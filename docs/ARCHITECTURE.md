@@ -95,7 +95,9 @@ A member of guild MAIN types "hello" in guild chat.
 2. **`RelayTyped`** hashes the tag, author and text into an id, packs `CL4~id~MAIN~Author~CLASS~flags~nick~hello`,
    and `Channel.lua`, `SendChannelText` posts it into the hidden channel as text. One send, every realm.
 3. **`Events.lua`, `CHAT_MSG_CHANNEL`** on every addon user's client hands the text to `Relay.lua`,
-   `OnLinkMessage`, which calls `ShowPacket`. MAIN clients note the author as an addon user and show nothing,
+   `OnLinkMessage`, which calls `ShowPacket`. The author is the player the game says posted the text; a packet
+   naming someone else is shown under its poster, without the rank and nickname it claims, and its poster is
+   noted as nothing. MAIN clients note the author as an addon user and show nothing,
    since they saw the line natively. Other guilds' clients note the author as a live peer of MAIN and show
    `[MAIN] [Author]: (Rank Nick) hello` in every chat window with Guild chat, class and officer coloured
    (`Display.lua`), unless the same author was just shown from the community (`CrossSeen`).
