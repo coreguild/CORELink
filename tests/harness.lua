@@ -283,7 +283,7 @@ do
     report():match("relay typed=.- shown=(%d+)") == shown0
     and report():find("dropped packet 0badf0ae via whisper, delivered by Carol: 'Beau's Beard' is not a character name", 1, true) ~= nil, report())
   check("such a line is not fanned out to the guild either", #guildSends(sent0, "LINE~") == 0)
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0badf0af~ALT~Beau's Beard~PRIEST~~~I am majestic", "GUILD", "Bob-Beta")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "LINE~CL4~0badf0af~ALT~Beau's Beard~PRIEST~~~I am majestic", "GUILD", "Tanner-Beta")
   check("nor is it shown when a guildmate fans it out", report():match("relay typed=.- shown=(%d+)") == shown0, report())
   -- someone on our own roster cannot be speaking for another guild
   channelLine("CL4~0badf0b0~ALT~Bob~WARRIOR~~~hello from the alts", "Bob")
