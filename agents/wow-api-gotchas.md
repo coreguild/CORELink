@@ -68,3 +68,9 @@ Read before changing anything in the relay, channel or chat code.
     down; the start of combat is the one confirmed case. The addon does not ask in combat (`InCombatLockdown`
     or `UnitAffectingCombat("player")`) or chat lockdown, asks only every five minutes, and logs
     `guild info read blocked: lockdown=.. fighting=.. instance=..` when a read is blocked, to find the condition.
+15. **The author field of a channel packet is not evidence.** Seen in the live link on 2026-11-21: a line shown as
+    `[Eternal] [Beau's Beard]`, a name the reporter says the game does not allow. Anyone in the link channel can
+    type `CL4~...` text with any author, rank and nickname in it. On the channel the game itself names the
+    poster (`CHAT_MSG_CHANNEL`'s author), and a typed line is posted by its author's own client, so show that
+    name. The tag, rank and nickname fields are still only what the sender wrote, and a line carried by whisper
+    has no such check. Who posted the line above was not established.

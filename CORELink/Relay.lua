@@ -99,10 +99,16 @@ local function NoteAuthor(author, class, label, nick)
 end
 
 -- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
-function NS.ShowPacket(text, via)
+-- sender: who the game says posted it, on the link channel. A typed line is posted by its author's own client,
+-- so that name is the author; the packet's author field is text anyone in the channel can type.
+function NS.ShowPacket(text, via, sender)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then return nil end
+  if sender and sender ~= "" and author ~= sender then
+    Debug("packet %s via %s names %s as author but %s posted it", id, via, author, sender)
+    author = sender
+  end
   local now = GetTime()
   seen[id] = now
   NS.heard[tag] = now
@@ -125,9 +131,9 @@ end
 -- addon user of that guild: a guildmate's line tells us they relay their own, another guild's gives us a peer.
 function NS.OnLinkMessage(text, author)
   if issecret(text) or issecret(author) or type(text) ~= "string" or type(author) ~= "string" then return end
-  local tag = NS.ShowPacket(text, "channel")
-  if not tag then return end
   author = Ambiguate(author, "none")
+  local tag = NS.ShowPacket(text, "channel", author)
+  if not tag then return end
   if tag == GetTag() then NS.addonUsers[author] = GetTime() else NS.NotePeer(author, tag) end
 end
 

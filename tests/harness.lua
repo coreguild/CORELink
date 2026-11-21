@@ -244,6 +244,16 @@ advance(1)
 check("the courier waits at least a second for the author's own copy", #whisperSends(amark, "WB~") == 0)
 advance(3)
 check("a line from an addon user whose own copy never arrives is carried after the wait", #whisperSends(amark, "WB~") == 1)
+-- the author shown for a channel line is the player the game says posted it, not the name typed into the packet
+do
+  local at = #chatLines
+  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~~I am majestic", "Mallory")
+  local got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a channel packet naming someone else as author is shown under its real sender",
+    got:find("[Mallory]", 1, true) ~= nil and got:find("Beau", 1, true) == nil, got)
+  check("the report log names the author field and the real sender",
+    report():find("names Beau's Beard as author but Mallory posted it", 1, true) ~= nil, report())
+end
 -- a copy arrives on the channel during the back-off: the courier stands down
 amark = #sentAddon
 H(nil, "CHAT_MSG_GUILD", "dora types", "Dora-Beta", nil, nil, nil, nil, nil, nil, nil, nil, nil, "guid-dora")
