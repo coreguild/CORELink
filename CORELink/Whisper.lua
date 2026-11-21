@@ -204,6 +204,10 @@ end
 NS.whisperPackets.WB = function(rest, sender)
   if not NS.db or NS.db.whisper == false then return end
   local tag = rest:match("^CL%d+" .. SEP .. "%x+" .. SEP .. "([^" .. SEP .. "]+)")
+  if NS.IsGuildmate(Ambiguate(sender, "none")) then   -- a courier carries to other guilds, never to its own
+    Debug("dropped a carried line from %s: they are in our own guild", sender)
+    return
+  end
   local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
   if not known then
     Debug("dropped a carried line from %s: not a peer, tag %s not heard", sender, tostring(tag))
@@ -212,8 +216,8 @@ NS.whisperPackets.WB = function(rest, sender)
   stats.recv = stats.recv + 1
   if peers[sender] then peers[sender].seen = GetTime() end
   local id = rest:match("^CL%d+" .. SEP .. "(%x+)" .. SEP)
-  NS.ShowPacket(rest, "whisper")
-  if id and not fanned[id] then
+  local _, status = NS.ShowPacket(rest, "whisper", sender)
+  if id and status ~= "refused" and not fanned[id] then
     fanned[id] = GetTime()
     stats.fanned = stats.fanned + 1
     NS.SendGuildAddon("LINE" .. SEP .. rest)
