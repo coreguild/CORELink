@@ -246,13 +246,34 @@ advance(3)
 check("a line from an addon user whose own copy never arrives is carried after the wait", #whisperSends(amark, "WB~") == 1)
 -- the author shown for a channel line is the player the game says posted it, not the name typed into the packet
 do
+  local peers0 = report():match("peers=(%d+)")
   local at = #chatLines
-  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~~I am majestic", "Mallory")
+  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~Fancy~I am majestic", "Mallory")
   local got = chatLines[at + 1] and chatLines[at + 1].text or ""
   check("a channel packet naming someone else as author is shown under its real sender",
     got:find("[Mallory]", 1, true) ~= nil and got:find("Beau", 1, true) == nil, got)
+  check("the rank and nickname such a packet claims are not shown",
+    got:find("Captain", 1, true) == nil and got:find("Fancy", 1, true) == nil, got)
   check("the report log names the author field and the real sender",
     report():find("names Beau's Beard as author but Mallory posted it", 1, true) ~= nil, report())
+  check("its sender does not become a peer of the guild it names", report():match("peers=(%d+)") == peers0, report())
+  channelLine("CL4~0badf0aa~ALT~Beau's Beard~PRIEST~OCaptain~Fancy~I am majestic", "Mallory")
+  local _, said = report():gsub("names Beau's Beard as author", "")
+  check("a repeat of the same packet adds no second log line", said == 1, said)
+  -- an honest line: the game may spell the poster with a realm the packet does not carry
+  at = #chatLines
+  local _, forged = NS.ShowPacket("CL4~0badf0ab~ALT~Carol~PRIEST~OCaptain~Cee~honest", "channel", "Carol-Realm7")
+  got = chatLines[at + 1] and chatLines[at + 1].text or ""
+  check("a poster spelled with a realm is the packet's author: name, rank and nickname kept",
+    forged == false and got:find("[Carol]", 1, true) ~= nil and got:find("(Captain Cee)", 1, true) ~= nil
+    and report():find("names Carol as author", 1, true) == nil, got)
+  -- claiming our own tag does not make a stranger one of our addon users (they would be elected courier)
+  channelLine("CL4~0badf0ac~MAIN~Aaa~PRIEST~~~hi", "Aaa")
+  check("a stranger posting under our tag does not become the courier", report():find("courier=me", 1, true) ~= nil, report())
+  -- a carried line's log says who delivered it
+  NS.ShowPacket("CL4~0badf0ad~ALT~Erin~PRIEST~~~carried", "whisper", "Carol")
+  check("the log of a carried line names who delivered it",
+    report():find("0badf0ad via whisper from Erin <ALT>, delivered by Carol", 1, true) ~= nil, report())
 end
 -- a copy arrives on the channel during the back-off: the courier stands down
 amark = #sentAddon

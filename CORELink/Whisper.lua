@@ -212,7 +212,7 @@ NS.whisperPackets.WB = function(rest, sender)
   stats.recv = stats.recv + 1
   if peers[sender] then peers[sender].seen = GetTime() end
   local id = rest:match("^CL%d+" .. SEP .. "(%x+)" .. SEP)
-  NS.ShowPacket(rest, "whisper")
+  NS.ShowPacket(rest, "whisper", sender)
   if id and not fanned[id] then
     fanned[id] = GetTime()
     stats.fanned = stats.fanned + 1

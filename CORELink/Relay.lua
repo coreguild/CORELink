@@ -98,44 +98,49 @@ local function NoteAuthor(author, class, label, nick)
   NS.authorNick[author] = nick ~= "" and nick or nil
 end
 
--- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet).
--- sender: who the game says posted it, on the link channel. A typed line is posted by its author's own client,
--- so that name is the author; the packet's author field is text anyone in the channel can type.
-function NS.ShowPacket(text, via, sender)
+-- A packet that reached us by any path: note it, show it once. Returns the parsed tag (nil if not a packet)
+-- and whether its author field was false.
+-- from: who the game says delivered it. On the link channel that is the author: a typed line is posted by its
+-- author's own client, and the packet's fields are text anyone in the channel can type. A packet there that
+-- names someone else is shown under its poster, without the rank, nickname and class it claims. A carried
+-- line (whisper, guild) names a guildmate of the courier; from is only logged.
+function NS.ShowPacket(text, via, from)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then return nil end
-  if sender and sender ~= "" and author ~= sender then
-    Debug("packet %s via %s names %s as author but %s posted it", id, via, author, sender)
-    author = sender
-  end
+  local claimed = author
+  local forged = via == "channel" and from ~= nil and NS.PeerName(from) ~= NS.PeerName(author)
+  if forged then author, class, flags, nick = from, "", "", "" end
   local now = GetTime()
   seen[id] = now
-  NS.heard[tag] = now
-  if displayed[id] then return tag end
+  if not forged then NS.heard[tag] = now end
+  if displayed[id] then return tag, forged end
   displayed[id] = now
-  if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag end
-  if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag end
-  Debug("showing packet %s via %s from %s <%s>", id, via, author, tag)
+  if forged then Debug("packet %s via channel names %s as author but %s posted it", id, claimed, from) end
+  if tag == GetTag() then Debug("ignored packet %s via %s: own guild tag", id, via) return tag, forged end
+  if NS.db.muted[tag:lower()] then Debug("ignored packet %s via %s: tag %s muted", id, via, tag) return tag, forged end
+  Debug("showing packet %s via %s from %s <%s>, delivered by %s", id, via, author, tag, tostring(from))
   local label = OfficerLabel(flags)
   nick = NS.CleanNick(nick)
   NoteAuthor(author, class, label, nick)
-  if NS.CrossSeen(author, "relay") then Debug("skipped packet %s: shown from the community", id) return tag end
+  if NS.CrossSeen(author, "relay") then Debug("skipped packet %s: shown from the community", id) return tag, forged end
   stats.shown = stats.shown + 1
   NS.Display(tag, author, class, msg, label, nick ~= "" and nick or nil)
   NS.MaybeEcho(id, tag, author, msg, label, nick ~= "" and nick or nil)
-  return tag
+  return tag, forged
 end
 
--- Text on the link channel (CHAT_MSG_CHANNEL): an addon user's own line. Its author is, by definition, an
--- addon user of that guild: a guildmate's line tells us they relay their own, another guild's gives us a peer.
+-- Text on the link channel (CHAT_MSG_CHANNEL): an addon user's own line. Its poster is an addon user of the
+-- guild it names: a guildmate's line tells us they relay their own, another guild's gives us a peer. A poster
+-- whose packet named someone else, or who claims our tag without being in our roster, is neither.
 function NS.OnLinkMessage(text, author)
   if issecret(text) or issecret(author) or type(text) ~= "string" or type(author) ~= "string" then return end
   author = Ambiguate(author, "none")
-  local tag = NS.ShowPacket(text, "channel", author)
-  if not tag then return end
-  if tag == GetTag() then NS.addonUsers[author] = GetTime() else NS.NotePeer(author, tag) end
+  local tag, forged = NS.ShowPacket(text, "channel", author)
+  if not tag or forged then return end
+  if tag ~= GetTag() then NS.NotePeer(author, tag)
+  elseif NS.IsGuildmate(author) then NS.addonUsers[author] = GetTime() end
 end
 
 -- LINE~<packet>: a guildmate fans out a line it received by whisper from another guild's courier.
-NS.guildPackets.LINE = function(rest) NS.ShowPacket(rest, "guild") end
+NS.guildPackets.LINE = function(rest, sender) NS.ShowPacket(rest, "guild", sender) end

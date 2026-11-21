@@ -72,5 +72,5 @@ Read before changing anything in the relay, channel or chat code.
     `[Eternal] [Beau's Beard]`, a name the reporter says the game does not allow. Anyone in the link channel can
     type `CL4~...` text with any author, rank and nickname in it. On the channel the game itself names the
     poster (`CHAT_MSG_CHANNEL`'s author), and a typed line is posted by its author's own client, so show that
-    name. The tag, rank and nickname fields are still only what the sender wrote, and a line carried by whisper
-    has no such check. Who posted the line above was not established.
+    name, and take nothing else from a packet whose author field names someone else. The guild tag is still only
+    what the sender wrote, and a line carried by whisper has no such check (its log names who delivered it). Who posted the line above was not established.
