@@ -8,9 +8,12 @@ local conn = NS.conn
 
 function NS.StatusLine()
   local db = NS.db
-  if not Configured() then return "NOT CONFIGURED. Guild leaders: /cl setup <channel> <password> [tag]" end
-  return string.format("%s | tag: %s | channel: %s (%s) | config: %s%s",
-    db.enabled and "ON" or "OFF", tostring(NS.GetTag()), db.channel,
+  local version = NS.VersionText()
+  if not Configured() then
+    return version .. " | NOT CONFIGURED. Guild leaders: /cl setup <channel> <password> [tag]"
+  end
+  return string.format("%s | %s | tag: %s | channel: %s (%s) | config: %s%s",
+    version, db.enabled and "ON" or "OFF", tostring(NS.GetTag()), db.channel,
     NS.ChannelId() and "joined" or "not joined", db.source or "local",
     NS.Locked() and " | PAUSED (chat lockdown)" or "")
 end

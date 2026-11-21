@@ -96,6 +96,12 @@ function NS.Version()
   return v
 end
 
+-- "version 0.2.2", the same words wherever the addon says which build it is.
+function NS.VersionText()
+  local v = NS.Version()
+  return "version " .. v .. (v == "dev" and " (unreleased build)" or "")
+end
+
 function NS.Clean(s) return (s:gsub("[%s~|]", "")) end
 
 -- What another client sent, made safe to show, save and echo. A well-formed value comes back unchanged. The
