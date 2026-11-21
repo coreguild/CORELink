@@ -68,3 +68,9 @@ Read before changing anything in the relay, channel or chat code.
     down; the start of combat is the one confirmed case. The addon does not ask in combat (`InCombatLockdown`
     or `UnitAffectingCombat("player")`) or chat lockdown, asks only every five minutes, and logs
     `guild info read blocked: lockdown=.. fighting=.. instance=..` when a read is blocked, to find the condition.
+15. **A link is not the same text on every client.** Reported from the live guilds on 2026-11-15: a guild line
+    with a quest link was shown several times in the linked guild, "because of the level differences". A link's
+    colour and details (a quest's level) can differ between what the author typed and what each guildmate's
+    client receives, so `NS.Hash` of the raw text gives each client a different packet id and id dedupe misses.
+    Compare lines with `NS.TextKey` (a quest link reduced to its quest id, colour codes removed; other links untouched) as well
+    as by id. Which part of the link differs was not captured; nothing here was verified in game.

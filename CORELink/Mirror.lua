@@ -123,9 +123,9 @@ local function ShowGeneralPost(line)
     NS.Display(nil, line.who, line.class, line.content, line.label, line.nick, true)
     return
   end
-  local id = NS.Hash(line.tag .. line.who .. line.msg)
-  if NS.displayed[id] then return end                         -- already shown from the relay channel
-  NS.displayed[id] = now; NS.seen[id] = now
+  local id, key = NS.Hash(line.tag .. line.who .. line.msg), NS.TextKey(line.tag, line.who, line.msg)
+  if NS.displayed[id] or NS.seenText[key] then return end     -- already shown from the relay channel
+  NS.displayed[id] = now; NS.seen[id] = now; NS.seenText[key] = now
   NS.heard[line.tag] = now
   NS.CrossSeen(line.who, "club")
   mirror.shown = mirror.shown + 1
