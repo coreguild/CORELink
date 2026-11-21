@@ -301,7 +301,7 @@ do
   check("a carried line whose author hides an invented name behind a hyphen is not shown",
     report():match("relay typed=.- shown=(%d+)") == shown0
     and report():find("'Beau-'s Beard ||cffff0000GM||r' is not a character name", 1, true) ~= nil, report())
-  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b3~ALT~Erin Vale-Realm7~PRIEST~~~with a realm", "WHISPER", "Carol")
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~CL4~0badf0b3~ALT~Erin Vale-Zul'J\195\173n~PRIEST~~~with a realm", "WHISPER", "Carol")
   advance(3)
   check("a carried line whose author carries a realm is shown",
     tonumber(report():match("relay typed=.- shown=(%d+)")) == shown0 + 1, report())
