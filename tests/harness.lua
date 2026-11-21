@@ -1109,6 +1109,8 @@ do
     check("members: the list is in the copy box on one line",
       lastSetText == "4 in " .. ch .. " | Alt Guild (1): Carol Reed | CORE Forever (2): Bob, " .. UnitName("player")
         .. " | guild not known (1): Mallory", lastSetText)
+    check("members: the report log records the request and what came back",
+      report():find("members: 4 name(s) in 2 list event(s)", 1, true) ~= nil, report())
     advance(5)
     local hellos = whisperSends(0, "HELLO~")
     check("members: a member whose guild is not known is greeted, the known ones are not",

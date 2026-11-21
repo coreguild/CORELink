@@ -7,7 +7,7 @@
 -- without the addon stays under "guild not known".
 -- Provides the members command.
 local _, NS = ...
-local Print = NS.Print
+local Print, Debug = NS.Print, NS.Debug
 local WAIT = 1.5              -- seconds to collect the list, which can arrive in more than one event
 local GREET_MAX = 20          -- hellos sent per run to members whose guild is not known
 local pending                 -- { names = set, frame = the window the command was typed in } while collecting
@@ -56,6 +56,7 @@ local function Finish()
   local names = {}
   for name in pairs(req.names) do names[#names + 1] = name end
   table.sort(names)
+  Debug("members: %d name(s) in %d list event(s)", #names, req.events)
   NS.replyFrame = req.frame
   if #names == 0 then
     Print("the game sent no member list for " .. tostring(NS.db.channel) .. ". Try again in a few seconds.")
@@ -86,6 +87,8 @@ NS.events.CHAT_MSG_CHANNEL_LIST = function(text, _, _, channelString, _, _, _, _
   if not pending or NS.issecret(text) or type(text) ~= "string" then return end
   local named = (channelString and channelString ~= "") or (channelBaseName and channelBaseName ~= "")
   if named and not (NS.IsLinkChannel(channelString) or NS.IsLinkChannel(channelBaseName)) then return end
+  pending.events = pending.events + 1
+  if pending.events == 1 then Debug("members: first list event starts '%s'", text:sub(1, 40)) end
   for raw in text:gmatch("[^,]+") do
     local name = raw:match("^%s*%p*(.-)%s*$")
     if name ~= "" then pending.names[name] = true end
@@ -97,7 +100,8 @@ NS.commands.members = function()
   if not id then Print("not in the link channel right now. /cl reload to retry, /cl for the status.") return end
   if not ListChannelByName then Print("this client cannot list a channel's members.") return end
   if pending then return end
-  pending = { names = {}, frame = NS.replyFrame }
+  pending = { names = {}, events = 0, frame = NS.replyFrame }
+  Debug("members: asked the game for the members of channel %d", id)
   ListChannelByName(id)
   C_Timer.After(WAIT, Finish)
 end
