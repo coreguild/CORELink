@@ -57,7 +57,7 @@ end
 -- rendered a link in it differently for the author and for us, by what it says (SameLine).
 function NS.OnGuildMessage(msg, author, _, _, _, _, _, _, _, _, _, guid)
   local db = NS.db
-  if not db.enabled or not Configured() or Locked() then return end
+  if not db or not db.enabled or not Configured() or Locked() then return end
   if issecret(msg) or issecret(author) or not msg or msg == "" then return end
   local tag = GetTag()
   if not tag then return end
@@ -93,7 +93,7 @@ end
 -- "O<rank name>" in the flags field -> the officer label to show, or nil.
 local function OfficerLabel(flags)
   if NS.db.officer == false or not flags or flags:sub(1, 1) ~= "O" then return nil end
-  local label = (flags:sub(2):gsub("[~|]", ""))
+  local label = NS.CleanField(flags:sub(2))
   return label ~= "" and label or "Officer"
 end
 
@@ -167,10 +167,14 @@ end
 -- author's own client, and the packet's fields are text anyone in the channel can type. A packet there that
 -- names someone else is shown under its poster, without the rank, nickname and class it claims, and does not
 -- count as word from the guild it names. A carried line (whisper, guild) names a guildmate of the courier.
+-- Tag, author, class and text go into chat formatting codes, saved peers and the echo: they are cleaned first.
+-- The id is the sender's and is never recomputed here, so cleaning does not disturb the dedupe.
 function NS.ShowPacket(text, via, from)
   if issecret(text) or type(text) ~= "string" then return nil end
   local id, tag, author, class, flags, nick, msg = ParsePacket(text)
   if not id then NoteNewerProto(text, via) return nil end
+  tag, author, class, msg = NS.CleanTag(tag), NS.CleanField(author), NS.CleanField(class), NS.CleanText(msg)
+  if tag == "" or author == "" then return nil end
   local now, status = GetTime(), nil
   local why = Refused(via, tag, author, from)
   if why then
