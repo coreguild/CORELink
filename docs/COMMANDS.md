@@ -40,6 +40,7 @@ The courier is the addon user who carries messages from guildmates without COREL
 |---|---|
 | `/cl whisper on/off` | Controls whether your client can act as courier and pass along messages it receives from another courier. This is on by default. |
 | `/cl echo on/off` | Controls whether your client can re-post linked messages into guild chat. This is on by default and only takes effect if your guild master adds `echo=on` to the CORELink line. |
+| `/cl members` | Lists everyone in the link channel right now, grouped by guild, and puts the list in the copy box. A member whose guild CORELink doesn't know is greeted; run it again a few seconds later, and whoever is still under "guild not known" has no addon or didn't answer. |
 | `/cl peers` | Lists known peers, their guilds and tags, and when CORELink last heard from them. |
 | `/cl who` | Removed in 0.2.1. It only says so. |
 | `/cl hello <First Surname>` | Contacts an addon user in another guild by character name. They appear in `/cl peers` once they answer. |

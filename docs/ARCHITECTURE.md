@@ -45,6 +45,7 @@ as `NS.Name()` when called.
 | `Hooks.lua` | The chat send hooks, the one place the addon runs inside the player's keypress. |
 | `Events.lua` | The event frame, saved variables, login, message dispatch, the housekeeping ticker, `StatusLine`. |
 | `Report.lua` | `/cl report`, `/cl guilds`, `/cl peers`. |
+| `Members.lua` | `/cl members`: the link channel's member list from the game, grouped by guild. |
 | `Commands.lua` | Every other `/cl` command, one function each, the dispatcher, the help line built from the command table. |
 
 Limits, enforced by `tests/run.sh`: a file is at most 400 lines, a function at most 40, a line at most 120.

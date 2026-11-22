@@ -18,4 +18,5 @@ Mirror.lua
 Hooks.lua
 Events.lua
 Report.lua
+Members.lua
 Commands.lua
