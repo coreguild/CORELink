@@ -16,7 +16,7 @@ globals = {
 read_globals = {
   -- frames / UI
   "CreateFrame", "UIParent", "InCombatLockdown", "UnitAffectingCombat", "IsInInstance", "DEFAULT_CHAT_FRAME", "ChatFrame2", "NUM_CHAT_WINDOWS", "ChatTypeInfo", "RAID_CLASS_COLORS",
-  "ChatFrame_AddMessageEventFilter", "ChatFrame_RemoveChannel", "StaticPopup_Show", "C_AddOns", "GetAddOnMetadata",
+  "ChatFrame_AddMessageEventFilter", "ChatFrame_RemoveChannel", "ListChannelByName", "StaticPopup_Show", "C_AddOns", "GetAddOnMetadata",
   "GetChatWindowMessages", "GetChatWindowChannels", "ChatFrame1EditBox", "ChatEdit_ParseText", "hooksecurefunc",
   -- chat / channels
   "SendChatMessage", "SendAddonMessage", "ERR_CHAT_PLAYER_NOT_FOUND_S", "JoinChannelByName", "StaticPopup_Hide", "StaticPopup_Visible", "JoinTemporaryChannel", "LeaveChannelByName",
