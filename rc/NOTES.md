@@ -1,62 +1,53 @@
-▎ Two fixes for the live link. When a player in a linked guild logs off, CORELink no longer shows "No player named … is currently playing" for every carried line; it stops whispering that player and sends the line to another addon user in their guild. Guilds with a guilds= list on their Guild Info line no longer get "Interface action failed because of an AddOn": the lookup that caused it is removed, and guilds= is now ignored. Nothing changes on the wire, so 0.2.0 and 0.2.1 clients keep working together.
-
-## [0.2.1-rc1](https://github.com/coreguild/CORELink/compare/v0.2.0...v0.2.1-rc1) (2026-11-15)
+## [0.3.0-rc1](https://github.com/coreguild/CORELink/compare/v0.2.2...v0.3.0-rc1) (2026-11-22)
 
 
 ### Features
 
-* **release:** upload each rc and final to CurseForge ([df6871d](https://github.com/coreguild/CORELink/commit/df6871dbe8ec7b9b69f32a0faac0f6fefe4dd830))
-* **release:** a curseforge-check button proves the key and game versions without releasing ([c9aa2cc](https://github.com/coreguild/CORELink/commit/c9aa2cc9afe7eaf3ee4c2c325fe55d146b42a951))
-* **tests:** self-review loop: mutation check, review evals, and the self-review skill ([cc4597d](https://github.com/coreguild/CORELink/commit/cc4597d653ac245d9fcc4e861b9fc7935d695af7))
-* **release:** the curseforge-check button can upload an existing GitHub release by tag ([84afff9](https://github.com/coreguild/CORELink/commit/84afff9dea59e5ef978efa243aae24d3b8912d0b))
+* **roster:** say once per session when a guildmate runs a newer release ([126ad2b](https://github.com/coreguild/CORELink/commit/126ad2b2225609c0a0a2d64b3f821d23478d9197))
+* **relay:** say once per session when a linked guild sends a newer protocol than this version reads ([5140050](https://github.com/coreguild/CORELink/commit/514005005d19cf1346b4e19bcaeb055f8c845c6f))
+* **members:** /cl members lists who is in the link channel, grouped by guild, also in the copy box ([fa34039](https://github.com/coreguild/CORELink/commit/fa340391f5907ca5796193fead6490c848f1a249))
+* **members:** the report log records the request and how many names came back ([f3b612c](https://github.com/coreguild/CORELink/commit/f3b612c7659734eb191b23a6f57e0ed4b7bf0efa))
+* **members:** one line per guild whether a peer is known by name or tag; gossip is not knowledge; fewer hellos ([b8501f2](https://github.com/coreguild/CORELink/commit/b8501f2bf9bea92fd702728f9e8e5696e45ff3f6))
+* **report:** /cl report and the /cl status line say "version <number>" in words ([8a7cdea](https://github.com/coreguild/CORELink/commit/8a7cdeadbd4ebafcaae73a3d310a795c617cfbe3))
 
 
 ### Bug Fixes
 
-* **release:** the site channel refreshes a channel's notes from the GitHub release ([dc5f54b](https://github.com/coreguild/CORELink/commit/dc5f54bab124b063b0818b48f583060cabcb5d2c))
-* **release:** the CurseForge key never reaches a command line or a log ([042c4e2](https://github.com/coreguild/CORELink/commit/042c4e2fdc8a2db88b2ec5e903b412e54fdc571c))
-* **release:** the CurseForge upload script and the secrets check are executable ([05d9a07](https://github.com/coreguild/CORELink/commit/05d9a070396abc54285e7dd928799d3b7e93b191))
-* **tests:** the mutation check and the eval runner are executable ([2573f66](https://github.com/coreguild/CORELink/commit/2573f66c7237e3c0f4d63e385f4baf640c19b1bd))
-* **tests:** the mutation check compares against the merge-base and knows a no-op change; the eval runner reports errors apart from misses ([107bb5f](https://github.com/coreguild/CORELink/commit/107bb5f1281c97ed1be98222b8a98af4418af31c))
-* **release:** the tag upload gets its own button, reads the zip's TOCs, and refuses a partial version list ([4d6afd6](https://github.com/coreguild/CORELink/commit/4d6afd6ef670a636386d403e1a9328aac4138b51))
-* **release:** post to CurseForge's upload-file endpoint and trust only a file id in the answer ([f5c3c2d](https://github.com/coreguild/CORELink/commit/f5c3c2db6be3b50d8ec6369dc7db0c451df05aef))
-* **release:** every CurseForge call checks status and JSON, and a printed answer never holds the key ([bec2a98](https://github.com/coreguild/CORELink/commit/bec2a98bd993d68190fdb9483fb5230c73b92d07))
-* **release:** send the CurseForge metadata with --form-string, so a semicolon in the notes keeps the JSON whole ([e6bfe40](https://github.com/coreguild/CORELink/commit/e6bfe40ca97db4f0086a89db8ed4d9f1e5784856))
-* **release:** CurseForge metadata goes through a file; empty notes get a changelog; unreachable is said plainly ([96a3a3d](https://github.com/coreguild/CORELink/commit/96a3a3d5a47cf2f9c78feda4340e38aa85db7e8c))
-* **release:** the CurseForge helper reports curl's exit code, so a lost answer is told apart from no connection ([dc0df71](https://github.com/coreguild/CORELink/commit/dc0df7173844f1bedbefc1ce1238c35b03a00017))
-* **whisper:** hide the game's "not playing" reply to a carried line and stop whispering to that peer ([59cd727](https://github.com/coreguild/CORELink/commit/59cd72791ec077913faf6dc0ca63afa8fb083d58))
-* **whisper:** a peer the game calls not playing is marked gone, not unanswered, and is asked again for an hour ([3576897](https://github.com/coreguild/CORELink/commit/357689777d236f6788f30280b3d7ac015dd94cf9))
-* **whisper:** a carried line that hit a peer who is not playing goes to the guild's next peer ([bc71ada](https://github.com/coreguild/CORELink/commit/bc71ada2046739241383540c223b94433df0c110))
-* **whisper:** the who lookup runs only from /cl who, one guild per command ([cf4c5d7](https://github.com/coreguild/CORELink/commit/cf4c5d7d88d355fe7d6c6691390b4ad579528f6d))
-* **whisper:** /cl who waits for its answer, notices a block, asks an unanswered guild again, and gives the Who results back to chat ([1886664](https://github.com/coreguild/CORELink/commit/188666490b1f4e163ac065119d7c3bd5f69c00ba))
-* **whisper:** remove the who lookup of guilds= guilds; the game blocks it and shows "Interface action failed" ([9bbb191](https://github.com/coreguild/CORELink/commit/9bbb19135395645202cf63dab25fdf65a721c5e9))
+* **roster:** the update notice names the guildmate instead of claiming a release, once per version ([28591f7](https://github.com/coreguild/CORELink/commit/28591f786752d1a6385c6e3fda831249ebb8302e))
+* **ci:** the game-version check fails when the TOC does not list the live interface ([4c5b3aa](https://github.com/coreguild/CORELink/commit/4c5b3aa2497bbabcc04d4826687d36b04e39af46))
+* **commands:** plain /cl no longer prints the stale "(0 = success)" hint ([683fee4](https://github.com/coreguild/CORELink/commit/683fee4616a32507fe21f9c20956cb97d0ef1689))
+* **commands:** /cl who names the guild's courier instead of a realm ([3057957](https://github.com/coreguild/CORELink/commit/30579571ef73c67e47d940bdaf350afd3a063add))
+* **release:** a release candidate carries its rc number in game and in its zip name ([1436dac](https://github.com/coreguild/CORELink/commit/1436dac22247230f1c41a2773e2a7e2066c03f73))
+* clean names and tags sent by other clients and harden the chat handlers ([ea235d6](https://github.com/coreguild/CORELink/commit/ea235d6d6e1a44c0536d74ac624ac421d4412b4b))
+* **ci:** only an unreachable version server passes with a warning, and only on pull requests ([0750dea](https://github.com/coreguild/CORELink/commit/0750dea9978016d31d24c9da79f341a434ed91eb))
+* **relay:** the newer-protocol notice needs a packet's shape and skips our own and muted guilds ([c2efdd5](https://github.com/coreguild/CORELink/commit/c2efdd51a1f1925ef9e5545b9e825dd23e84d8f4))
+* **site:** the candidate card stays hidden when stable has moved past the candidate ([5fdd8b0](https://github.com/coreguild/CORELink/commit/5fdd8b0907df2e92066c95790d306d8bc0e0c06c))
+* strip line breaks from relayed text, clean peer cards, and wait ten minutes before forgetting a nickname ([f103ac1](https://github.com/coreguild/CORELink/commit/f103ac11c4723e11c76acf01af314b2490ccd6ba))
+* **channel:** keep the link-channel name match as it was in 0.2.0 ([07b2604](https://github.com/coreguild/CORELink/commit/07b26047389b949a090540d0c1ccdf2a81ca48a2))
+* **roster:** a client on a release candidate is told when its release is out ([7cd81e2](https://github.com/coreguild/CORELink/commit/7cd81e2bcde79a9d610ff9f80094c4bb9b73d45e))
+* **relay:** a line with a quest link is no longer shown more than once in the linked guild ([c44b7b7](https://github.com/coreguild/CORELink/commit/c44b7b7261b9e17457ea1da3e7e372045626d18f))
+* **relay:** two variants of one item linked back to back are both shown; the line key keeps a link's name ([e8e4863](https://github.com/coreguild/CORELink/commit/e8e486338baba84306b7ad0e637e90e4f747adfb))
+* **relay:** only quest links are compared by quest id; other links keep their data, the community copy is matched too ([65f615f](https://github.com/coreguild/CORELink/commit/65f615f51578577df8f82e9ce3afbcb3c6b524f6))
+* **relay:** a line on the link channel is shown under the player who posted it, not the name written in it ([251a6ab](https://github.com/coreguild/CORELink/commit/251a6ab5e061e5b4e3da0ebb54261b2a9373358d))
+* **relay:** a packet naming another author also loses the rank and nickname it claims, and its poster is no peer ([973793d](https://github.com/coreguild/CORELink/commit/973793d70ff2b213179cda8e10456dc63c123400))
+* **relay:** a line is dropped when its author is not a possible character name, or a guildmate sends it for another guild ([aacbda8](https://github.com/coreguild/CORELink/commit/aacbda8bf0eb5401eb33ee12feefcb44bc45a1c9))
+* **relay:** the name rule covers the whole author and only where the game does not name the poster ([3735225](https://github.com/coreguild/CORELink/commit/37352253c6bc2d1e32d36ce45b1ac1c8b6447c7b))
+* **relay:** a realm after the author's name may use any letters; only spaces, pipes and control bytes are refused ([b281790](https://github.com/coreguild/CORELink/commit/b281790bfe02bbb68e3ed91abbc6d53f6b20ffd7))
 
 
 ### Documentation
 
-* **readme:** install steps that match the download page; everyone must be on 0.2.0 ([8e837f6](https://github.com/coreguild/CORELink/commit/8e837f60d130ef5a60f7d27f7aa2697f1f69b450))
-* release branches are protected like main; feature branches reach them through reviewed PRs ([2306b95](https://github.com/coreguild/CORELink/commit/2306b95f153ef6e8985af2f6b29f44bfb0b85141))
-* **readme:** what a player does, what a guild master does, nothing else first ([e919f35](https://github.com/coreguild/CORELink/commit/e919f353d92ed317b3293728f1a2062b2cdcf4d4))
-* commands grouped by task with who may run them; troubleshooting rows for old versions and members without the addon; example line in the README ([e37738b](https://github.com/coreguild/CORELink/commit/e37738b00246e3a1a4d0dccca8ff0b19902efbf1))
-* **readme:** clean up a lot of wording for ease of understanding ([dd4f26d](https://github.com/coreguild/CORELink/commit/dd4f26dbac2c5e8e3244a6766a17b86a8b5d6df3))
-* **commands:** clean up a lot of wording for ease of understanding ([0caa9fa](https://github.com/coreguild/CORELink/commit/0caa9fa5a692e40e821ee4450b15a84730fe0a6c))
-* **troubleshooting:** clean up a lot of wording for ease of understanding ([b682fbf](https://github.com/coreguild/CORELink/commit/b682fbf41cf9f57a83940a015ca163abb4798af9))
-* add nod to greenwall ([af200e4](https://github.com/coreguild/CORELink/commit/af200e40cff85672a13da4be9205c8e663a29daa))
-* **skills:** say the skills folder is hidden; the rc refusal cites the development doc ([09c6d0e](https://github.com/coreguild/CORELink/commit/09c6d0ebf27f516c3ffb0aea1cbd2d4465c648a2))
-* release branches need green checks, not an approval, since the ruleset dropped it ([0ba6735](https://github.com/coreguild/CORELink/commit/0ba67355a6c2f12c5776287dc9a85959a1552a1e))
+* **skills:** unslop skill, trimmed to this project's prose, run from the self-review when prose changes ([a0337bb](https://github.com/coreguild/CORELink/commit/a0337bb082dd37dbc58b350d8c36bceedfac5753))
+* **skills:** unslop keeps the repository's own conventions; the self-review reads the file, since it is hidden ([5fc7d00](https://github.com/coreguild/CORELink/commit/5fc7d0022a8e98e3d7a0a7f44a35c440c6517fdb))
+* **commands:** lastSend ok, not 0, in troubleshooting; describe the /cl who refusal without quoting it ([5a90132](https://github.com/coreguild/CORELink/commit/5a901326f01b4be1ae0e15e723a2a3fbdb578860))
+* what a receiver can and cannot tell about a forged line ([9d13d17](https://github.com/coreguild/CORELink/commit/9d13d17dfb477c5de7c4c6ff1a8a8634f84f9608))
 
 
 ### Maintenance
 
-* ISC license ([d3ea73e](https://github.com/coreguild/CORELink/commit/d3ea73e47a13a8c41e69d6ec0db474fb0f564e8e))
-* keep Python bytecode out of the repo ([10418a9](https://github.com/coreguild/CORELink/commit/10418a96c3f490f2b2a2a45b9da370abced2d957))
-* **skills:** one home for the skills, .claude/skills/, instead of skills/ plus symlinks ([3ba1819](https://github.com/coreguild/CORELink/commit/3ba18198b3cdc56df3f8feb193c5fa220f8f09ea))
-* **compat:** run the released 0.2.0 against the working copy on every pull request ([41bf69c](https://github.com/coreguild/CORELink/commit/41bf69c9758a2e17dd3a27763cdc3b742cdbe4a9))
-* **compat:** close the gaps the self-review found in the cross-version test ([9e6919f](https://github.com/coreguild/CORELink/commit/9e6919f71f3bc80be73fbff1a4c761ab86e76386))
-
-
-### Other Changes
-
-* Update LICENSE ([f56f886](https://github.com/coreguild/CORELink/commit/f56f886cdea90b79cca233570d956098d092c799))
+* **harness:** the version checks fail, not crash, against an addon without the feature ([49fb02b](https://github.com/coreguild/CORELink/commit/49fb02be77738661ac7ae936b7e14f19819a10c7))
+* **commands:** keep the /cl who check from shifting the who rounds after it ([d4a4d16](https://github.com/coreguild/CORELink/commit/d4a4d160d0fd8b4b4c74628bd9673b3afcaf1c03))
+* the fan-out check uses a guildmate who is already an addon user, so the courier does not change ([ec6c90b](https://github.com/coreguild/CORELink/commit/ec6c90b858253263091dbd9eb3e0d400e3477070))
+* **compat:** the oldest supported release is 0.2.2 ([9ec23fa](https://github.com/coreguild/CORELink/commit/9ec23fa67d6fd4fb7825f22eaf101ec33dfc718a))
 
 Direct download (RC channel): https://coreguild.github.io/CORELink/rc/CORELink.zip
