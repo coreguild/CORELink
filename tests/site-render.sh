@@ -25,4 +25,23 @@ lacks "no template placeholder left"                 "{{"
 lacks "download line is not shown as a paragraph"    "<p>Direct download"
 if grep -q '"stable":"1.2.3","rc":"1.3.0"' "$T/channels.json"; then echo "PASS site: channels.json"; else echo "FAIL site: channels.json"; fail=1; fi
 [ -f "$T/style.css" ] && echo "PASS site: style.css copied" || { echo "FAIL site: style.css copied"; fail=1; }
+# The candidate card: shown while the candidate is ahead of stable, hidden once its version shipped. A candidate
+# says its rc number (0.3.0-rc1, #19); the ones before that said the bare version.
+card() {  # card <stable> <rc> <shown|hidden>
+  echo "$1" > "$T/latest/VERSION"; echo "$2" > "$T/rc/VERSION"
+  bash scripts/render-site.sh "$T" https://example.test/CORELink
+  local got=hidden; if grep -qF 'class="card rc show"' "$T/index.html"; then got=shown; fi
+  if [ "$got" = "$3" ] && grep -qF "Version $2<" "$T/index.html"; then echo "PASS site: stable $1, rc $2: card $3"
+  else echo "FAIL site: stable $1, rc $2: card $got, expected $3"; fail=1; fi
+}
+card 0.2.0 0.3.0-rc1 shown
+card 0.3.0 0.3.0-rc2 hidden
+card 0.3.0 0.3.1-rc1 shown
+card 0.2.0 0.2.0     hidden
+card 0.2.0 0.3.0     shown
+card 0.3.1 0.3.0-rc2 hidden      # a hotfix without a candidate went out after 0.3.0
+card 0.10.0 0.9.1-rc1 hidden     # compared as versions, not as text
+rm "$T/latest/VERSION"; bash scripts/render-site.sh "$T" https://example.test/CORELink
+if grep -qF 'class="card rc show"' "$T/index.html"; then echo "PASS site: no stable yet: candidate card shown"
+else echo "FAIL site: no stable yet: candidate card shown"; fail=1; fi
 exit $fail

@@ -22,4 +22,5 @@ bash tests/compat.sh   # the released baseline and this tree talk to each other
 bash tests/site-render.sh
 bash tests/secrets.sh
 bash tests/curseforge-args.sh
+bash tests/release-names.sh
 bash tests/game-version.sh
