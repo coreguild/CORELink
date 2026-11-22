@@ -473,6 +473,9 @@ check("the chat line above the report says the version too",
   chatLines[#chatLines - 1].text == "|cff33ff99CORELink:|r version 0.2.0-test. Report (also in the copy box, Ctrl+C and paste it to whoever is helping):", chatLines[#chatLines - 1].text)
 check("plain /cl says the version in its status line",
   lines(function() slash("") end):find("CORELink:|r version 0.2.0-test | ON | tag: MAIN", 1, true) ~= nil, lines(function() slash("") end))
+-- plain /cl: the send result is a word (ok, error, refused) since 0.2.0, so no "(0 = success)" hint after it
+out = lines(function() slash("") end) .. "\n"
+check("plain /cl prints the last send result without the old numeric hint", out:find("last send result: ok\n", 1, true) ~= nil, out)
 -- a reply to a /cl command goes to the chat window the command was typed in; anything else to the default one
 do
   local function typedIn(editBox, command)
