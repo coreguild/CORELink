@@ -18,7 +18,7 @@ AI agents (and people using one) read [AGENTS.md](../AGENTS.md) and `agents/`.
 | `site/` | Template and stylesheet for the download page. Never edited on `gh-pages` by hand. |
 | `docs/` | This folder: commands, troubleshooting, architecture, development. |
 | `agents/` | Rules for AI agents: branching, testing, gotchas, review. |
-| `.claude/skills/` | Step-by-step procedures (start a feature, test, self-review, release). Claude Code loads them from this hidden folder; they are plain Markdown anyone can follow. |
+| `.claude/skills/` | Step-by-step procedures (start a feature, test, self-review, unslop the prose, release). Claude Code loads them from this hidden folder; they are plain Markdown anyone can follow. |
 
 ## Everyday commands
 
