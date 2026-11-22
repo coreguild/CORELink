@@ -84,3 +84,8 @@ Read before changing anything in the relay, channel or chat code.
     words of letters, single spaces; taken from the names seen in the live guild, not from a published rule),
     and a poster or whisperer who is on its own roster while the packet speaks for another guild. A guildmate's
     fan-out (`LINE`) cannot be told from an invented one; its sender is logged.
+17. **`/chatlist` prints nothing for the link channel.** The game shows a channel's member list
+    (`CHAT_MSG_CHANNEL_LIST`) only in a chat window that displays the channel, and the addon removes the link
+    channel from every window. `ListChannelByName(id)` plus a listener for that event works (run by hand in the
+    live guild on 2026-11-21). `/cl members` does this; the event's argument layout and the marks in front of the
+    owner's name are assumed from the standard client, not confirmed on Forever.
