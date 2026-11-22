@@ -30,7 +30,7 @@ end
 local function ShowStatus()
   Print(NS.StatusLine())
   local lastSend = NS.conn.lastSendResult
-  if Configured() and lastSend then Print("last send result: " .. lastSend .. " (0 = success)") end
+  if Configured() and lastSend then Print("last send result: " .. lastSend) end
   Print(HelpLine(IsGM()))
 end
 
