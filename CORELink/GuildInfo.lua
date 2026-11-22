@@ -165,7 +165,7 @@ local function CreateCopyFrame()
   local t = fr:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   t:SetPoint("TOP", 0, -14)
   t:SetWidth(400)
-  t:SetText("CORELink: press Ctrl+C to copy, then paste into Guild Info")
+  fr.caption = t
 
   local eb = CreateFrame("EditBox", nil, fr, "InputBoxTemplate")
   eb:SetSize(390, 24)
@@ -181,8 +181,10 @@ local function CreateCopyFrame()
   return fr
 end
 
-function NS.ShowCopyBox(line)
+-- caption: what the text is for; the Guild Info line when not given.
+function NS.ShowCopyBox(line, caption)
   copyFrame = copyFrame or CreateCopyFrame()
+  copyFrame.caption:SetText(caption or "CORELink: press Ctrl+C to copy, then paste into Guild Info")
   copyFrame:Show()
   copyFrame.edit:SetText(line)
   copyFrame.edit:SetFocus()
