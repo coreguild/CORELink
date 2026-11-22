@@ -97,7 +97,7 @@ NS.commands.report = function()
   local report = BuildReport()
   Print(NS.VersionText() .. ". Report (also in the copy box, Ctrl+C and paste it to whoever is helping):")
   Print(report)
-  pcall(NS.ShowCopyBox, report)
+  pcall(NS.ShowCopyBox, report, "CORELink: press Ctrl+C to copy the report")
 end
 
 ---------------------------------------------------------------- /cl guilds
