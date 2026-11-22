@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 
 # The oldest release that must keep working with the code in this tree. Not "the previous release": players
 # who installed it never update on our schedule. Raise it only when that release is deliberately dropped.
-BASELINE=${BASELINE:-v0.2.0}
+# v0.2.2 since 2026-11-21: the addon was announced to the guilds with 0.2.2, so 0.2.0 and 0.2.1 are dropped.
+BASELINE=${BASELINE:-v0.2.2}
 
 LUA=${LUA:-lua}
 if ! git rev-parse -q --verify "refs/tags/$BASELINE^{commit}" >/dev/null; then
