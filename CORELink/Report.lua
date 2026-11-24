@@ -75,6 +75,7 @@ local function BuildReport()
     "inGuild " .. tostring(IsInGuild()),
     "guildInfo " .. conn.giState,
     "joinAttempts " .. conn.joinAttempts,
+    "passwordAnswers " .. tostring(conn.passwordAnswers),
     "lastNotice " .. (conn.lastNotice and (conn.lastNotice .. " at " .. conn.lastNoticeAt) or "none"),
     "joinHold " .. (GetTime() < conn.blockedUntil and tostring(conn.blockedWhy) or "no"),
     "lockdown " .. tostring(NS.Locked()),

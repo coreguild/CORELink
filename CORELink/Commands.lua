@@ -217,8 +217,7 @@ commands.window = function(arg)
 end
 
 commands.reload = function()
-  local conn = NS.conn
-  NS.db.lastGI = nil; conn.blockedUntil = 0; conn.blockedWhy = nil
+  NS.db.lastGI = nil; NS.ClearJoinHold()
   local read = NS.ReadGuildInfo(true)
   NS.EnsureChannel()
   Print(read == false and "retried the channel. Guild Info will be re-read when the fight or lockdown is over."
