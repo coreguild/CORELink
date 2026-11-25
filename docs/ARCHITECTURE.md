@@ -46,6 +46,7 @@ as `NS.Name()` when called.
 | `Events.lua` | The event frame, saved variables, login, message dispatch, the housekeeping ticker, `StatusLine`. |
 | `Report.lua` | `/cl report`, `/cl guilds`, `/cl peers`. |
 | `Members.lua` | `/cl members`: the link channel's member list from the game, grouped by guild. |
+| `Suspects.lua` | `/cl suspects`: lines the relay did not believe, kept in the saved variables with who delivered them. |
 | `Commands.lua` | Every other `/cl` command, one function each, the dispatcher, the help line built from the command table. |
 
 Limits, enforced by `tests/run.sh`: a file is at most 400 lines, a function at most 40, a line at most 120.

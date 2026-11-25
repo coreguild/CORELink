@@ -36,6 +36,8 @@ Type `/cl report` and check the version at the start. If it's older than 0.2.0, 
 
 Update CORELink. Versions up to 0.2.2 showed whatever name, rank and guild a message claimed, and anyone in the link channel could type one. Newer versions show the character that really posted a line, drop a line whose author isn't a possible character name, and drop a line that a member of your own guild sends under another guild's name. `/cl report` on a client that dropped one says who delivered it.
 
+`/cl suspects` lists every such line this character caught, with the date and who the game says delivered it, and keeps them after logout. On the link channel the deliverer is whoever typed the line. A line that arrived by whisper or from a guild member's client may have been passed on by someone who only carried another player's fake, so treat that name as a lead, not proof.
+
 ## The same message appears twice
 
 Older versions could show a message with a quest link more than once in the linked guild, because the game writes the link differently for each player. Update the addon in both guilds.

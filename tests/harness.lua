@@ -356,6 +356,43 @@ do
   NS.ShowPacket("CL4~0badf0ad~ALT~Erin~PRIEST~~~carried", "whisper", "Carol")
   check("the log of a carried line names who delivered it",
     report():find("0badf0ad via whisper from Erin <ALT>, delivered by Carol", 1, true) ~= nil, report())
+  -- every line not believed above is kept in the saved variables with who delivered it, once per packet
+  local kept = CORELinkDB.suspects or {}
+  local function find(kind, via, from, author)
+    local n = 0
+    for _, e in ipairs(kept) do
+      if e.kind == kind and e.via == via and e.from == from and e.author == author then n = n + 1 end
+    end
+    return n
+  end
+  check("suspects: a forged channel line is kept once with its poster and the author it named, though sent twice",
+    find("forged", "channel", "Mallory", "Beau's Beard") == 1, #kept)
+  check("suspects: a carried line with an impossible author is kept with who delivered it",
+    find("refused", "whisper", "Carol", "Beau's Beard") == 1 and find("refused", "guild", "Tanner", "Beau's Beard") == 1)
+  check("suspects: a guildmate posting for another guild and a guildmate carrying to us are kept",
+    find("refused", "channel", "Bob", "Bob") >= 1 and find("refused", "whisper", "Bob", "Carol") == 1)
+  check("suspects: honest lines are not kept", find("forged", "channel", "Carol-Realm7", "Carol") == 0
+    and find("forged", "channel", "Carol Reed", "Carol") == 0 and find("forged", "channel", "D'Arcy Vale", "D'Arcy Vale") == 0)
+  local drawn = false
+  for _, e in ipairs(kept) do for _, v in pairs(e) do if tostring(v):find("|", 1, true) then drawn = true end end end
+  check("suspects: nothing kept can draw in chat", not drawn)
+  local beau
+  for _, e in ipairs(kept) do if e.from == "Mallory" and e.author == "Beau's Beard" then beau = e end end
+  check("suspects: each entry has a date, the reason and the text", beau and beau.when:match("^%d%d%d%d%-%d%d%-%d%d %d")
+    and beau.why ~= "" and beau.text == "I am majestic", beau and beau.when)
+  lastSetText = nil
+  out = lines(function() slash("suspects") end)
+  check("/cl suspects prints how many and the lines, and puts them all in the copy box",
+    out:find(#kept .. " suspect line(s) recorded", 1, true) ~= nil and out:find("delivered by Mallory", 1, true) ~= nil
+    and (lastSetText or ""):find("forged via channel, delivered by Mallory: <ALT> Beau's Beard", 1, true) ~= nil, out)
+  for i = 1, 120 do NS.NoteSuspect({ kind = "refused", via = "guild", from = "Spam", author = "N" .. i, text = "x" }) end
+  check("suspects: the list keeps the newest 100", #CORELinkDB.suspects == 100 and CORELinkDB.suspects[100].author == "N120"
+    and CORELinkDB.suspects[1].author == "N21", #CORELinkDB.suspects)
+  out = lines(function() slash("suspects") end)
+  check("/cl suspects shows only the last ten in chat when there are more", select(2, out:gsub("delivered by", "")) == 10, out)
+  slash("suspects clear")
+  check("/cl suspects clear empties the list", CORELinkDB.suspects == nil
+    and lines(function() slash("suspects") end):find("no suspect lines recorded", 1, true) ~= nil)
 end
 -- a quest link reaches each client with its own colour and level, so the author's packet id is not the id the
 -- courier computes from guild chat: the copy is recognised by what it says

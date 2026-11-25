@@ -19,4 +19,5 @@ Hooks.lua
 Events.lua
 Report.lua
 Members.lua
+Suspects.lua
 Commands.lua
