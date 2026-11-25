@@ -37,13 +37,26 @@ end
 -- /cl suspects watch: each new entry is also said in chat as it is caught, at most WATCH_MAX a minute (one
 -- person sending many lines must not bury the chat window); the list keeps them all either way.
 local WATCH_MAX, watchFrom, watchCount = 10, -60, 0
+local RED = { r = 1, g = 0.1, b = 0.1 }
+
+-- The raid-warning banner in the middle of the screen and its sound: impossible to miss. Not every client has
+-- both, and the alert must never break the line's handling, so each is tried and skipped when missing.
+local function Alarm(e)
+  if RaidNotice_AddMessage and RaidWarningFrame then
+    pcall(RaidNotice_AddMessage, RaidWarningFrame, "FORGERY: " .. e.from .. " posted as <" .. e.tag .. "> "
+      .. e.author, RED)
+  end
+  if PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then pcall(PlaySound, SOUNDKIT.RAID_WARNING, "Master") end
+end
 local function Watch(e)
   local now = GetTime()
   if now - watchFrom >= 60 then watchFrom, watchCount = now, 0 end
   watchCount = watchCount + 1
   if watchCount > WATCH_MAX then return end
-  NS.Print(string.format("|cffff4040caught|r %s via %s: %s posted as <%s> %s: \"%s\" (%s)%s", e.kind, e.via, e.from,
-    e.tag, e.author, e.text, e.why, watchCount == WATCH_MAX and " - more this minute go to /cl suspects only" or ""))
+  NS.Print(string.format("|cffff2020>>> FORGERY CAUGHT <<<|r |cffff6060%s via %s: %s posted as <%s> %s: \"%s\""
+    .. " (%s)%s|r", e.kind, e.via, e.from, e.tag, e.author, e.text, e.why,
+    watchCount == WATCH_MAX and " - more this minute go to /cl suspects only" or ""))
+  Alarm(e)
 end
 
 -- s: { kind=, via=, from=, tag=, author=, text=, why= }. A line already kept from the same deliverer is not
