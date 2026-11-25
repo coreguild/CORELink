@@ -17,29 +17,62 @@
   <section class="cards">
     <article class="card stable">
       <h2>Stable</h2>
-      <p class="version">Version 0.2.2</p>
+      <p class="version">Version 0.3.0</p>
       <a class="button" href="latest/CORELink.zip" download>Download CORELink.zip</a>
-      <p class="meta">What everyone in the guild should run. Published 2026-11-15.</p>
+      <p class="meta">What everyone in the guild should run. Published 2026-11-25.</p>
       <details class="notes" open>
-        <summary>What's new in 0.2.2</summary>
-        <p>▎ Fixes the "CORELink tried to call the protected function" errors that filled BugSack: the addon now reads Guild Info at login and every five minutes, and never in combat. /cl replies now appear in the chat tab you typed them in. Officers' messages default to a slightly darker guild green; a color you set yourself is kept.</p>
-<h3><a href="https://github.com/coreguild/CORELink/compare/v0.2.1...v0.2.2">0.2.2</a> (2026-11-15)</h3>
+        <summary>What's new in 0.3.0</summary>
+        <h3><a href="https://github.com/coreguild/CORELink/compare/v0.2.2...v0.3.0">0.3.0</a> (2026-11-25)</h3>
 <h3>Features</h3>
 <ul>
-<li><strong>display:</strong> the default officer colour is #40db27, the guild green a shade darker (<a href="https://github.com/coreguild/CORELink/commit/4f3f7208ca00fdcc40a85aa8088a9a6a2d6ebeeb">4f3f720</a>)</li>
+<li><strong>roster:</strong> say once per session when a guildmate runs a newer release (<a href="https://github.com/coreguild/CORELink/commit/126ad2b2225609c0a0a2d64b3f821d23478d9197">126ad2b</a>)</li>
+<li><strong>relay:</strong> say once per session when a linked guild sends a newer protocol than this version reads (<a href="https://github.com/coreguild/CORELink/commit/514005005d19cf1346b4e19bcaeb055f8c845c6f">5140050</a>)</li>
+<li><strong>members:</strong> /cl members lists who is in the link channel, grouped by guild, also in the copy box (<a href="https://github.com/coreguild/CORELink/commit/fa340391f5907ca5796193fead6490c848f1a249">fa34039</a>)</li>
+<li><strong>members:</strong> the report log records the request and how many names came back (<a href="https://github.com/coreguild/CORELink/commit/f3b612c7659734eb191b23a6f57e0ed4b7bf0efa">f3b612c</a>)</li>
+<li><strong>members:</strong> one line per guild whether a peer is known by name or tag; gossip is not knowledge; fewer hellos (<a href="https://github.com/coreguild/CORELink/commit/b8501f2bf9bea92fd702728f9e8e5696e45ff3f6">b8501f2</a>)</li>
+<li><strong>report:</strong> /cl report and the /cl status line say "version &lt;number&gt;" in words (<a href="https://github.com/coreguild/CORELink/commit/8a7cdeadbd4ebafcaae73a3d310a795c617cfbe3">8a7cdea</a>)</li>
 </ul>
 <h3>Bug Fixes</h3>
 <ul>
-<li><strong>core:</strong> the addon's own messages go to the chat tab the player is looking at (<a href="https://github.com/coreguild/CORELink/commit/0c9d4a6316e0bb33f311b0bc81039744f4718184">0c9d4a6</a>)</li>
-<li><strong>core:</strong> a /cl reply goes to the chat window the command was typed in; other messages stay in the default window (<a href="https://github.com/coreguild/CORELink/commit/0c58db1e7eb04456ddc6d1c40348cff9107e8cd3">0c58db1</a>)</li>
-<li><strong>guildinfo:</strong> read Guild Info at login and every five minutes, never in combat or chat lockdown (<a href="https://github.com/coreguild/CORELink/commit/42628960ac4f4e43c4b9c1e3dd8ceb21daa6b3ea">4262896</a>)</li>
-<li><strong>guildinfo:</strong> also hold the read while the player is fighting; record where the block was seen (<a href="https://github.com/coreguild/CORELink/commit/a60af345857f91804997aeb8c1adf3d49ea7c47c">a60af34</a>)</li>
-<li><strong>guildinfo:</strong> a read that had to wait is done after the fight; a guild change and /cl reload are never throttled; a blocked read is logged and backs off (<a href="https://github.com/coreguild/CORELink/commit/4d2a5259625ec12e6c674faea2d5942f16653185">4d2a525</a>)</li>
+<li><strong>roster:</strong> the update notice names the guildmate instead of claiming a release, once per version (<a href="https://github.com/coreguild/CORELink/commit/28591f786752d1a6385c6e3fda831249ebb8302e">28591f7</a>)</li>
+<li><strong>ci:</strong> the game-version check fails when the TOC does not list the live interface (<a href="https://github.com/coreguild/CORELink/commit/4c5b3aa2497bbabcc04d4826687d36b04e39af46">4c5b3aa</a>)</li>
+<li><strong>commands:</strong> plain /cl no longer prints the stale "(0 = success)" hint (<a href="https://github.com/coreguild/CORELink/commit/683fee4616a32507fe21f9c20956cb97d0ef1689">683fee4</a>)</li>
+<li><strong>commands:</strong> /cl who names the guild's courier instead of a realm (<a href="https://github.com/coreguild/CORELink/commit/30579571ef73c67e47d940bdaf350afd3a063add">3057957</a>)</li>
+<li><strong>release:</strong> a release candidate carries its rc number in game and in its zip name (<a href="https://github.com/coreguild/CORELink/commit/1436dac22247230f1c41a2773e2a7e2066c03f73">1436dac</a>)</li>
+<li>clean names and tags sent by other clients and harden the chat handlers (<a href="https://github.com/coreguild/CORELink/commit/ea235d6d6e1a44c0536d74ac624ac421d4412b4b">ea235d6</a>)</li>
+<li><strong>ci:</strong> only an unreachable version server passes with a warning, and only on pull requests (<a href="https://github.com/coreguild/CORELink/commit/0750dea9978016d31d24c9da79f341a434ed91eb">0750dea</a>)</li>
+<li><strong>relay:</strong> the newer-protocol notice needs a packet's shape and skips our own and muted guilds (<a href="https://github.com/coreguild/CORELink/commit/c2efdd51a1f1925ef9e5545b9e825dd23e84d8f4">c2efdd5</a>)</li>
+<li><strong>site:</strong> the candidate card stays hidden when stable has moved past the candidate (<a href="https://github.com/coreguild/CORELink/commit/5fdd8b0907df2e92066c95790d306d8bc0e0c06c">5fdd8b0</a>)</li>
+<li>strip line breaks from relayed text, clean peer cards, and wait ten minutes before forgetting a nickname (<a href="https://github.com/coreguild/CORELink/commit/f103ac11c4723e11c76acf01af314b2490ccd6ba">f103ac1</a>)</li>
+<li><strong>channel:</strong> keep the link-channel name match as it was in 0.2.0 (<a href="https://github.com/coreguild/CORELink/commit/07b26047389b949a090540d0c1ccdf2a81ca48a2">07b2604</a>)</li>
+<li><strong>roster:</strong> a client on a release candidate is told when its release is out (<a href="https://github.com/coreguild/CORELink/commit/7cd81e2bcde79a9d610ff9f80094c4bb9b73d45e">7cd81e2</a>)</li>
+<li><strong>relay:</strong> a line with a quest link is no longer shown more than once in the linked guild (<a href="https://github.com/coreguild/CORELink/commit/c44b7b7261b9e17457ea1da3e7e372045626d18f">c44b7b7</a>)</li>
+<li><strong>relay:</strong> two variants of one item linked back to back are both shown; the line key keeps a link's name (<a href="https://github.com/coreguild/CORELink/commit/e8e486338baba84306b7ad0e637e90e4f747adfb">e8e4863</a>)</li>
+<li><strong>relay:</strong> only quest links are compared by quest id; other links keep their data, the community copy is matched too (<a href="https://github.com/coreguild/CORELink/commit/65f615f51578577df8f82e9ce3afbcb3c6b524f6">65f615f</a>)</li>
+<li><strong>relay:</strong> a line on the link channel is shown under the player who posted it, not the name written in it (<a href="https://github.com/coreguild/CORELink/commit/251a6ab5e061e5b4e3da0ebb54261b2a9373358d">251a6ab</a>)</li>
+<li><strong>relay:</strong> a packet naming another author also loses the rank and nickname it claims, and its poster is no peer (<a href="https://github.com/coreguild/CORELink/commit/973793d70ff2b213179cda8e10456dc63c123400">973793d</a>)</li>
+<li><strong>relay:</strong> a line is dropped when its author is not a possible character name, or a guildmate sends it for another guild (<a href="https://github.com/coreguild/CORELink/commit/aacbda8bf0eb5401eb33ee12feefcb44bc45a1c9">aacbda8</a>)</li>
+<li><strong>relay:</strong> the name rule covers the whole author and only where the game does not name the poster (<a href="https://github.com/coreguild/CORELink/commit/37352253c6bc2d1e32d36ce45b1ac1c8b6447c7b">3735225</a>)</li>
+<li><strong>relay:</strong> a realm after the author's name may use any letters; only spaces, pipes and control bytes are refused (<a href="https://github.com/coreguild/CORELink/commit/b281790bfe02bbb68e3ed91abbc6d53f6b20ffd7">b281790</a>)</li>
+</ul>
+<h3>Documentation</h3>
+<ul>
+<li><strong>skills:</strong> unslop skill, trimmed to this project's prose, run from the self-review when prose changes (<a href="https://github.com/coreguild/CORELink/commit/a0337bb082dd37dbc58b350d8c36bceedfac5753">a0337bb</a>)</li>
+<li><strong>skills:</strong> unslop keeps the repository's own conventions; the self-review reads the file, since it is hidden (<a href="https://github.com/coreguild/CORELink/commit/5fc7d0022a8e98e3d7a0a7f44a35c440c6517fdb">5fc7d00</a>)</li>
+<li><strong>commands:</strong> lastSend ok, not 0, in troubleshooting; describe the /cl who refusal without quoting it (<a href="https://github.com/coreguild/CORELink/commit/5a901326f01b4be1ae0e15e723a2a3fbdb578860">5a90132</a>)</li>
+<li>what a receiver can and cannot tell about a forged line (<a href="https://github.com/coreguild/CORELink/commit/9d13d17dfb477c5de7c4c6ff1a8a8634f84f9608">9d13d17</a>)</li>
+</ul>
+<h3>Maintenance</h3>
+<ul>
+<li><strong>harness:</strong> the version checks fail, not crash, against an addon without the feature (<a href="https://github.com/coreguild/CORELink/commit/49fb02be77738661ac7ae936b7e14f19819a10c7">49fb02b</a>)</li>
+<li><strong>commands:</strong> keep the /cl who check from shifting the who rounds after it (<a href="https://github.com/coreguild/CORELink/commit/d4a4d160d0fd8b4b4c74628bd9673b3afcaf1c03">d4a4d16</a>)</li>
+<li>the fan-out check uses a guildmate who is already an addon user, so the courier does not change (<a href="https://github.com/coreguild/CORELink/commit/ec6c90b858253263091dbd9eb3e0d400e3477070">ec6c90b</a>)</li>
+<li><strong>compat:</strong> the oldest supported release is 0.2.2 (<a href="https://github.com/coreguild/CORELink/commit/9ec23fa67d6fd4fb7825f22eaf101ec33dfc718a">9ec23fa</a>)</li>
 </ul>
       </details>
     </article>
 
-    <article class="card rc show">
+    <article class="card rc ">
       <h2>Release candidate</h2>
       <p class="version">Version 0.3.0-rc1</p>
       <a class="button secondary" href="rc/CORELink.zip" download>Download RC</a>
@@ -109,7 +142,7 @@
 
   <footer>
     <p>Permanent links: <a href="https://coreguild.github.io/CORELink/latest/CORELink.zip">https://coreguild.github.io/CORELink/latest/CORELink.zip</a> and <a href="https://coreguild.github.io/CORELink/rc/CORELink.zip">https://coreguild.github.io/CORELink/rc/CORELink.zip</a>. Older builds: <code>v/CORELink-&lt;version&gt;.zip</code> (a candidate: <code>v/CORELink-&lt;version&gt;-rcN.zip</code>), their notes: <code>notes/&lt;version&gt;.md</code>. <a href="CHANGELOG.md">Full changelog</a>.</p>
-    <p class="meta">Page updated 2026-11-22 00:38 UTC.</p>
+    <p class="meta">Page updated 2026-11-25 04:04 UTC.</p>
   </footer>
 </main>
 </body>
