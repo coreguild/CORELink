@@ -124,10 +124,11 @@ end
 -- Packet text is anyone's to write: what goes into the log is cut short and cannot draw anything.
 local function Safe(s) return (tostring(s):sub(1, 40):gsub("|", "||")) end
 
--- A packet we did not believe: one log line and one entry in the kept suspect list (Suspects.lua) per packet id,
--- however often it is repeated. kind is "refused" (dropped) or "forged" (shown under its poster).
+-- A packet we did not believe: an entry in the kept suspect list (Suspects.lua, which tells repeats apart by what
+-- they say) and one log line per packet id. kind is "refused" (dropped) or "forged" (shown under its poster).
 local logged, nLogged = {}, 0
 local function Distrust(id, kind, via, from, tag, author, msg, why)
+  NS.NoteSuspect({ kind = kind, via = via, from = from, tag = tag, author = author, text = msg, why = why })
   if logged[id] then return end
   if nLogged >= 50 then logged, nLogged = {}, 0 end
   logged[id], nLogged = true, nLogged + 1
@@ -136,7 +137,6 @@ local function Distrust(id, kind, via, from, tag, author, msg, why)
   else
     Debug("dropped packet %s via %s, delivered by %s: %s", id, via, Safe(from), why)
   end
-  NS.NoteSuspect({ kind = kind, via = via, from = from, tag = tag, author = author, text = msg, why = why })
 end
 
 -- The name to show for a channel packet, or nil when its author field names someone other than its poster.

@@ -385,7 +385,46 @@ do
   check("/cl suspects prints how many and the lines, and puts them all in the copy box",
     out:find(#kept .. " suspect line(s) recorded", 1, true) ~= nil and out:find("delivered by Mallory", 1, true) ~= nil
     and (lastSetText or ""):find("forged via channel, delivered by Mallory: <ALT> Beau's Beard", 1, true) ~= nil, out)
-  for i = 1, 120 do NS.NoteSuspect({ kind = "refused", via = "guild", from = "Spam", author = "N" .. i, text = "x" }) end
+  -- packet ids are the sender's: one deliverer cannot crowd out the rest, a new id does not make a line new,
+  -- and a reused id does not hide one
+  local function count(field, value)
+    local n = 0
+    for _, e in ipairs(CORELinkDB.suspects) do if e[field] == value then n = n + 1 end end
+    return n
+  end
+  local carol, total = count("from", "Carol"), #CORELinkDB.suspects
+  for i = 1, 30 do channelLine(("CL4~%08x~ALT~Fake Name~PRIEST~~~spam %d"):format(0x5a000000 + i, i), "Mallory") end
+  check("suspects: one deliverer keeps at most ten entries, their newest, and nobody else's go",
+    count("from", "Mallory") == 10 and count("text", "spam 30") == 1 and count("text", "spam 20") == 0
+    and count("from", "Carol") == carol and #CORELinkDB.suspects == total - 3 + 10, count("from", "Mallory"))
+  channelLine("CL4~5b000001~ALT~Fake Name~PRIEST~~~spam 30", "Mallory")
+  check("suspects: the same line under a new packet id is not kept twice", count("text", "spam 30") == 1)
+  channelLine("CL4~0badf0aa~ALT~Other Name~PRIEST~~~reused id", "Erin")
+  check("suspects: a line reusing an id already seen is still kept", count("text", "reused id") == 1)
+  slash("mute HUSH")
+  channelLine("CL4~5c000001~HUSH~Fake Name~PRIEST~~~from a muted guild", "Erin")
+  slash("unmute HUSH")
+  check("suspects: lines naming a muted guild are not kept", count("text", "from a muted guild") == 0)
+  H(nil, "CHAT_MSG_ADDON", "CORELink", "WB~not a packet at all", "WHISPER", "Bob")
+  check("suspects: a guildmate's whisper that is no packet is not kept", count("text", "not a packet at all") == 0
+    and count("why", "carried to us by someone in our own guild") == 1)
+  -- what is kept stays readable: a link keeps its words, a cut never splits a character
+  NS.NoteSuspect({ kind = "forged", via = "channel", from = "Linker", author = "A B",
+    text = "|cffffff00|Hquest:1:60|h[The Missing Diplomat]|h|r we need help" })
+  check("suspects: a link is kept as its words", count("text", "[The Missing Diplomat] we need help") == 1)
+  NS.NoteSuspect({ kind = "forged", via = "channel", from = "Accents", author = "A B", text = "a" .. ("\195\169"):rep(50) })
+  local accents
+  for _, e in ipairs(CORELinkDB.suspects) do if e.from == "Accents" then accents = e.text end end
+  check("suspects: a cut text ends on a whole character", accents and #accents == 79 and accents:byte(-1) == 169, accents and #accents)
+  -- a saved list the game cannot have written does not break the relay
+  CORELinkDB.suspects = { "junk", { from = 5 } }
+  at = #chatLines
+  channelLine("CL4~5d000001~ALT~Fake Name~PRIEST~~~after junk", "Mallory")
+  check("suspects: a broken saved list does not stop a line from showing, and the line is kept",
+    #chatLines > at and count("text", "after junk") == 1 and type(CORELinkDB.suspects[1]) == "table")
+  check("/cl suspects copes with an entry missing its fields", pcall(slash, "suspects"))
+  CORELinkDB.suspects = nil
+  for i = 1, 120 do NS.NoteSuspect({ kind = "refused", via = "guild", from = "S" .. i, author = "N" .. i, text = "x" }) end
   check("suspects: the list keeps the newest 100", #CORELinkDB.suspects == 100 and CORELinkDB.suspects[100].author == "N120"
     and CORELinkDB.suspects[1].author == "N21", #CORELinkDB.suspects)
   out = lines(function() slash("suspects") end)

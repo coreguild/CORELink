@@ -73,7 +73,7 @@ Defined in `Core.lua`, used everywhere:
 
 | Table | Key -> value | Why |
 |---|---|---|
-| `NS.db` | the saved variables (`CORELinkDB`, per character) | settings, nicknames, mutes, saved peers; nil until ADDON_LOADED |
+| `NS.db` | the saved variables (`CORELinkDB`, per character) | settings, nicknames, mutes, saved peers, the kept suspect list (up to 100 lines other players wrote); nil until ADDON_LOADED |
 | `NS.seen` | packet id -> time | a line already relayed, read, carried or fanned: do not do it again |
 | `NS.seenText` | `NS.TextKey` of a line -> time | the same line under another packet id (a quest link is written per viewer): not carried, not shown again |
 | `NS.pending` | packet id -> true | the courier's back-off is deciding whether to carry it |

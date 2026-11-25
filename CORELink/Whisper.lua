@@ -202,18 +202,14 @@ NS.whisperPackets.DIR = function(rest)
   end
 end
 
--- A carried line whispered by a guildmate: kept in the suspect list once per packet id.
-local carriedByGuildmate, nCarried = {}, 0
+-- A carried line whispered by a guildmate goes in the kept suspect list (Suspects.lua), if it is a packet at all.
 local function NoteGuildmateCarry(rest, sender)
-  local id, tag, author, text = rest:match("^CL%d+" .. SEP .. "(%x+)" .. SEP .. "([^" .. SEP .. "]*)" .. SEP
-    .. "([^" .. SEP .. "]*)" .. SEP .. "[^" .. SEP .. "]*" .. SEP .. "[^" .. SEP .. "]*" .. SEP .. "[^" .. SEP .. "]*"
-    .. SEP .. "(.*)$")
-  local key = id or rest:sub(1, 40)
-  if carriedByGuildmate[key] then return end
-  if nCarried >= 50 then carriedByGuildmate, nCarried = {}, 0 end
-  carriedByGuildmate[key], nCarried = true, nCarried + 1
-  NS.NoteSuspect({ kind = "refused", via = "whisper", from = sender, tag = tag, author = author, text = text or rest,
-    why = "carried to us by someone in our own guild" })
+  local proto, body = rest:match("^(CL%d+)" .. SEP .. "(.*)$")
+  if not proto then return end
+  local _, tag, author, _, _, _, text = NS.Split(body, 7)
+  if not text then return end
+  NS.NoteSuspect({ kind = "refused", via = "whisper", from = Ambiguate(sender, "none"), tag = tag, author = author,
+    text = text, why = "carried to us by someone in our own guild" })
 end
 
 -- WB: another guild's courier carried a line to us. Show it and fan it out to our guild once. Accepted from a
