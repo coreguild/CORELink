@@ -2,7 +2,8 @@
 -- An addon cannot write files of its own. The list lives in this character's saved variables
 -- (CORELinkDB.suspects), which the game writes to disk at logout and /reload:
 --   WTF/Account/<account>/<realm>/<character>/SavedVariables/CORELink.lua
--- /cl suspects shows it in chat and in the copy box; /cl suspects clear empties it.
+-- /cl suspects shows it in chat and in the copy box; /cl suspects clear empties it; /cl suspects watch says each
+-- new one in chat as it is caught.
 -- "delivered by" is the one name the game vouches for. On the link channel that is whoever typed the line; on a
 -- whisper or a guild fan-out it is the client that passed it on, which may only be carrying someone else's lie.
 -- Packet ids are the sender's to choose, so entries are told apart by what they say, and one deliverer keeps at
@@ -33,6 +34,18 @@ local function Same(a, b)
   return a.from == b.from and a.kind == b.kind and a.tag == b.tag and a.author == b.author and a.text == b.text
 end
 
+-- /cl suspects watch: each new entry is also said in chat as it is caught, at most WATCH_MAX a minute (one
+-- person sending many lines must not bury the chat window); the list keeps them all either way.
+local WATCH_MAX, watchFrom, watchCount = 10, -60, 0
+local function Watch(e)
+  local now = GetTime()
+  if now - watchFrom >= 60 then watchFrom, watchCount = now, 0 end
+  watchCount = watchCount + 1
+  if watchCount > WATCH_MAX then return end
+  NS.Print(string.format("|cffff4040caught|r %s via %s: %s posted as <%s> %s: \"%s\" (%s)%s", e.kind, e.via, e.from,
+    e.tag, e.author, e.text, e.why, watchCount == WATCH_MAX and " - more this minute go to /cl suspects only" or ""))
+end
+
 -- s: { kind=, via=, from=, tag=, author=, text=, why= }. A line already kept from the same deliverer is not
 -- kept again; a deliverer's oldest entry makes room for their newest.
 function NS.NoteSuspect(s)
@@ -53,6 +66,7 @@ function NS.NoteSuspect(s)
   if mine >= PER_SENDER then table.remove(list, first) end
   list[#list + 1] = e
   while #list > MAX do table.remove(list, 1) end
+  if db.watchSuspects then Watch(e) end
 end
 
 local function Line(e)
@@ -64,7 +78,14 @@ local SHOW_IN_CHAT = 10
 
 NS.commands.suspects = function(arg)
   local db = NS.db
-  if arg:lower() == "clear" then
+  local word, value = arg:lower():match("^(%S*)%s*(%S*)")
+  if word == "watch" then
+    db.watchSuspects = value ~= "off"
+    NS.Print("caught lines " .. (db.watchSuspects and "are said in chat as they arrive" or "go to /cl suspects only")
+      .. ". (/cl suspects watch " .. (db.watchSuspects and "off" or "on") .. " to change)")
+    return
+  end
+  if word == "clear" then
     db.suspects = nil
     NS.Print("suspect list cleared.")
     return

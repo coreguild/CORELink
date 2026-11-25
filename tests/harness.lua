@@ -423,6 +423,26 @@ do
   check("suspects: a broken saved list does not stop a line from showing, and the line is kept",
     #chatLines > at and count("text", "after junk") == 1 and type(CORELinkDB.suspects[1]) == "table")
   check("/cl suspects copes with an entry missing its fields", pcall(slash, "suspects"))
+  -- watch: each new catch is also said in chat as it arrives, at most ten a minute, until switched off
+  check("suspects: nothing is said in chat unless watch is on", lines(function()
+    channelLine("CL4~5e000000~ALT~Fake Name~PRIEST~~~quiet one", "Mallory") end):find("caught", 1, true) == nil)
+  slash("suspects watch")
+  out = lines(function() channelLine("CL4~5e000001~ALT~Fake Name~PRIEST~~~watch me", "Mallory") end)
+  check("/cl suspects watch says a caught line in chat with its real poster",
+    out:find("caught|r forged via channel: Mallory posted as <ALT> Fake Name: \"watch me\"", 1, true) ~= nil, out)
+  advance(61)
+  out = lines(function()
+    for i = 1, 15 do channelLine(("CL4~%08x~ALT~Fake Name~PRIEST~~~w %d"):format(0x5f000000 + i, i), "Watcher" .. i) end
+  end)
+  check("watch says at most ten a minute, and says when it stops", select(2, out:gsub("caught|r", "")) == 10
+    and out:find("more this minute go to /cl suspects only", 1, true) ~= nil and count("text", "w 15") == 1, out)
+  advance(61)
+  out = lines(function() channelLine("CL4~5e000002~ALT~Fake Name~PRIEST~~~next minute", "Watcher20") end)
+  check("watch speaks again the next minute", out:find("caught|r", 1, true) ~= nil, out)
+  slash("suspects watch off")
+  out = lines(function() channelLine("CL4~5e000003~ALT~Fake Name~PRIEST~~~off again", "Watcher21") end)
+  check("/cl suspects watch off stops it; the line is still kept", out:find("caught|r", 1, true) == nil
+    and count("text", "off again") == 1, out)
   CORELinkDB.suspects = nil
   for i = 1, 120 do NS.NoteSuspect({ kind = "refused", via = "guild", from = "S" .. i, author = "N" .. i, text = "x" }) end
   check("suspects: the list keeps the newest 100", #CORELinkDB.suspects == 100 and CORELinkDB.suspects[100].author == "N120"
