@@ -202,6 +202,16 @@ NS.whisperPackets.DIR = function(rest)
   end
 end
 
+-- A carried line whispered by a guildmate goes in the kept suspect list (Suspects.lua), if it is a packet at all.
+local function NoteGuildmateCarry(rest, sender)
+  local proto, body = rest:match("^(CL%d+)" .. SEP .. "(.*)$")
+  if not proto then return end
+  local _, tag, author, _, _, _, text = NS.Split(body, 7)
+  if not text then return end
+  NS.NoteSuspect({ kind = "refused", via = "whisper", from = Ambiguate(sender, "none"), tag = tag, author = author,
+    text = text, why = "carried to us by someone in our own guild" })
+end
+
 -- WB: another guild's courier carried a line to us. Show it and fan it out to our guild once. Accepted from a
 -- known peer, or for a guild we have heard on the channel; a stranger's whisper is dropped.
 NS.whisperPackets.WB = function(rest, sender)
@@ -210,6 +220,7 @@ NS.whisperPackets.WB = function(rest, sender)
   tag = tag and NS.CleanTag(tag)             -- as ShowPacket files it under NS.heard
   if NS.IsGuildmate(Ambiguate(sender, "none")) then   -- a courier carries to other guilds, never to its own
     Debug("dropped a carried line from %s: they are in our own guild", sender)
+    NoteGuildmateCarry(rest, sender)
     return
   end
   local known = peers[sender] or (tag and NS.heard[tag] and GetTime() - NS.heard[tag] <= NS.HEARD_SECS)
