@@ -385,6 +385,10 @@ do
   check("/cl suspects prints how many and the lines, and puts them all in the copy box",
     out:find(#kept .. " suspect line(s) recorded", 1, true) ~= nil and out:find("delivered by Mallory", 1, true) ~= nil
     and (lastSetText or ""):find("forged via channel, delivered by Mallory: <ALT> Beau's Beard", 1, true) ~= nil, out)
+  check("/cl suspects starts with who forged and who was refused",
+    out:find("suspects " .. #kept .. ": forged by [^;]*Mallory") ~= nil and out:find("; refused from [^|]*Carol") ~= nil, out)
+  check("/cl report names the forgers too",
+    report():find("| suspects " .. #kept .. ": forged by [^;]*Mallory") ~= nil, report())
   -- packet ids are the sender's: one deliverer cannot crowd out the rest, a new id does not make a line new,
   -- and a reused id does not hide one
   local function count(field, value)
@@ -436,7 +440,8 @@ do
     out:find("FORGERY CAUGHT", 1, true) ~= nil
     and out:find("forged via channel: Mallory posted as <ALT> Fake Name: \"watch me\"", 1, true) ~= nil, out)
   check("watch also puts a red banner in the middle of the screen and plays the raid warning sound",
-    #banners == 1 and banners[1].text == "FORGERY: Mallory posted as <ALT> Fake Name" and banners[1].color.r == 1
+    #banners == 1 and banners[1].text == "FORGERY: Mallory posted as <ALT> Fake Name: \"watch me\""
+    and banners[1].color.r == 1
     and sounds[1] == 8959, banners[1] and banners[1].text)
   RaidNotice_AddMessage = function() error("no banner on this client") end
   check("a banner that fails does not stop the line from being kept",
@@ -463,9 +468,12 @@ do
     and CORELinkDB.suspects[1].author == "N21", #CORELinkDB.suspects)
   out = lines(function() slash("suspects") end)
   check("/cl suspects shows only the last ten in chat when there are more", select(2, out:gsub("delivered by", "")) == 10, out)
+  check("the summary names at most five, then says how many more", report():find("| suspects 100: refused from S100, S101, "
+    .. "S102, S103, S104, +95 more |", 1, true) ~= nil, report())
   slash("suspects clear")
   check("/cl suspects clear empties the list", CORELinkDB.suspects == nil
-    and lines(function() slash("suspects") end):find("no suspect lines recorded", 1, true) ~= nil)
+    and lines(function() slash("suspects") end):find("no suspect lines recorded", 1, true) ~= nil
+    and report():find("| suspects none |", 1, true) ~= nil)
 end
 -- a quest link reaches each client with its own colour and level, so the author's packet id is not the id the
 -- courier computes from guild chat: the copy is recognised by what it says

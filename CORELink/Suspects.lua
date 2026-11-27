@@ -44,7 +44,7 @@ local RED = { r = 1, g = 0.1, b = 0.1 }
 local function Alarm(e)
   if RaidNotice_AddMessage and RaidWarningFrame then
     pcall(RaidNotice_AddMessage, RaidWarningFrame, "FORGERY: " .. e.from .. " posted as <" .. e.tag .. "> "
-      .. e.author, RED)
+      .. e.author .. ": \"" .. Short(e.text, 40) .. "\"", RED)
   end
   if PlaySound and SOUNDKIT and SOUNDKIT.RAID_WARNING then pcall(PlaySound, SOUNDKIT.RAID_WARNING, "Master") end
 end
@@ -87,6 +87,36 @@ local function Line(e)
     tostring(e.via), tostring(e.from), tostring(e.tag), tostring(e.author), tostring(e.text), tostring(e.why))
 end
 
+-- "Mallory x3, Eve" for one kind of entry: who delivered them, most first, at most NAMES of them.
+local NAMES = 5
+local function Names(list, kind)
+  local n, order = {}, {}
+  for _, e in ipairs(list) do
+    if e.kind == kind then
+      local who = tostring(e.from)
+      if not n[who] then order[#order + 1] = who end
+      n[who] = (n[who] or 0) + 1
+    end
+  end
+  if #order == 0 then return nil end
+  table.sort(order, function(a, b) return n[a] > n[b] or (n[a] == n[b] and a < b) end)
+  local out = {}
+  for i = 1, math.min(NAMES, #order) do out[i] = order[i] .. (n[order[i]] > 1 and (" x" .. n[order[i]]) or "") end
+  return table.concat(out, ", ") .. (#order > NAMES and (", +" .. (#order - NAMES) .. " more") or "")
+end
+
+-- One line for /cl report and the head of /cl suspects: "3: forged by Mallory x2; refused from Carol", or "none".
+function NS.SuspectSummary()
+  local db = NS.db
+  if not db then return "none" end
+  local list = List(db)
+  if #list == 0 then return "none" end
+  local parts, forged, refused = {}, Names(list, "forged"), Names(list, "refused")
+  if forged then parts[#parts + 1] = "forged by " .. forged end
+  if refused then parts[#parts + 1] = "refused from " .. refused end
+  return #list .. ": " .. table.concat(parts, "; ")
+end
+
 local SHOW_IN_CHAT = 10
 
 NS.commands.suspects = function(arg)
@@ -107,6 +137,7 @@ NS.commands.suspects = function(arg)
   if #list == 0 then NS.Print("no suspect lines recorded on this character.") return end
   local lines = {}
   for i, e in ipairs(list) do lines[i] = Line(e) end
+  NS.Print("|cffff2020suspects " .. NS.SuspectSummary() .. "|r")
   NS.Print(#lines .. " suspect line(s) recorded on this character, oldest first"
     .. (#lines > SHOW_IN_CHAT and ("; the last " .. SHOW_IN_CHAT .. " here, all in the copy box") or "") .. ":")
   for i = math.max(1, #lines - SHOW_IN_CHAT + 1), #lines do NS.Print(lines[i]) end
